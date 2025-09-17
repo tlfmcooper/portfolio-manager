@@ -1,0 +1,47 @@
+.python-version
+.vscode/
+__pycache__/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/api/__pycache__/
+backend/app/core/__pycache__/
+backend/app/crud/__pycache__/
+backend/app/models/__pycache__/
+backend/app/schemas/__pycache__/
+backend/app/services/__pycache__/
+backend/app/utils/__pycache__/
+
+env/
+node_modules/
+dist/
+frontend/dist/
+frontend/node_modules/
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+*.env
+.env
+*.sqlite3
+*.db
+*.log
+*.coverage
+.mypy_cache/
+.pytest_cache/
+.pylint.d/
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Project specific
+backend/portfolio.db
+backend/instance/portfolio.db
+uv.lock
