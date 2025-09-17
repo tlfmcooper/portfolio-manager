@@ -1,0 +1,26 @@
+# Executive Summary Image Placeholder
+
+This file is a placeholder for the executive-summary.png image that would be used in the portfolio dashboard.
+
+## Recommended Image Specifications:
+- Format: PNG
+- Size: 1200x600 pixels (2:1 aspect ratio)
+- Content: Executive summary infographic showing:
+  - Key portfolio metrics
+  - Performance charts
+  - Risk indicators
+  - Asset allocation overview
+
+## Usage:
+Replace this file with an actual PNG image named "executive-summary.png" for use in the ExecutiveReport component.
+
+The image can be imported and used in React components like this:
+```jsx
+import executiveSummaryImage from '../assets/executive-summary.png'
+
+// Use in component
+<img src={executiveSummaryImage} alt="Executive Summary" />
+```
+
+## Alternative:
+You can generate this image programmatically using chart libraries or create it using design tools like Figma, Canva, or Photoshop.
