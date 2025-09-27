@@ -22,8 +22,8 @@ const CPPISection = lazy(() => import('./components/CPPISection'));
 
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-    <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
+  <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-background)' }}>
+    <Loader2 className="h-12 w-12 animate-spin" style={{ color: 'var(--color-primary)' }} />
   </div>
 );
 
@@ -86,36 +86,51 @@ const DashboardLayout = () => {
   const toggleTheme = () => {
     const newDarkMode = !darkMode;
     setDarkMode(newDarkMode);
-    document.documentElement.classList.toggle('dark', newDarkMode);
+    document.documentElement.setAttribute('data-color-scheme', newDarkMode ? 'dark' : 'light');
   };
 
   const renderTabContent = () => {
     if (loading) {
       return (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          <div 
+            className="animate-spin rounded-full h-12 w-12 border-b-2" 
+            style={{ borderColor: 'var(--color-primary)' }}
+          ></div>
         </div>
       );
     }
 
     if (error) {
       return (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded-lg" role="alert">
+        <div 
+          className="border px-6 py-4 rounded-lg" 
+          role="alert"
+          style={{
+            backgroundColor: 'rgba(var(--color-error-rgb), 0.1)',
+            borderColor: 'var(--color-error)',
+            color: 'var(--color-error)'
+          }}
+        >
           <div className="flex">
             <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Notice</h3>
-              <div className="mt-2 text-sm text-red-700">
+              <h3 className="text-sm font-medium">Notice</h3>
+              <div className="mt-2 text-sm">
                 <p>{error}</p>
               </div>
               <div className="mt-4">
                 <button 
                   onClick={fetchPortfolioData}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                  className="font-bold py-2 px-4 rounded"
+                  style={{
+                    backgroundColor: 'var(--color-error)',
+                    color: 'var(--color-white)'
+                  }}
                 >
                   Retry
                 </button>
@@ -127,31 +142,36 @@ const DashboardLayout = () => {
     }
 
     return (
-      <div className={`min-h-screen transition-colors duration-200 ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-        <header className={`sticky top-0 z-10 ${darkMode ? 'bg-gray-800' : 'bg-white'} shadow`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Portfolio Dashboard</h1>
+      <div className="dashboard">
+        <header className="dashboard-header">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <div className="portfolio-info">
+              <h1>Strategic Multi-Asset Portfolio</h1>
               {user && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Welcome back, {user.display_name || user.username}
+                <p className="portfolio-meta">
+                  Welcome back, {user.display_name || user.username} • Last Updated: {new Date().toLocaleDateString()}
                 </p>
               )}
             </div>
             <div className="flex items-center space-x-4">
               <button
                 onClick={toggleTheme}
-                className={`px-4 py-2 rounded-lg border transition-all duration-200 ${
-                  darkMode 
-                    ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
+                className="px-4 py-2 rounded-lg border transition-all duration-200"
+                style={{
+                  backgroundColor: darkMode ? 'var(--color-surface)' : 'var(--color-surface)',
+                  borderColor: 'var(--color-border)',
+                  color: 'var(--color-text)'
+                }}
               >
                 {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
               </button>
               <button
-                onClick={logout} // <-- FIX: use logout directly
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                onClick={logout}
+                className="px-4 py-2 rounded-lg transition-colors"
+                style={{
+                  backgroundColor: 'var(--color-error)',
+                  color: 'var(--color-white)'
+                }}
               >
                 Logout
               </button>
@@ -159,22 +179,16 @@ const DashboardLayout = () => {
           </div>
         </header>
 
-        <nav className={`border-b transition-colors duration-200 ${
-          darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-        }`}>
+        <nav className="dashboard-nav">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex space-x-8">
+            <div className="nav-tabs">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === tab.id
-                        ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'
-                    }`}
+                    className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
                   >
                     <div className="flex items-center">
                       <Icon className="h-5 w-5 mr-2" />
@@ -187,7 +201,7 @@ const DashboardLayout = () => {
           </div>
         </nav>
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
           <Suspense fallback={<LoadingSpinner />}>
             {portfolioData && (
               <div className="space-y-8">
@@ -253,7 +267,7 @@ function App() {
             },
           }}
         />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               {/* Public routes */}

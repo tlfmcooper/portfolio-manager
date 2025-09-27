@@ -100,32 +100,44 @@ const RiskSection = () => {
     {
       name: 'VaR 95%',
       value: Math.abs((riskAnalytics.value_at_risk_95 || 0) * 100),
-      color: '#F59E0B'
+      color: 'var(--color-warning)'
     },
     {
       name: 'VaR 99%',
       value: Math.abs((riskAnalytics.value_at_risk_99 || 0) * 100),
-      color: '#EF4444'
+      color: 'var(--color-error)'
     },
     {
       name: 'CVaR',
       value: Math.abs((riskAnalytics.cvar || 0) * 100),
-      color: '#DC2626'
+      color: 'var(--color-red-500)'
     },
     {
       name: 'Semideviation',
       value: (riskAnalytics.semideviation || 0) * 100,
-      color: '#3B82F6'
+      color: 'var(--color-primary)'
     }
   ]
 
-  const COLORS = ['#F59E0B', '#EF4444', '#DC2626', '#3B82F6']
+  const COLORS = [
+    'var(--color-warning)', 
+    'var(--color-error)', 
+    'var(--color-red-500)', 
+    'var(--color-primary)'
+  ]
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0]
       return (
-        <div className="bg-gray-900 text-white p-3 rounded-lg border border-gray-700">
+        <div 
+          className="p-3 rounded-lg border"
+          style={{
+            backgroundColor: 'var(--color-charcoal-800)',
+            color: 'var(--color-white)',
+            borderColor: 'var(--color-border)'
+          }}
+        >
           <p className="font-medium">{data.name}</p>
           <p className="text-sm">{data.value.toFixed(2)}%</p>
         </div>
@@ -137,39 +149,37 @@ const RiskSection = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold mb-6">Risk Analytics</h2>
+        <h2 style={{ 
+          fontSize: 'var(--font-size-3xl)', 
+          fontWeight: 'var(--font-weight-bold)', 
+          marginBottom: 'var(--space-24)',
+          color: 'var(--color-text)'
+        }}>
+          Risk Analytics
+        </h2>
         
         {/* Risk Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="metrics-grid">
           {riskMetrics.map((metric) => {
-            const colorClass = getRiskColor(metric.key, metric.value)
             const status = getRiskStatus(metric.key, metric.value)
             const tooltip = getTooltipText(metric.key)
             
             return (
               <div 
                 key={metric.key}
-                className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border-l-4 p-6 hover:shadow-md transition-all duration-200 ${
-                  metric.type === 'warning' ? 'border-l-yellow-500' :
-                  metric.type === 'negative' ? 'border-l-red-500' :
-                  'border-l-blue-500'
-                }`}
+                className={`metric-card ${metric.type}`}
+                data-tooltip={tooltip}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <div className="metric-header">
+                  <span className="metric-label">
                     {metric.label}
                   </span>
-                  <div className="group relative">
-                    <Info className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute right-0 top-6 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                      {tooltip}
-                    </div>
-                  </div>
+                  <span className="info-icon">ℹ️</span>
                 </div>
-                <div className={`text-3xl font-bold mb-2 ${colorClass}`}>
+                <div className="metric-value">
                   {formatPercentage(metric.value)}
                 </div>
-                <div className={`text-xs font-medium uppercase tracking-wider ${colorClass}`}>
+                <div className={`metric-status ${metric.type}`}>
                   {status}
                 </div>
               </div>
@@ -178,8 +188,12 @@ const RiskSection = () => {
         </div>
 
         {/* Risk Distribution Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+        <div className="chart-container">
+          <h3 style={{ 
+            fontSize: 'var(--font-size-xl)', 
+            marginBottom: 'var(--space-20)',
+            color: 'var(--color-text)'
+          }}>
             Risk Distribution
           </h3>
           <div className="h-96">
@@ -215,14 +229,29 @@ const RiskSection = () => {
         </div>
 
         {/* Risk Analysis Summary */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+        <div 
+          className="border rounded-lg p-6"
+          style={{
+            backgroundColor: 'var(--color-bg-2)',
+            borderColor: 'var(--color-border)'
+          }}
+        >
           <div className="flex items-start">
-            <AlertTriangle className="h-6 w-6 text-blue-600 dark:text-blue-400 mt-1 mr-3 flex-shrink-0" />
+            <AlertTriangle 
+              className="h-6 w-6 mt-1 mr-3 flex-shrink-0" 
+              style={{ color: 'var(--color-primary)' }}
+            />
             <div>
-              <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              <h4 
+                className="text-lg font-semibold mb-2"
+                style={{ color: 'var(--color-text)' }}
+              >
                 Risk Analysis Summary
               </h4>
-              <div className="text-blue-800 dark:text-blue-200 space-y-2">
+              <div 
+                className="space-y-2"
+                style={{ color: 'var(--color-text)' }}
+              >
                 <p>
                   Your portfolio shows a <strong>VaR (95%) of {formatPercentage(riskAnalytics.value_at_risk_95)}</strong>, 
                   meaning there's only a 5% chance of losing more than this amount in any given period.

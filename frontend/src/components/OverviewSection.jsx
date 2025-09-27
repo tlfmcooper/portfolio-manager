@@ -60,12 +60,9 @@ const OverviewSection = () => {
   }
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'positive': return 'text-green-600'
-      case 'negative': return 'text-red-600'
-      case 'warning': return 'text-yellow-600'
-      default: return 'text-blue-600'
-    }
+    // This function is no longer needed since we use CSS classes
+    // but keeping it for backwards compatibility
+    return '';
   }
 
   const getStatusText = (metric, value) => {
@@ -140,35 +137,37 @@ const OverviewSection = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold mb-6">Performance Overview</h2>
+        <h2 style={{ 
+          fontSize: 'var(--font-size-3xl)', 
+          fontWeight: 'var(--font-weight-bold)', 
+          marginBottom: 'var(--space-24)',
+          color: 'var(--color-text)'
+        }}>
+          Performance Overview
+        </h2>
         
         {/* Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="metrics-grid">
           {metrics.map((metric) => {
             const status = getMetricStatus(metric.key, metric.value)
-            const statusColor = getStatusColor(status)
             const statusText = getStatusText(metric.key, metric.value)
             
             return (
               <div 
                 key={metric.key}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow duration-200"
+                className={`metric-card ${status}`}
+                data-tooltip={metric.tooltip}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <div className="metric-header">
+                  <span className="metric-label">
                     {metric.label}
                   </span>
-                  <div className="group relative">
-                    <Info className="h-4 w-4 text-gray-400 cursor-help" />
-                    <div className="absolute right-0 top-6 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                      {metric.tooltip}
-                    </div>
-                  </div>
+                  <span className="info-icon">ℹ️</span>
                 </div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                <div className="metric-value">
                   {metric.formatter(metric.value)}
                 </div>
-                <div className={`text-xs font-medium uppercase tracking-wider ${statusColor}`}>
+                <div className={`metric-status ${status}`}>
                   {statusText}
                 </div>
               </div>
@@ -178,8 +177,12 @@ const OverviewSection = () => {
 
         {/* Performance Chart */}
         {chartData.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+          <div className="chart-container">
+            <h3 style={{ 
+              fontSize: 'var(--font-size-xl)', 
+              marginBottom: 'var(--space-20)',
+              color: 'var(--color-text)'
+            }}>
               Performance Distribution
             </h3>
             <div className="h-96">
@@ -198,10 +201,10 @@ const OverviewSection = () => {
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: '#1F2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#F9FAFB'
+                      backgroundColor: 'var(--color-charcoal-800)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-base)',
+                      color: 'var(--color-white)'
                     }}
                     formatter={(value, name) => [
                       `${value.toFixed(2)}%`, 
@@ -210,13 +213,13 @@ const OverviewSection = () => {
                   />
                   <Bar 
                     dataKey="return" 
-                    fill="#3B82F6" 
+                    fill="var(--color-primary)" 
                     name="return"
                     radius={[2, 2, 0, 0]}
                   />
                   <Bar 
                     dataKey="volatility" 
-                    fill="#F59E0B" 
+                    fill="var(--color-warning)" 
                     name="volatility"
                     radius={[2, 2, 0, 0]}
                   />
