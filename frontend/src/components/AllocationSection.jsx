@@ -1,54 +1,62 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { useAuth } from '../contexts/AuthContext'
 
-const AllocationSection = ({ data }) => {
+const AllocationSection = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/sector-allocation')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch allocation data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
-  const assetAllocation = data.asset_allocation || {}
-  const individualPerformance = data.individual_performance || {}
+  const assetAllocation = data || {}
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A'
-    return `${(value * 100).toFixed(1)}%`
+    return `${value.toFixed(1)}%`
   }
 
-  const formatCurrency = (value, weight) => {
-    const totalValue = 1250000 // Default total value
+  const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(totalValue * weight)
-  }
-
-  // Asset names mapping
-  const assetNames = {
-    'AAPL': 'Apple Inc.',
-    'GOOGL': 'Alphabet Inc.',
-    'MSFT': 'Microsoft Corp.',
-    'AMZN': 'Amazon.com Inc.',
-    'SPY': 'S&P 500 ETF',
-    'QQQ': 'Nasdaq 100 ETF',
-    'TLT': '20+ Year Treasury ETF',
-    'GLD': 'Gold ETF',
-    'VNQ': 'Real Estate ETF',
-    'VEA': 'Developed Markets ETF'
+    }).format(value)
   }
 
   // Prepare data for pie chart
-  const pieData = Object.entries(assetAllocation).map(([symbol, weight], index) => ({
-    name: symbol,
-    value: weight * 100,
-    weight: weight,
+  const pieData = Object.entries(assetAllocation).map(([sector, allocation], index) => ({
+    name: sector,
+    value: allocation.percentage,
     color: `hsl(${index * 36}, 70%, 50%)`
   }))
 
   // Prepare data for bar chart (asset values)
-  const barData = Object.entries(assetAllocation).map(([symbol, weight]) => ({
-    symbol,
-    value: 1250000 * weight, // Assuming $1.25M total value
-    percentage: weight * 100
+  const barData = Object.entries(assetAllocation).map(([sector, allocation]) => ({
+    sector,
+    value: allocation.value,
+    percentage: allocation.percentage
   }))
 
   // Colors for charts
@@ -62,40 +70,40 @@ const AllocationSection = ({ data }) => {
       const data = payload[0].payload
       return (
         <div className="bg-gray-900 text-white p-3 rounded-lg border border-gray-700">
-          <p className="font-medium">{data.name || data.symbol}</p>
-          <p className="text-sm">{formatCurrency(data.value || 1250000 * data.weight, data.weight || data.percentage / 100)}</p>
-          <p className="text-sm">{formatPercentage(data.weight || data.percentage / 100)}</p>
+          <p className="font-medium">{data.name || data.sector}</p>
+          <p className="text-sm">{formatCurrency(data.value)}</p>
+          <p className="text-sm">{formatPercentage(data.percentage)}</p>
         </div>
       )
     }
     return null
   }
 
-  const totalAssets = Object.keys(assetAllocation).length
-  const largestAllocation = Math.max(...Object.values(assetAllocation))
+  const totalSectors = Object.keys(assetAllocation).length
+  const largestAllocation = Math.max(...Object.values(assetAllocation).map(a => a.percentage))
 
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold mb-6">Asset Allocation</h2>
+        <h2 className="text-2xl font-bold mb-6">Sector Allocation</h2>
         
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Total Assets</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalAssets}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Total Sectors</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalSectors}</p>
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="text-center">
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Total Allocated</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">$1,250,000</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(Object.values(assetAllocation).reduce((acc, a) => acc + a.value, 0))}</p>
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Largest Position</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Largest Sector</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatPercentage(largestAllocation)}</p>
             </div>
           </div>
@@ -106,7 +114,7 @@ const AllocationSection = ({ data }) => {
           {/* Pie Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Portfolio Composition
+              Sector Composition
             </h3>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
@@ -134,14 +142,14 @@ const AllocationSection = ({ data }) => {
           {/* Bar Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Asset Values
+              Sector Values
             </h3>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                   <XAxis 
-                    dataKey="symbol" 
+                    dataKey="sector" 
                     tick={{ fontSize: 12, fill: '#6B7280' }}
                     stroke="#6B7280"
                     angle={-45}
@@ -171,17 +179,14 @@ const AllocationSection = ({ data }) => {
         {/* Asset Breakdown Table */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Asset Breakdown</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sector Breakdown</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Symbol
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Name
+                    Sector
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                     Value
@@ -196,33 +201,28 @@ const AllocationSection = ({ data }) => {
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {Object.entries(assetAllocation)
-                  .sort(([,a], [,b]) => b - a)
-                  .map(([symbol, weight], index) => (
-                  <tr key={symbol} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  .sort(([,a], [,b]) => b.value - a.value)
+                  .map(([sector, allocation], index) => (
+                  <tr key={sector} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div 
                           className="h-3 w-3 rounded-full mr-3"
-                          style={{ backgroundColor: COLORS[Object.keys(assetAllocation).indexOf(symbol) % COLORS.length] }}
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
                         ></div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {symbol}
+                          {sector}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-600 dark:text-gray-300">
-                        {assetNames[symbol] || symbol}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(1250000 * weight, weight)}
+                        {formatCurrency(allocation.value)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="text-sm text-gray-900 dark:text-white">
-                        {formatPercentage(weight)}
+                        {formatPercentage(allocation.percentage)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -231,8 +231,8 @@ const AllocationSection = ({ data }) => {
                           <div 
                             className="h-2 rounded-full transition-all duration-300"
                             style={{ 
-                              width: `${weight * 100}%`,
-                              backgroundColor: COLORS[Object.keys(assetAllocation).indexOf(symbol) % COLORS.length]
+                              width: `${allocation.percentage}%`,
+                              backgroundColor: COLORS[index % COLORS.length]
                             }}
                           ></div>
                         </div>
@@ -242,50 +242,6 @@ const AllocationSection = ({ data }) => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        {/* Diversification Analysis */}
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-4">
-            Diversification Analysis
-          </h3>
-          <div className="text-green-800 dark:text-green-200 space-y-2">
-            <p>
-              Your portfolio is allocated across <strong>{totalAssets} assets</strong>. The largest allocation is{' '}
-              <strong>{formatPercentage(largestAllocation)}</strong> in{' '}
-              <strong>
-                {Object.entries(assetAllocation).find(([,weight]) => weight === largestAllocation)?.[0]}
-              </strong>.
-            </p>
-            
-            <div className="mt-4">
-              <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">Diversification Score</h4>
-              <div className="flex items-center">
-                <div className="flex-1">
-                  {(() => {
-                    const maxPercentage = largestAllocation * 100
-                    const diversificationScore = maxPercentage < 30 ? 'Excellent' :
-                                               maxPercentage < 50 ? 'Good' :
-                                               maxPercentage < 70 ? 'Moderate' : 'Poor'
-                    const scoreColor = maxPercentage < 30 ? 'text-green-600 dark:text-green-400' :
-                                     maxPercentage < 50 ? 'text-blue-600 dark:text-blue-400' :
-                                     maxPercentage < 70 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-                    
-                    return (
-                      <span className={`font-semibold ${scoreColor}`}>
-                        {diversificationScore}
-                      </span>
-                    )
-                  })()}
-                  <span className="text-green-700 dark:text-green-300 ml-2">
-                    ({largestAllocation * 100 < 30 
-                      ? 'Well-diversified across assets' 
-                      : 'Consider reducing concentration in largest position'})
-                  </span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ const Dashboard = () => {
     { name: 'Overview', href: '/dashboard/overview', icon: Home, current: true },
     { name: 'Portfolio', href: '/dashboard/portfolio', icon: PieChart, current: false },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, current: false },
+    { name: 'Add Asset (Buy)', href: '/onboarding', icon: PieChart, current: false },
   ];
 
   const toggleDarkMode = () => {

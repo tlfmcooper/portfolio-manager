@@ -1,11 +1,36 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { TrendingDown, Shield, Target, Info } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-const CPPISection = ({ data }) => {
+const CPPISection = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/cppi')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch CPPI analysis data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
-  const cppiAnalysis = data.cppi_analysis || {}
+  const cppiAnalysis = data || {}
   const {
     multiplier = 3,
     floor = 0.8,
@@ -23,7 +48,7 @@ const CPPISection = ({ data }) => {
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value * 1000) // Convert to actual currency
+    }).format(value)
   }
 
   const formatPercentage = (value) => {
@@ -173,6 +198,7 @@ const CPPISection = ({ data }) => {
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#6B7280' }}
                     stroke="#6B7280"
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
                     label={{ value: 'Portfolio Value ($K)', angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
@@ -271,6 +297,7 @@ const CPPISection = ({ data }) => {
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#6B7280' }}
                     stroke="#6B7280"
+                    tickFormatter={(value) => `${value.toFixed(0)}%`}
                     label={{ value: 'Risk Budget (%)', angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
@@ -306,6 +333,7 @@ const CPPISection = ({ data }) => {
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#6B7280' }}
                     stroke="#6B7280"
+                    tickFormatter={(value) => `${value.toFixed(0)}%`}
                     domain={[-8, 1]}
                     label={{ value: 'Drawdown (%)', angle: -90, position: 'insideLeft' }}
                   />

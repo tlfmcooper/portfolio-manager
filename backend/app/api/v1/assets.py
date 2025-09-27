@@ -9,9 +9,11 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.models.asset import Asset
 from app.models.holding import Holding
+from app.models.transaction import Transaction
 from app.services.finance_service import FinanceService
 from pydantic import BaseModel
 from typing import List
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,7 @@ async def onboard_asset(
             # Create holding
             holding = Holding(
                 asset_id=asset_obj.id,
+                ticker=asset_obj.ticker,  # Add ticker here
                 quantity=item.quantity,
                 average_cost=item.unit_cost,
                 portfolio_id=1,  # TODO: Replace with actual portfolio/user logic
@@ -88,6 +91,17 @@ async def onboard_asset(
             )
             db.add(holding)
             await db.flush()  # Get the holding ID
+            # Create transaction (buy)
+            transaction = Transaction(
+                portfolio_id=holding.portfolio_id,
+                asset_id=asset_obj.id,  # Use asset_id instead of ticker
+                transaction_type="BUY",
+                quantity=item.quantity,
+                price=item.unit_cost,
+                transaction_date=datetime.utcnow(),
+            )
+            db.add(transaction)
+            await db.flush()
             created_assets.append(
                 {
                     "ticker": ticker,
@@ -98,6 +112,7 @@ async def onboard_asset(
                     "market_value": holding.market_value,
                     "asset_id": asset_obj.id,
                     "holding_id": holding.id,
+                    "transaction_id": transaction.id,
                 }
             )
             logger.info(
@@ -109,6 +124,50 @@ async def onboard_asset(
     if created_assets:
         await db.commit()
     return {"assets": created_assets, "errors": errors}
+
+
+@router.post("/sell", status_code=201, response_model=dict)
+async def sell_asset(data: AssetOnboardingRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Sell (delete) asset from holdings and create a sell transaction.
+    """
+    try:
+        ticker = data.ticker.upper().strip()
+        # Find holding
+        stmt = select(Holding).where(
+            Holding.ticker == ticker, Holding.portfolio_id == 1
+        )
+        result = await db.execute(stmt)
+        holding = result.scalar_one_or_none()
+        if not holding or holding.quantity < data.quantity:
+            raise HTTPException(status_code=400, detail="Not enough quantity to sell")
+        # Update holding
+        holding.quantity -= data.quantity
+        holding.market_value = holding.quantity * (
+            holding.current_price or data.unit_cost
+        )
+        holding.cost_basis = holding.quantity * holding.average_cost
+        # Create transaction (sell)
+        transaction = Transaction(
+            portfolio_id=holding.portfolio_id,
+            asset_id=holding.asset_id, # Use asset_id instead of ticker
+            transaction_type="SELL",
+            quantity=data.quantity,
+            price=data.unit_cost,
+            transaction_date=datetime.utcnow(),
+        )
+        db.add(transaction)
+        await db.commit()
+        return {
+            "success": True,
+            "message": f"Sold {data.quantity} of {ticker}",
+            "transaction_id": transaction.id,
+        }
+    except Exception as e:
+        logger.error(f"Error selling {data.ticker}: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error selling {data.ticker}: {str(e)}"
+        )
 
 
 @router.get("/refresh/{ticker}")

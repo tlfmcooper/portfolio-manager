@@ -1,11 +1,36 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Target, Info } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-const EfficientFrontierSection = ({ data }) => {
+const EfficientFrontierSection = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/efficient-frontier')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch efficient frontier data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
-  const efficientFrontier = data.efficient_frontier || {}
+  const efficientFrontier = data || {}
   const frontierPoints = efficientFrontier.frontier_points || []
   const specialPortfolios = efficientFrontier.special_portfolios || {}
 

@@ -1,11 +1,36 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import { AlertTriangle, Info } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-const RiskSection = ({ data }) => {
+const RiskSection = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/metrics')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch risk data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
-  const riskAnalytics = data.risk_analytics || {}
+  const riskAnalytics = data || {}
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A'
@@ -16,13 +41,8 @@ const RiskSection = ({ data }) => {
     if (typeof value !== 'number') return 'text-gray-500'
     
     switch (metricType) {
-      case 'var_95':
-      case 'var_99':
+      case 'value_at_risk_95':
         return Math.abs(value) < 0.03 ? 'text-yellow-600' : 'text-red-600'
-      case 'cvar':
-        return Math.abs(value) < 0.05 ? 'text-red-600' : 'text-red-700'
-      case 'semideviation':
-        return value < 0.1 ? 'text-blue-600' : 'text-yellow-600'
       default:
         return 'text-gray-600'
     }
@@ -32,14 +52,8 @@ const RiskSection = ({ data }) => {
     if (typeof value !== 'number') return 'No Data'
     
     switch (metricType) {
-      case 'var_95':
+      case 'value_at_risk_95':
         return '5% Probability'
-      case 'var_99':
-        return '1% Probability'
-      case 'cvar':
-        return 'Tail Risk'
-      case 'semideviation':
-        return 'Downside Volatility'
       default:
         return 'Risk Metric'
     }
@@ -47,14 +61,8 @@ const RiskSection = ({ data }) => {
 
   const getTooltipText = (metricType) => {
     switch (metricType) {
-      case 'var_95':
+      case 'value_at_risk_95':
         return 'Value at Risk (95%) indicates there\'s only a 5% chance of losing more than this amount in any given period.'
-      case 'var_99':
-        return 'Value at Risk (99%) shows the potential loss in extreme scenarios (1% probability).'
-      case 'cvar':
-        return 'Conditional VaR shows the expected loss when VaR is exceeded. This represents the average loss in worst-case scenarios.'
-      case 'semideviation':
-        return 'Semideviation measures downside volatility only, focusing on negative returns rather than total volatility.'
       default:
         return 'Risk metric for portfolio analysis.'
     }
@@ -62,56 +70,23 @@ const RiskSection = ({ data }) => {
 
   const riskMetrics = [
     {
-      key: 'var_95',
+      key: 'value_at_risk_95',
       label: 'VaR (95%)',
-      value: riskAnalytics.var_95,
+      value: riskAnalytics.value_at_risk_95,
       type: 'warning'
     },
-    {
-      key: 'var_99',
-      label: 'VaR (99%)',
-      value: riskAnalytics.var_99,
-      type: 'negative'
-    },
-    {
-      key: 'cvar',
-      label: 'CVaR (Expected Shortfall)',
-      value: riskAnalytics.cvar,
-      type: 'negative'
-    },
-    {
-      key: 'semideviation',
-      label: 'Semideviation',
-      value: riskAnalytics.semideviation,
-      type: 'neutral'
-    }
   ]
 
   // Prepare data for risk distribution chart
   const chartData = [
     {
       name: 'VaR 95%',
-      value: Math.abs((riskAnalytics.var_95 || 0) * 100),
+      value: Math.abs((riskAnalytics.value_at_risk_95 || 0) * 100),
       color: '#F59E0B'
     },
-    {
-      name: 'VaR 99%',
-      value: Math.abs((riskAnalytics.var_99 || 0) * 100),
-      color: '#EF4444'
-    },
-    {
-      name: 'CVaR',
-      value: Math.abs((riskAnalytics.cvar || 0) * 100),
-      color: '#DC2626'
-    },
-    {
-      name: 'Semideviation',
-      value: (riskAnalytics.semideviation || 0) * 100,
-      color: '#3B82F6'
-    }
   ]
 
-  const COLORS = ['#F59E0B', '#EF4444', '#DC2626', '#3B82F6']
+  const COLORS = ['#F59E0B']
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
@@ -216,16 +191,8 @@ const RiskSection = ({ data }) => {
               </h4>
               <div className="text-blue-800 dark:text-blue-200 space-y-2">
                 <p>
-                  Your portfolio shows a <strong>VaR (95%) of {formatPercentage(riskAnalytics.var_95)}</strong>, 
+                  Your portfolio shows a <strong>VaR (95%) of {formatPercentage(riskAnalytics.value_at_risk_95)}</strong>, 
                   meaning there's only a 5% chance of losing more than this amount in any given period.
-                </p>
-                <p>
-                  The <strong>Expected Shortfall (CVaR) of {formatPercentage(riskAnalytics.cvar)}</strong> represents 
-                  the average loss in worst-case scenarios beyond the 95% threshold.
-                </p>
-                <p>
-                  Portfolio volatility is <strong>{formatPercentage(riskAnalytics.portfolio_volatility)}</strong> annualized, 
-                  with downside semideviation of <strong>{formatPercentage(riskAnalytics.semideviation)}</strong>.
                 </p>
               </div>
             </div>

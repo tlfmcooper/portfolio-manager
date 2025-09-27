@@ -1,11 +1,36 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-const MonteCarloSection = ({ data }) => {
+const MonteCarloSection = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/monte-carlo')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch Monte Carlo simulation data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
-  const monteCarlo = data.monte_carlo || {}
+  const monteCarlo = data || {}
   const {
     scenarios = 1000,
     time_horizon = 252,
@@ -25,7 +50,7 @@ const MonteCarloSection = ({ data }) => {
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value * 1000) // Convert to actual currency (assuming values are in thousands)
+    }).format(value)
   }
 
   const formatNumber = (value) => {
@@ -111,7 +136,7 @@ const MonteCarloSection = ({ data }) => {
       const data = payload[0].payload
       return (
         <div className="bg-gray-900 text-white p-3 rounded-lg border border-gray-700">
-          <p className="font-medium">Final Value Range: {formatCurrency(parseInt(label.split('-')[0]))}-{formatCurrency(parseInt(label.split('-')[1]))}</p>
+          <p className="font-medium">Final Value Range: {label}</p>
           <p className="text-sm">{data.count} scenarios ({data.percentage.toFixed(1)}%)</p>
         </div>
       )
@@ -175,6 +200,7 @@ const MonteCarloSection = ({ data }) => {
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#6B7280' }}
                     stroke="#6B7280"
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
                     label={{ value: 'Portfolio Value ($K)', angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
@@ -256,7 +282,7 @@ const MonteCarloSection = ({ data }) => {
                     angle={-45}
                     textAnchor="end"
                     height={80}
-                    label={{ value: 'Final Portfolio Value Range ($K)', position: 'insideBottom', offset: -40 }}
+                    label={{ value: 'Final Portfolio Value Range', position: 'insideBottom', offset: -40 }}
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#6B7280' }}

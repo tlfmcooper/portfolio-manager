@@ -15,7 +15,7 @@ from app.crud import (
 )
 from app.utils.dependencies import get_current_active_user
 from app.models import User
-from app.services import portfolio_analysis_service
+from app.services.portfolio_analysis import AdvancedPortfolioAnalytics
 
 router = APIRouter()
 
@@ -156,5 +156,6 @@ async def get_portfolio_analysis(
             detail="Portfolio not found"
         )
     
-    analysis = await portfolio_analysis_service.generate_portfolio_analysis(portfolio)
-    return analysis
+    analysis = AdvancedPortfolioAnalytics(portfolio.id, db)
+    metrics = await analysis.calculate_portfolio_metrics()
+    return metrics

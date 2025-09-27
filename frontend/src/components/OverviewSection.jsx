@@ -1,12 +1,37 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, Info } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-const OverviewSection = ({ data }) => {
+const OverviewSection = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/metrics')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch overview data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
-  const performanceMetrics = data.performance_metrics || {}
-  const individualPerformance = data.individual_performance || {}
+  const performanceMetrics = data || {}
+  const individualPerformance = {} // TODO: Fetch individual performance data
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A'
@@ -22,14 +47,12 @@ const OverviewSection = ({ data }) => {
     if (typeof value !== 'number') return 'neutral'
     
     switch (metric) {
-      case 'annual_return':
+      case 'portfolio_return_annualized':
       case 'sharpe_ratio':
-      case 'sortino_ratio':
-      case 'calmar_ratio':
         return value > 0 ? 'positive' : 'negative'
       case 'max_drawdown':
         return value > -0.15 ? 'positive' : value > -0.25 ? 'warning' : 'negative'
-      case 'annual_volatility':
+      case 'portfolio_volatility_annualized':
         return value < 0.15 ? 'positive' : value < 0.25 ? 'warning' : 'negative'
       default:
         return 'neutral'
@@ -49,18 +72,14 @@ const OverviewSection = ({ data }) => {
     if (typeof value !== 'number') return 'No Data'
     
     switch (metric) {
-      case 'annual_return':
+      case 'portfolio_return_annualized':
         return value > 0.15 ? 'Excellent Performance' : value > 0.08 ? 'Good Performance' : 'Below Average'
-      case 'annual_volatility':
+      case 'portfolio_volatility_annualized':
         return value < 0.15 ? 'Low Risk' : value < 0.25 ? 'Moderate Risk' : 'High Risk'
       case 'sharpe_ratio':
         return value > 1.5 ? 'Excellent Risk-Adj Return' : value > 1.0 ? 'Good Risk-Adj Return' : 'Poor Risk-Adj Return'
-      case 'sortino_ratio':
-        return value > 1.5 ? 'Strong Downside Protection' : value > 1.0 ? 'Good Downside Protection' : 'Weak Downside Protection'
       case 'max_drawdown':
         return value > -0.10 ? 'Well Controlled' : value > -0.20 ? 'Acceptable' : 'High Drawdown'
-      case 'calmar_ratio':
-        return value > 1.5 ? 'Strong Return/Risk' : value > 1.0 ? 'Good Return/Risk' : 'Poor Return/Risk'
       default:
         return 'Standard'
     }
@@ -68,16 +87,16 @@ const OverviewSection = ({ data }) => {
 
   const metrics = [
     {
-      key: 'annual_return',
+      key: 'portfolio_return_annualized',
       label: 'Annual Return',
-      value: performanceMetrics.annual_return,
+      value: performanceMetrics.portfolio_return_annualized,
       formatter: formatPercentage,
       tooltip: 'The annualized return represents the geometric average amount of money earned by the portfolio each year.'
     },
     {
-      key: 'annual_volatility',
+      key: 'portfolio_volatility_annualized',
       label: 'Annual Volatility',
-      value: performanceMetrics.annual_volatility,
+      value: performanceMetrics.portfolio_volatility_annualized,
       formatter: formatPercentage,
       tooltip: 'Annual volatility measures the portfolio\'s price fluctuations over time.'
     },
@@ -89,25 +108,11 @@ const OverviewSection = ({ data }) => {
       tooltip: 'The Sharpe ratio measures risk-adjusted returns. Values above 1.0 are good, above 2.0 are very good.'
     },
     {
-      key: 'sortino_ratio',
-      label: 'Sortino Ratio',
-      value: performanceMetrics.sortino_ratio,
-      formatter: formatRatio,
-      tooltip: 'The Sortino ratio focuses on downside volatility, providing a better measure of risk-adjusted returns.'
-    },
-    {
       key: 'max_drawdown',
       label: 'Maximum Drawdown',
       value: performanceMetrics.max_drawdown,
       formatter: formatPercentage,
       tooltip: 'Maximum drawdown shows the largest peak-to-trough decline in portfolio value.'
-    },
-    {
-      key: 'calmar_ratio',
-      label: 'Calmar Ratio',
-      value: performanceMetrics.calmar_ratio,
-      formatter: formatRatio,
-      tooltip: 'The Calmar ratio compares annual return to maximum drawdown.'
     }
   ]
 

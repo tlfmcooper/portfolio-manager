@@ -1,11 +1,36 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useAuth } from '../contexts/AuthContext'
 
-const PerformanceView = ({ data }) => {
+const PerformanceView = () => {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { api } = useAuth()
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // TODO: Replace with dynamic portfolio ID
+        const response = await api.get('/analysis/portfolios/1/analysis/metrics')
+        setData(response.data)
+      } catch (err) {
+        setError('Failed to fetch performance data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [api])
+
+  if (loading) return <div>Loading...</div>
+  if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
   const formatPercentage = (value) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+    return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`
   }
 
   const formatRatio = (value) => {
@@ -23,9 +48,7 @@ const PerformanceView = ({ data }) => {
   // Prepare chart data
   const chartData = [
     { name: 'Sharpe Ratio', value: data.sharpe_ratio, color: '#3B82F6' },
-    { name: 'Alpha', value: data.alpha, color: '#10B981' },
-    { name: 'Beta', value: data.beta, color: '#F59E0B' },
-    { name: 'Volatility', value: data.volatility, color: '#EF4444' },
+    { name: 'Volatility', value: data.portfolio_volatility_annualized, color: '#EF4444' },
   ]
 
   return (
@@ -57,35 +80,10 @@ const PerformanceView = ({ data }) => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-center">
             <p className="text-sm font-medium text-gray-500 mb-2">Volatility</p>
-            <p className={`text-3xl font-bold ${getColorForValue(data.volatility, false)}`}>
-              {formatPercentage(data.volatility)}
+            <p className={`text-3xl font-bold ${getColorForValue(data.portfolio_volatility_annualized, false)}`}>
+              {formatPercentage(data.portfolio_volatility_annualized)}
             </p>
             <p className="text-xs text-gray-400 mt-1">Price fluctuation</p>
-          </div>
-        </div>
-
-        {/* Beta */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-500 mb-2">Beta</p>
-            <p className={`text-3xl font-bold ${
-              data.beta > 1 ? 'text-red-600' : 
-              data.beta < 0.8 ? 'text-green-600' : 'text-yellow-600'
-            }`}>
-              {formatRatio(data.beta)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Market sensitivity</p>
-          </div>
-        </div>
-
-        {/* Alpha */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-500 mb-2">Alpha</p>
-            <p className={`text-3xl font-bold ${getColorForValue(data.alpha)}`}>
-              {formatPercentage(data.alpha)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Excess return</p>
           </div>
         </div>
       </div>
@@ -138,30 +136,11 @@ const PerformanceView = ({ data }) => {
           </div>
           
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Alpha ({formatPercentage(data.alpha)})</h4>
-            <p className="text-gray-600">
-              Excess return compared to market benchmark.
-              {data.alpha > 0 ? ' Your portfolio is outperforming the market.' :
-               ' Your portfolio is underperforming the market.'}
-            </p>
-          </div>
-          
-          <div>
-            <h4 className="font-medium text-gray-900 mb-2">Beta ({formatRatio(data.beta)})</h4>
-            <p className="text-gray-600">
-              Market sensitivity. 1.0 = market-level volatility.
-              {data.beta > 1 ? ' Higher volatility than market.' :
-               data.beta < 0.8 ? ' Lower volatility than market.' :
-               ' Similar volatility to market.'}
-            </p>
-          </div>
-          
-          <div>
-            <h4 className="font-medium text-gray-900 mb-2">Volatility ({formatPercentage(data.volatility)})</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Volatility ({formatPercentage(data.portfolio_volatility_annualized)})</h4>
             <p className="text-gray-600">
               Price fluctuation measure.
-              {data.volatility < 10 ? ' Low volatility portfolio.' :
-               data.volatility < 20 ? ' Moderate volatility portfolio.' :
+              {data.portfolio_volatility_annualized < 10 ? ' Low volatility portfolio.' :
+               data.portfolio_volatility_annualized < 20 ? ' Moderate volatility portfolio.' :
                ' High volatility portfolio.'}
             </p>
           </div>

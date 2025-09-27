@@ -12,6 +12,14 @@ const Register = lazy(() => import('./pages/Register'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
+// Lazy load dashboard sections
+const OverviewSection = lazy(() => import('./components/OverviewSection'));
+const RiskSection = lazy(() => import('./components/RiskSection'));
+const AllocationSection = lazy(() => import('./components/AllocationSection'));
+const EfficientFrontierSection = lazy(() => import('./components/EfficientFrontierSection'));
+const MonteCarloSection = lazy(() => import('./components/MonteCarloSection'));
+const CPPISection = lazy(() => import('./components/CPPISection'));
+
 // Loading component for Suspense fallback
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -183,12 +191,12 @@ const DashboardLayout = () => {
           <Suspense fallback={<LoadingSpinner />}>
             {portfolioData && (
               <div className="space-y-8">
-                {activeTab === 'overview' && <Dashboard data={portfolioData} />}
-                {activeTab === 'risk' && <div>Risk Analytics (Coming Soon)</div>}
-                {activeTab === 'allocation' && <div>Asset Allocation (Coming Soon)</div>}
-                {activeTab === 'efficient' && <div>Efficient Frontier (Coming Soon)</div>}
-                {activeTab === 'simulation' && <div>Monte Carlo Simulation (Coming Soon)</div>}
-                {activeTab === 'strategy' && <div>CPPI Strategy (Coming Soon)</div>}
+                {activeTab === 'overview' && <OverviewSection />}
+                {activeTab === 'risk' && <RiskSection />}
+                {activeTab === 'allocation' && <AllocationSection />}
+                {activeTab === 'efficient' && <EfficientFrontierSection />}
+                {activeTab === 'simulation' && <MonteCarloSection />}
+                {activeTab === 'strategy' && <CPPISection />}
               </div>
             )}
           </Suspense>

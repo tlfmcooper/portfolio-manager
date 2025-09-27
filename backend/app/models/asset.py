@@ -53,6 +53,11 @@ class Asset(Base):
         "Holding", back_populates="asset", cascade="all, delete-orphan"
     )
 
+    # Relationship to transactions
+    transactions = relationship(
+        "Transaction", back_populates="asset", cascade="all, delete-orphan"
+    )
+
     def __repr__(self) -> str:
         return f"<Asset(id={self.id}, ticker='{self.ticker}', name='{self.name}')>"
 

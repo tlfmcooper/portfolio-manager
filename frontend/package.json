@@ -10,7 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@headlessui/react": "^1.7.17",
+    "@mui/material": "^7.3.2",
     "axios": "^1.6.0",
     "clsx": "^2.0.0",
     "lucide-react": "^0.292.0",

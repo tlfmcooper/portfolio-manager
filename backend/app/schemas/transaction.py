@@ -1,30 +1,47 @@
 """
-Transaction schemas for API request/response models.
+Pydantic schemas for transactions.
 """
-
+from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+
+from app.models.transaction import TransactionType
 
 
 class TransactionBase(BaseModel):
-    ticker: str = Field(
-        ..., min_length=1, max_length=20, description="Asset ticker symbol"
-    )
-    type: str = Field(..., description="Transaction type: buy or sell")
-    quantity: float = Field(..., gt=0, description="Number of shares/units")
-    price: float = Field(..., gt=0, description="Price per share/unit")
-    date: Optional[datetime] = None
-    portfolio_id: int
+    """Base schema for a transaction."""
+
+    asset_id: int
+    transaction_type: TransactionType
+    quantity: float
+    price: float
+    transaction_date: Optional[datetime] = None
+    notes: Optional[str] = None
 
 
 class TransactionCreate(TransactionBase):
+    """Schema for creating a transaction."""
+
     pass
 
 
-class TransactionInDB(TransactionBase):
+class TransactionUpdate(TransactionBase):
+    """Schema for updating a transaction."""
+
+    pass
+
+
+class TransactionInDBBase(TransactionBase):
+    """Base schema for a transaction in the database."""
+
     id: int
-    date: Optional[datetime] = None
+    portfolio_id: int
 
     class Config:
         from_attributes = True
+
+
+class Transaction(TransactionInDBBase):
+    """Schema for a transaction."""
+
+    pass

@@ -45,6 +45,7 @@ class Portfolio(Base):
     # Relationships
     user = relationship("User", back_populates="portfolio")
     holdings = relationship("Holding", back_populates="portfolio", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="portfolio", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<Portfolio(id={self.id}, name='{self.name}', user_id={self.user_id})>"
