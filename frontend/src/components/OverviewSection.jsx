@@ -14,10 +14,12 @@ const OverviewSection = () => {
       try {
         // TODO: Replace with dynamic portfolio ID
         const response = await api.get('/analysis/portfolios/1/analysis/metrics')
+        console.log('API Response:', response.data)
+        console.log('Individual Performance:', response.data?.individual_performance)
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch overview data')
-        console.error(err)
+        console.error('API Error:', err)
       } finally {
         setLoading(false)
       }

@@ -201,14 +201,12 @@ class AdvancedPortfolioAnalytics:
 
 # Demo function to showcase the analytics
 def run_portfolio_demo():
-    """Demonstrate the advanced portfolio analytics features"""
+    """Demonstrate the advanced portfolio analytics features with AAPL and NVDA"""
     
-    # Create sample portfolio positions
+    # Create sample portfolio positions matching the actual database
     positions = [
-        PortfolioPosition("AAPL", "Apple Inc.", 100, 150.0, 120.0, "Technology"),
-        PortfolioPosition("MSFT", "Microsoft Corp.", 50, 300.0, 250.0, "Technology"),
-        PortfolioPosition("JNJ", "Johnson & Johnson", 75, 160.0, 140.0, "Healthcare"),
-        PortfolioPosition("JPM", "JPMorgan Chase", 40, 140.0, 130.0, "Financial"),
+        PortfolioPosition("AAPL", "Apple Inc.", 248, 255.46, 73.0, "Technology"),
+        PortfolioPosition("NVDA", "NVIDIA Corporation", 110, 178.19, 125.0, "Technology"),
     ]
     
     # Generate sample price history (30 days)
