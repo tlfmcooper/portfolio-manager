@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategic Multi-Asset Portfolio Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="container flex justify-between items-center">
+                <div class="portfolio-info">
+                    <h1>Strategic Multi-Asset Portfolio</h1>
+                    <p class="portfolio-meta">Total Value: $1,250,000 • Last Updated: September 14, 2025</p>
+                </div>
+                <div class="theme-toggle">
+                    <button class="btn btn--outline btn--sm" id="themeToggle">🌙 Dark Mode</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="dashboard-nav">
+            <div class="container">
+                <div class="nav-tabs">
+                    <button class="nav-tab active" data-section="overview">Overview</button>
+                    <button class="nav-tab" data-section="risk">Risk Analytics</button>
+                    <button class="nav-tab" data-section="allocation">Asset Allocation</button>
+                    <button class="nav-tab" data-section="efficient">Efficient Frontier</button>
+                    <button class="nav-tab" data-section="simulation">Monte Carlo</button>
+                    <button class="nav-tab" data-section="strategy">CPPI Strategy</button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="dashboard-main">
+            <div class="container">
+                
+                <!-- Overview Section -->
+                <section id="overview" class="dashboard-section active">
+                    <h2>Performance Overview</h2>
+                    <div class="metrics-grid">
+                        <div class="metric-card positive" data-tooltip="The annualized return represents the geometric average amount of money earned by the portfolio each year. A return of 12.5% is considered strong performance, especially when risk-adjusted.">
+                            <div class="metric-header">
+                                <span class="metric-label">Annual Return</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">12.5%</div>
+                            <div class="metric-status positive">Excellent Performance</div>
+                        </div>
+
+                        <div class="metric-card neutral" data-tooltip="Annual volatility measures the portfolio's price fluctuations. 15.2% volatility is moderate and appropriate for a diversified portfolio seeking growth.">
+                            <div class="metric-header">
+                                <span class="metric-label">Annual Volatility</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">15.2%</div>
+                            <div class="metric-status neutral">Moderate Risk</div>
+                        </div>
+
+                        <div class="metric-card positive" data-tooltip="The Sharpe ratio measures risk-adjusted returns by comparing excess returns to volatility. Values above 1.0 are good, above 2.0 are very good. Your 1.45 ratio indicates excellent risk-adjusted performance.">
+                            <div class="metric-header">
+                                <span class="metric-label">Sharpe Ratio</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">1.45</div>
+                            <div class="metric-status positive">Excellent Risk-Adj Return</div>
+                        </div>
+
+                        <div class="metric-card positive" data-tooltip="The Sortino ratio focuses on downside volatility, providing a better measure of risk-adjusted returns than Sharpe. A ratio of 1.67 indicates strong performance with limited downside risk.">
+                            <div class="metric-header">
+                                <span class="metric-label">Sortino Ratio</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">1.67</div>
+                            <div class="metric-status positive">Strong Downside Protection</div>
+                        </div>
+
+                        <div class="metric-card positive" data-tooltip="Maximum drawdown shows the largest peak-to-trough decline. A -8.3% drawdown is relatively modest and indicates good risk management through diversification.">
+                            <div class="metric-header">
+                                <span class="metric-label">Maximum Drawdown</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">-8.3%</div>
+                            <div class="metric-status positive">Well Controlled</div>
+                        </div>
+
+                        <div class="metric-card positive" data-tooltip="The Calmar ratio compares annual return to maximum drawdown. A ratio of 1.51 indicates strong returns relative to maximum loss, showing effective risk management.">
+                            <div class="metric-header">
+                                <span class="metric-label">Calmar Ratio</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">1.51</div>
+                            <div class="metric-status positive">Strong Return/Risk</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Performance Distribution</h3>
+                        <div style="position: relative; height: 400px;">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Risk Analytics Section -->
+                <section id="risk" class="dashboard-section">
+                    <h2>Risk Analytics</h2>
+                    <div class="metrics-grid">
+                        <div class="metric-card warning" data-tooltip="Value at Risk (95%) indicates there's only a 5% chance of losing more than 2.1% in any given period. This helps quantify downside risk exposure.">
+                            <div class="metric-header">
+                                <span class="metric-label">VaR (95%)</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">-2.1%</div>
+                            <div class="metric-status warning">5% Probability</div>
+                        </div>
+
+                        <div class="metric-card negative" data-tooltip="Value at Risk (99%) shows the potential loss in extreme scenarios (1% probability). -3.4% represents the tail risk of the portfolio.">
+                            <div class="metric-header">
+                                <span class="metric-label">VaR (99%)</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">-3.4%</div>
+                            <div class="metric-status negative">1% Probability</div>
+                        </div>
+
+                        <div class="metric-card negative" data-tooltip="Conditional VaR shows the expected loss when VaR is exceeded. -4.2% represents the average loss in worst-case scenarios beyond the 95% threshold.">
+                            <div class="metric-header">
+                                <span class="metric-label">CVaR (Expected Shortfall)</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">-4.2%</div>
+                            <div class="metric-status negative">Tail Risk</div>
+                        </div>
+
+                        <div class="metric-card neutral" data-tooltip="Semideviation measures downside volatility only, focusing on negative returns. 9.34% indicates moderate downside risk relative to total volatility.">
+                            <div class="metric-header">
+                                <span class="metric-label">Semideviation</span>
+                                <span class="info-icon">ℹ️</span>
+                            </div>
+                            <div class="metric-value">9.34%</div>
+                            <div class="metric-status neutral">Downside Volatility</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Risk Distribution</h3>
+                        <div style="position: relative; height: 400px;">
+                            <canvas id="riskChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Asset Allocation Section -->
+                <section id="allocation" class="dashboard-section">
+                    <h2>Asset Allocation</h2>
+                    <div class="allocation-grid">
+                        <div class="chart-container">
+                            <h3>Portfolio Composition</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="allocationChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="allocation-details">
+                            <h3>Asset Breakdown</h3>
+                            <div class="asset-list">
+                                <div class="asset-item">
+                                    <span class="asset-symbol">SPY</span>
+                                    <span class="asset-name">S&P 500 ETF</span>
+                                    <span class="asset-weight">20.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">AAPL</span>
+                                    <span class="asset-name">Apple Inc.</span>
+                                    <span class="asset-weight">15.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">MSFT</span>
+                                    <span class="asset-name">Microsoft Corp.</span>
+                                    <span class="asset-weight">13.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">GOOGL</span>
+                                    <span class="asset-name">Alphabet Inc.</span>
+                                    <span class="asset-weight">12.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">AMZN</span>
+                                    <span class="asset-name">Amazon.com Inc.</span>
+                                    <span class="asset-weight">10.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">QQQ</span>
+                                    <span class="asset-name">Nasdaq 100 ETF</span>
+                                    <span class="asset-weight">10.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">TLT</span>
+                                    <span class="asset-name">20+ Year Treasury ETF</span>
+                                    <span class="asset-weight">8.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">GLD</span>
+                                    <span class="asset-name">Gold ETF</span>
+                                    <span class="asset-weight">7.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">VNQ</span>
+                                    <span class="asset-name">Real Estate ETF</span>
+                                    <span class="asset-weight">3.0%</span>
+                                </div>
+                                <div class="asset-item">
+                                    <span class="asset-symbol">VEA</span>
+                                    <span class="asset-name">Developed Markets ETF</span>
+                                    <span class="asset-weight">2.0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Efficient Frontier Section -->
+                <section id="efficient" class="dashboard-section">
+                    <h2>Efficient Frontier Analysis</h2>
+                    <div class="explanation-card">
+                        <p>The efficient frontier shows optimal risk-return combinations. Portfolios on the frontier provide maximum return for each level of risk. Your current portfolio (marked in blue) sits near the efficient frontier, indicating good optimization.</p>
+                    </div>
+                    <div class="chart-container">
+                        <div style="position: relative; height: 500px;">
+                            <canvas id="efficientFrontierChart"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Monte Carlo Section -->
+                <section id="simulation" class="dashboard-section">
+                    <h2>Monte Carlo Simulation</h2>
+                    <div class="simulation-summary">
+                        <div class="metric-card neutral">
+                            <div class="metric-label">Success Probability</div>
+                            <div class="metric-value">85%</div>
+                            <div class="metric-status">1000 Scenarios</div>
+                        </div>
+                        <div class="metric-card positive">
+                            <div class="metric-label">Expected Value</div>
+                            <div class="metric-value">$1,125K</div>
+                            <div class="metric-status">Mean Outcome</div>
+                        </div>
+                        <div class="metric-card neutral">
+                            <div class="metric-label">5th Percentile</div>
+                            <div class="metric-value">$850K</div>
+                            <div class="metric-status">Worst Case</div>
+                        </div>
+                        <div class="metric-card positive">
+                            <div class="metric-label">95th Percentile</div>
+                            <div class="metric-value">$1,420K</div>
+                            <div class="metric-status">Best Case</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-grid">
+                        <div class="chart-container">
+                            <h3>Simulation Paths (Sample Scenarios)</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="monteCarloPathsChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Final Return Distribution</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="monteCarloDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CPPI Strategy Section -->
+                <section id="strategy" class="dashboard-section">
+                    <h2>CPPI Strategy Analysis</h2>
+                    <div class="explanation-card">
+                        <p>CPPI (Constant Proportion Portfolio Insurance) is a dynamic strategy that adjusts risk exposure to provide downside protection while maintaining upside participation. The strategy outperformed buy-and-hold by 4.9%.</p>
+                    </div>
+                    <div class="strategy-metrics">
+                        <div class="metric-card positive">
+                            <div class="metric-label">CPPI Final Value</div>
+                            <div class="metric-value">$1,180K</div>
+                            <div class="metric-status">Dynamic Strategy</div>
+                        </div>
+                        <div class="metric-card neutral">
+                            <div class="metric-label">Buy & Hold Value</div>
+                            <div class="metric-value">$1,125K</div>
+                            <div class="metric-status">Static Strategy</div>
+                        </div>
+                        <div class="metric-card positive">
+                            <div class="metric-label">Outperformance</div>
+                            <div class="metric-value">+4.9%</div>
+                            <div class="metric-status">CPPI Advantage</div>
+                        </div>
+                        <div class="metric-card neutral">
+                            <div class="metric-label">Multiplier</div>
+                            <div class="metric-value">3.0x</div>
+                            <div class="metric-status">Risk Leverage</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-grid">
+                        <div class="chart-container">
+                            <h3>Performance Comparison</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="cppiPerformanceChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Dynamic Allocation</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="cppiAllocationChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Risk Budget Evolution</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="cppiRiskBudgetChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Drawdown Comparison</h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="cppiDrawdownChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

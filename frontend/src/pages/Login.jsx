@@ -45,7 +45,7 @@ const Login = () => {
     
     // Redirect to onboarding if it's the user's first login
     // Otherwise, go to dashboard
-    navigate('/onboarding');
+    navigate('/dashboard');
   };
 
   return (

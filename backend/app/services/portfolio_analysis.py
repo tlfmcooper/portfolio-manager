@@ -63,22 +63,43 @@ class AdvancedPortfolioAnalytics:
         portfolio_return = self._calculate_portfolio_return(weights, returns_data)
         portfolio_volatility = self._calculate_portfolio_volatility(weights, returns_data)
         sharpe_ratio = self._calculate_sharpe_ratio(portfolio_return, portfolio_volatility)
+        sortino_ratio = self._calculate_sortino_ratio(portfolio_return, returns_data, weights)
 
         # Risk metrics
         var_95 = self._calculate_var(returns_data, weights, confidence_level=0.95)
+        var_99 = self._calculate_var_99(returns_data, weights)
+        cvar = self._calculate_cvar(returns_data, weights, confidence_level=0.95)
+        semideviation = self._calculate_semideviation(returns_data, weights)
         max_drawdown = self._calculate_max_drawdown(price_history, weights)
+        calmar_ratio = self._calculate_calmar_ratio(portfolio_return, max_drawdown)
+
+        # Individual asset performance
+        individual_performance = {}
+        for holding in holdings:
+            ticker = holding.asset.ticker
+            if ticker in returns_data.columns:
+                asset_returns = returns_data[ticker]
+                individual_performance[ticker] = {
+                    "return": asset_returns.mean() * 252,  # Annualized
+                    "volatility": asset_returns.std() * np.sqrt(252),  # Annualized
+                }
 
         return {
             "portfolio_return_annualized": portfolio_return * 252,  # Daily to annual
             "portfolio_volatility_annualized": portfolio_volatility * np.sqrt(252),
             "sharpe_ratio": sharpe_ratio,
+            "sortino_ratio": sortino_ratio,
             "value_at_risk_95": var_95,
+            "value_at_risk_99": var_99,
+            "cvar": cvar,
+            "semideviation": semideviation,
             "max_drawdown": max_drawdown,
+            "calmar_ratio": calmar_ratio,
             "total_portfolio_value": total_value,
             "number_of_positions": len(holdings),
-            "concentration_risk": max(weights)  # Largest position weight
+            "concentration_risk": max(weights),
+            "individual_performance": individual_performance,
         }
-
     def _calculate_returns(self, price_history: Dict[str, List[float]]) -> pd.DataFrame:
         """Calculate daily returns for all positions"""
         returns_dict = {}
@@ -108,12 +129,51 @@ class AdvancedPortfolioAnalytics:
             return 0
         return (portfolio_return - self.risk_free_rate / 252) / portfolio_volatility
 
+    def _calculate_sortino_ratio(self, portfolio_return: float, returns_data: pd.DataFrame, weights: List[float]) -> float:
+        """Calculate Sortino ratio"""
+        portfolio_returns = returns_data.dot(weights)
+        downside_returns = portfolio_returns[portfolio_returns < 0]
+        if downside_returns.empty:
+            return 0
+        downside_deviation = np.std(downside_returns)
+        if downside_deviation == 0:
+            return 0
+        return (portfolio_return - self.risk_free_rate / 252) / downside_deviation
+
+    def _calculate_calmar_ratio(self, portfolio_return: float, max_drawdown: float) -> float:
+        """Calculate Calmar ratio"""
+        if max_drawdown == 0:
+            return 0
+        return portfolio_return / max_drawdown
+
     def _calculate_var(self, returns_data: pd.DataFrame, weights: List[float], 
                       confidence_level: float = 0.95) -> float:
         """Calculate Value at Risk using historical simulation"""
         portfolio_returns = returns_data.dot(weights)
         var_value = np.percentile(portfolio_returns, (1 - confidence_level) * 100)
         return abs(var_value)
+
+    def _calculate_var_99(self, returns_data: pd.DataFrame, weights: List[float]) -> float:
+        """Calculate Value at Risk (99%) using historical simulation"""
+        portfolio_returns = returns_data.dot(weights)
+        var_value = np.percentile(portfolio_returns, 1)
+        return abs(var_value)
+
+    def _calculate_cvar(self, returns_data: pd.DataFrame, weights: List[float], 
+                       confidence_level: float = 0.95) -> float:
+        """Calculate Conditional Value at Risk (CVaR) using historical simulation"""
+        portfolio_returns = returns_data.dot(weights)
+        var_95 = np.percentile(portfolio_returns, (1 - confidence_level) * 100)
+        cvar_value = portfolio_returns[portfolio_returns <= var_95].mean()
+        return abs(cvar_value)
+
+    def _calculate_semideviation(self, returns_data: pd.DataFrame, weights: List[float]) -> float:
+        """Calculate semideviation (downside volatility)"""
+        portfolio_returns = returns_data.dot(weights)
+        downside_returns = portfolio_returns[portfolio_returns < 0]
+        if downside_returns.empty:
+            return 0
+        return np.std(downside_returns)
 
     def _calculate_max_drawdown(self, price_history: Dict[str, List[float]], 
                                weights: List[float]) -> float:

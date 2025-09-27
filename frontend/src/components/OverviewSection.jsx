@@ -31,7 +31,7 @@ const OverviewSection = () => {
   if (!data) return null
 
   const performanceMetrics = data || {}
-  const individualPerformance = {} // TODO: Fetch individual performance data
+  const individualPerformance = data.individual_performance || {}
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A'
@@ -108,11 +108,25 @@ const OverviewSection = () => {
       tooltip: 'The Sharpe ratio measures risk-adjusted returns. Values above 1.0 are good, above 2.0 are very good.'
     },
     {
+      key: 'sortino_ratio',
+      label: 'Sortino Ratio',
+      value: performanceMetrics.sortino_ratio,
+      formatter: formatRatio,
+      tooltip: 'The Sortino ratio focuses on downside volatility, providing a better measure of risk-adjusted returns.'
+    },
+    {
       key: 'max_drawdown',
       label: 'Maximum Drawdown',
       value: performanceMetrics.max_drawdown,
       formatter: formatPercentage,
       tooltip: 'Maximum drawdown shows the largest peak-to-trough decline in portfolio value.'
+    },
+    {
+      key: 'calmar_ratio',
+      label: 'Calmar Ratio',
+      value: performanceMetrics.calmar_ratio,
+      formatter: formatRatio,
+      tooltip: 'The Calmar ratio compares annual return to maximum drawdown.'
     }
   ]
 
@@ -170,7 +184,7 @@ const OverviewSection = () => {
             </h3>
             <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} barSize={20} barGap={3}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                   <XAxis 
                     dataKey="symbol" 

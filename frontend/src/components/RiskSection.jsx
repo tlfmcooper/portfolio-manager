@@ -75,6 +75,24 @@ const RiskSection = () => {
       value: riskAnalytics.value_at_risk_95,
       type: 'warning'
     },
+    {
+      key: 'value_at_risk_99',
+      label: 'VaR (99%)',
+      value: riskAnalytics.value_at_risk_99,
+      type: 'negative'
+    },
+    {
+      key: 'cvar',
+      label: 'CVaR (Expected Shortfall)',
+      value: riskAnalytics.cvar,
+      type: 'negative'
+    },
+    {
+      key: 'semideviation',
+      label: 'Semideviation',
+      value: riskAnalytics.semideviation,
+      type: 'neutral'
+    }
   ]
 
   // Prepare data for risk distribution chart
@@ -84,9 +102,24 @@ const RiskSection = () => {
       value: Math.abs((riskAnalytics.value_at_risk_95 || 0) * 100),
       color: '#F59E0B'
     },
+    {
+      name: 'VaR 99%',
+      value: Math.abs((riskAnalytics.value_at_risk_99 || 0) * 100),
+      color: '#EF4444'
+    },
+    {
+      name: 'CVaR',
+      value: Math.abs((riskAnalytics.cvar || 0) * 100),
+      color: '#DC2626'
+    },
+    {
+      name: 'Semideviation',
+      value: (riskAnalytics.semideviation || 0) * 100,
+      color: '#3B82F6'
+    }
   ]
 
-  const COLORS = ['#F59E0B']
+  const COLORS = ['#F59E0B', '#EF4444', '#DC2626', '#3B82F6']
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
@@ -193,6 +226,14 @@ const RiskSection = () => {
                 <p>
                   Your portfolio shows a <strong>VaR (95%) of {formatPercentage(riskAnalytics.value_at_risk_95)}</strong>, 
                   meaning there's only a 5% chance of losing more than this amount in any given period.
+                </p>
+                <p>
+                  The <strong>Expected Shortfall (CVaR) of {formatPercentage(riskAnalytics.cvar)}</strong> represents 
+                  the average loss in worst-case scenarios beyond the 95% threshold.
+                </p>
+                <p>
+                  Portfolio volatility is <strong>{formatPercentage(riskAnalytics.portfolio_volatility_annualized)}</strong> annualized, 
+                  with downside semideviation of <strong>{formatPercentage(riskAnalytics.semideviation)}</strong>.
                 </p>
               </div>
             </div>

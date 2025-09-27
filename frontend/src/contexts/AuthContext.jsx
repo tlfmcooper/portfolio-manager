@@ -86,6 +86,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const validateToken = async () => {
+    // Ensure a clean state before validation
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.get('/users/me');
       setUser(response.data);
