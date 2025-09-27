@@ -26,7 +26,7 @@ const DashboardLayout = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
-  const { api, user } = useAuth();
+  const { api, user, logout } = useAuth(); // <-- FIX: add logout here
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: TrendingUp },
@@ -142,10 +142,7 @@ const DashboardLayout = () => {
                 {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
               </button>
               <button
-                onClick={async () => {
-                  const { logout } = useAuth();
-                  await logout();
-                }}
+                onClick={logout} // <-- FIX: use logout directly
                 className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
               >
                 Logout

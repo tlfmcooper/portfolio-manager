@@ -63,11 +63,7 @@ const Onboarding = () => {
         </div>
       )}
       
-      <PortfolioOnboarding 
-        userData={user} 
-        onSubmit={handleOnboardingComplete} 
-        isSubmitting={isSubmitting}
-      />
+      <PortfolioOnboarding />
     </div>
   );
 };

@@ -1,9 +1,10 @@
 """
 API v1 router initialization.
 """
+
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, portfolios, holdings
+from app.api.v1 import auth, users, portfolios, holdings, assets
 from app.api.v1.auth_extended import refresh_router
 
 api_router = APIRouter()
@@ -20,3 +21,6 @@ api_router.include_router(portfolios.router, prefix="/portfolios", tags=["portfo
 
 # Include holdings management routes
 api_router.include_router(holdings.router, prefix="/holdings", tags=["holdings"])
+
+# Include assets management routes
+api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
