@@ -12,19 +12,9 @@ const LoadingSpinner = () => (
 
 const TabOverview = () => {
   return (
-    <section className="dashboard-section active">
-      <h2 style={{ 
-        marginBottom: 'var(--space-24)', 
-        fontSize: 'var(--font-size-2xl)', 
-        color: 'var(--color-text)',
-        fontWeight: 'var(--font-weight-semibold)'
-      }}>
-        Performance Overview
-      </h2>
-      <Suspense fallback={<LoadingSpinner />}>
-        <OverviewSection />
-      </Suspense>
-    </section>
+    <Suspense fallback={<LoadingSpinner />}>
+      <OverviewSection />
+    </Suspense>
   );
 };
 

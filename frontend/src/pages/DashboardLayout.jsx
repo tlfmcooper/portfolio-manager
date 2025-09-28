@@ -57,30 +57,35 @@ const DashboardLayout = () => {
     } else if (path.includes('portfolio')) {
       setActiveTab('allocation');
     } else if (path.includes('analytics')) {
-      setActiveTab('risk');
+      setActiveTab('risk'); // Default to risk for analytics page
     } else if (path.includes('update-portfolio')) {
       setActiveTab('overview'); // Default for update-portfolio
+    } else if (path === '/dashboard' || path === '/dashboard/') {
+      setActiveTab('overview'); // Default to overview
     }
   }, [location]);
 
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
-    // Navigate to different sections based on tab
-    switch (tabId) {
+    // No need to navigate - just change the active tab state
+  };
+
+  const getTabTitle = () => {
+    switch (activeTab) {
       case 'overview':
-        navigate('/dashboard/overview');
-        break;
+        return 'Performance Overview';
       case 'risk':
-      case 'efficient':
-      case 'simulation':
-      case 'strategy':
-        navigate('/dashboard/analytics');
-        break;
+        return 'Risk Analytics';
       case 'allocation':
-        navigate('/dashboard/portfolio');
-        break;
+        return 'Asset Allocation';
+      case 'efficient':
+        return 'Efficient Frontier Analysis';
+      case 'simulation':
+        return 'Monte Carlo Simulation';
+      case 'strategy':
+        return 'CPPI Strategy Analysis';
       default:
-        navigate('/dashboard/overview');
+        return 'Performance Overview';
     }
   };
 
@@ -222,6 +227,17 @@ const DashboardLayout = () => {
 
         <main className="flex-1 overflow-y-auto dashboard"> 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
+            {/* Show dynamic title for tab-based content */}
+            {!location.pathname.includes('update-portfolio') && (
+              <h2 style={{ 
+                marginBottom: 'var(--space-24)', 
+                fontSize: 'var(--font-size-2xl)', 
+                color: 'var(--color-text)',
+                fontWeight: 'var(--font-weight-semibold)'
+              }}>
+                {getTabTitle()}
+              </h2>
+            )}
             <Suspense fallback={<LoadingSpinner />}>
               {renderTabContent()}
             </Suspense>

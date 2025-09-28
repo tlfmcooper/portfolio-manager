@@ -12,15 +12,7 @@ const LoadingSpinner = () => (
 
 const TabEfficientFrontier = () => {
   return (
-    <section className="dashboard-section active">
-      <h2 style={{ 
-        marginBottom: 'var(--space-24)', 
-        fontSize: 'var(--font-size-2xl)', 
-        color: 'var(--color-text)',
-        fontWeight: 'var(--font-weight-semibold)'
-      }}>
-        Efficient Frontier Analysis
-      </h2>
+    <>
       <div className="explanation-card" style={{
         backgroundColor: 'var(--color-bg-2)',
         border: '1px solid var(--color-border)',
@@ -40,7 +32,7 @@ const TabEfficientFrontier = () => {
       <Suspense fallback={<LoadingSpinner />}>
         <EfficientFrontierSection />
       </Suspense>
-    </section>
+    </>
   );
 };
 
