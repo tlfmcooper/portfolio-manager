@@ -149,15 +149,6 @@ const RiskSection = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h2 style={{ 
-          fontSize: 'var(--font-size-3xl)', 
-          fontWeight: 'var(--font-weight-bold)', 
-          marginBottom: 'var(--space-24)',
-          color: 'var(--color-text)'
-        }}>
-          Risk Analytics
-        </h2>
-        
         {/* Risk Metrics Grid */}
         <div className="metrics-grid">
           {riskMetrics.map((metric) => {

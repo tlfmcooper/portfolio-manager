@@ -122,8 +122,6 @@ const CPPISection = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold mb-6">CPPI Strategy Analysis</h2>
-        
         {/* Explanation Card */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
           <div className="flex items-start">
