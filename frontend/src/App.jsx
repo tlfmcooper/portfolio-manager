@@ -2,8 +2,9 @@ import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
-import { Loader2, TrendingUp, Shield, PieChart, Target, BarChart3, TrendingDown } from 'lucide-react';
+import { Loader2, TrendingUp, Shield, PieChart, Target, BarChart3, TrendingDown, Menu } from 'lucide-react'; // Added Menu icon
 import PortfolioService from './services/portfolioService';
+import Sidebar from './components/Sidebar'; // Import Sidebar component
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -34,7 +35,8 @@ const DashboardLayout = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
-  const { api, user, logout } = useAuth(); // <-- FIX: add logout here
+  const [sidebarOpen, setSidebarOpen] = useState(false); // State for sidebar visibility
+  const { api, user, logout } = useAuth();
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: TrendingUp },
@@ -142,79 +144,95 @@ const DashboardLayout = () => {
     }
 
     return (
-      <div className="dashboard">
-        <header className="dashboard-header">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <div className="portfolio-info">
-              <h1>Strategic Multi-Asset Portfolio</h1>
-              {user && (
-                <p className="portfolio-meta">
-                  Welcome back, {user.display_name || user.username} • Last Updated: {new Date().toLocaleDateString()}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={toggleTheme}
-                className="px-4 py-2 rounded-lg border transition-all duration-200"
-                style={{
-                  backgroundColor: darkMode ? 'var(--color-surface)' : 'var(--color-surface)',
-                  borderColor: 'var(--color-border)',
-                  color: 'var(--color-text)'
-                }}
-              >
-                {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-              </button>
-              <button
-                onClick={logout}
-                className="px-4 py-2 rounded-lg transition-colors"
-                style={{
-                  backgroundColor: 'var(--color-error)',
-                  color: 'var(--color-white)'
-                }}
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </header>
+      <div className="min-h-screen flex"> {/* Changed to flex container for sidebar */}
+        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} darkMode={darkMode} toggleDarkMode={toggleTheme} />
 
-        <nav className="dashboard-nav">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="nav-tabs">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
-                  >
-                    <div className="flex items-center">
-                      <Icon className="h-5 w-5 mr-2" />
-                      {tab.label}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </nav>
-
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
-          <Suspense fallback={<LoadingSpinner />}>
-            {portfolioData && (
-              <div className="space-y-8">
-                {activeTab === 'overview' && <OverviewSection />}
-                {activeTab === 'risk' && <RiskSection />}
-                {activeTab === 'allocation' && <AllocationSection />}
-                {activeTab === 'efficient' && <EfficientFrontierSection />}
-                {activeTab === 'simulation' && <MonteCarloSection />}
-                {activeTab === 'strategy' && <CPPISection />}
+        <div className="flex-1 flex flex-col"> {/* Main content area */}
+          <header className="dashboard-header">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+              <div className="flex items-center"> {/* Added flex for hamburger menu */}
+                <button
+                  type="button"
+                  className="md:hidden p-1 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <span className="sr-only">Open sidebar</span>
+                  <Menu className="h-6 w-6" aria-hidden="true" />
+                </button>
+                <div className="portfolio-info ml-4"> {/* Added ml-4 for spacing */}
+                  <h1>Strategic Multi-Asset Portfolio</h1>
+                  {user && (
+                    <p className="portfolio-meta">
+                      Welcome back, {user.display_name || user.username} • Last Updated: {new Date().toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-          </Suspense>
-        </main>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={toggleTheme}
+                  className="px-4 py-2 rounded-lg border transition-all duration-200"
+                  style={{
+                    backgroundColor: darkMode ? 'var(--color-surface)' : 'var(--color-surface)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text)'
+                  }}
+                >
+                  {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+                </button>
+                <button
+                  onClick={logout}
+                  className="px-4 py-2 rounded-lg transition-colors"
+                  style={{
+                    backgroundColor: 'var(--color-error)',
+                    color: 'var(--color-white)'
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <nav className="dashboard-nav">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="nav-tabs">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+                    >
+                      <div className="flex items-center">
+                        <Icon className="h-5 w-5 mr-2" />
+                        {tab.label}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </nav>
+
+          <main className="flex-1 overflow-y-auto"> {/* Removed max-w-7xl and padding */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
+              <Suspense fallback={<LoadingSpinner />}>
+                {portfolioData && (
+                  <div className="space-y-8">
+                    {activeTab === 'overview' && <OverviewSection />}
+                    {activeTab === 'risk' && <RiskSection />}
+                    {activeTab === 'allocation' && <AllocationSection />}
+                    {activeTab === 'efficient' && <EfficientFrontierSection />}
+                    {activeTab === 'simulation' && <MonteCarloSection />}
+                    {activeTab === 'strategy' && <CPPISection />}
+                  </div>
+                )}
+              </Suspense>
+            </div>
+          </main>
+        </div>
       </div>
     );
   };
@@ -224,7 +242,7 @@ const DashboardLayout = () => {
 
 // Protected layout component
 const ProtectedLayout = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, isOnboarded } = useAuth(); // Get isOnboarded status
 
   if (loading) {
     return <LoadingSpinner />;
@@ -232,6 +250,11 @@ const ProtectedLayout = () => {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to onboarding if user is logged in but not onboarded
+  if (user && !loading && !isOnboarded) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return (

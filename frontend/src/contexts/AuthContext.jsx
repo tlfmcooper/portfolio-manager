@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PortfolioService from '../services/portfolioService'; // Import PortfolioService
 
 const AuthContext = createContext(null);
 
@@ -73,7 +74,25 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isOnboarded, setIsOnboarded] = useState(true); // New state for onboarding status
   const navigate = useNavigate();
+
+  const portfolioService = new PortfolioService(api); // Initialize portfolio service
+
+  // Function to check onboarding status
+  const checkOnboardingStatus = async (currentUser) => {
+    if (!currentUser) {
+      setIsOnboarded(false);
+      return;
+    }
+    try {
+      const analysis = await portfolioService.getPortfolioAnalysis();
+      setIsOnboarded(!!analysis); // If analysis exists, user is onboarded
+    } catch (err) {
+      console.error('Error checking onboarding status:', err);
+      setIsOnboarded(false); // Assume not onboarded if there\'s an error
+    }
+  };
 
   // Check if user is logged in on initial load
   useEffect(() => {
@@ -82,6 +101,7 @@ export const AuthProvider = ({ children }) => {
       validateToken();
     } else {
       setLoading(false);
+      setIsOnboarded(false); // No token, so not onboarded
     }
   }, []);
 
@@ -98,13 +118,16 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const response = await api.get('/users/me');
-      setUser(response.data);
+      const userData = response.data;
+      setUser(userData);
       setError(null);
+      await checkOnboardingStatus(userData); // Check onboarding status after setting user
     } catch (err) {
       console.error('Token validation failed:', err);
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       setUser(null);
+      setIsOnboarded(false); // Not onboarded if token validation fails
     } finally {
       setLoading(false);
     }
@@ -139,10 +162,13 @@ export const AuthProvider = ({ children }) => {
       
       // Fetch user data
       const userResponse = await api.get('/users/me');
-      setUser(userResponse.data);
+      const userData = userResponse.data;
+      setUser(userData);
+      
+      await checkOnboardingStatus(userData); // Check onboarding status after setting user
       
       toast.success('Login successful!');
-      navigate('/dashboard');
+      // navigate('/dashboard'); // Navigation will be handled by ProtectedLayout
       
       return { success: true };
     } catch (err) {
@@ -217,6 +243,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     changePassword,
     isAuthenticated: !!user,
+    isOnboarded, // Expose onboarding status
     api, // Expose the configured axios instance
   };
 
