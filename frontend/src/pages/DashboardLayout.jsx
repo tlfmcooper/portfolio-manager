@@ -1,10 +1,18 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Loader2, Menu } from 'lucide-react';
+import { Loader2, Menu, TrendingUp, Shield, PieChart, Target, BarChart3, TrendingDown } from 'lucide-react';
 import PortfolioService from '../services/portfolioService';
 import Sidebar from '../components/Sidebar';
+
+// Import tab components
+import TabOverview from '../components/tabs/TabOverview';
+import TabRisk from '../components/tabs/TabRisk';
+import TabAllocation from '../components/tabs/TabAllocation';
+import TabEfficientFrontier from '../components/tabs/TabEfficientFrontier';
+import TabMonteCarlo from '../components/tabs/TabMonteCarlo';
+import TabCPPI from '../components/tabs/TabCPPI';
 
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-background)' }}>
@@ -18,7 +26,19 @@ const DashboardLayout = () => {
   const [error, setError] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const { api, user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: TrendingUp },
+    { id: 'risk', label: 'Risk Analytics', icon: Shield },
+    { id: 'allocation', label: 'Asset Allocation', icon: PieChart },
+    { id: 'efficient', label: 'Efficient Frontier', icon: Target },
+    { id: 'simulation', label: 'Monte Carlo', icon: BarChart3 },
+    { id: 'strategy', label: 'CPPI Strategy', icon: TrendingDown },
+  ];
 
   // Initialize portfolio service
   const portfolioService = new PortfolioService(api);
@@ -28,6 +48,66 @@ const DashboardLayout = () => {
       fetchPortfolioData();
     }
   }, [user]);
+
+  // Set active tab based on current route
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('overview')) {
+      setActiveTab('overview');
+    } else if (path.includes('portfolio')) {
+      setActiveTab('allocation');
+    } else if (path.includes('analytics')) {
+      setActiveTab('risk');
+    } else if (path.includes('update-portfolio')) {
+      setActiveTab('overview'); // Default for update-portfolio
+    }
+  }, [location]);
+
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    // Navigate to different sections based on tab
+    switch (tabId) {
+      case 'overview':
+        navigate('/dashboard/overview');
+        break;
+      case 'risk':
+      case 'efficient':
+      case 'simulation':
+      case 'strategy':
+        navigate('/dashboard/analytics');
+        break;
+      case 'allocation':
+        navigate('/dashboard/portfolio');
+        break;
+      default:
+        navigate('/dashboard/overview');
+    }
+  };
+
+  const renderTabContent = () => {
+    // If on update-portfolio route, show the outlet for the UpdatePortfolio component
+    if (location.pathname.includes('update-portfolio')) {
+      return <Outlet />;
+    }
+    
+    // Otherwise, show the tab-based content
+    switch (activeTab) {
+      case 'overview':
+        return <TabOverview />;
+      case 'risk':
+        return <TabRisk />;
+      case 'allocation':
+        return <TabAllocation />;
+      case 'efficient':
+        return <TabEfficientFrontier />;
+      case 'simulation':
+        return <TabMonteCarlo />;
+      case 'strategy':
+        return <TabCPPI />;
+      default:
+        return <TabOverview />;
+    }
+  };
 
   const fetchPortfolioData = async () => {
     try {
@@ -115,10 +195,35 @@ const DashboardLayout = () => {
           </div>
         </header>
 
+        {/* Navigation Tabs - Hide on update-portfolio route */}
+        {!location.pathname.includes('update-portfolio') && (
+          <nav className="dashboard-nav">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="nav-tabs">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => handleTabClick(tab.id)}
+                      className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+                    >
+                      <div className="flex items-center">
+                        <Icon className="h-5 w-5 mr-2" />
+                        {tab.label}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </nav>
+        )}
+
         <main className="flex-1 overflow-y-auto dashboard"> 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
             <Suspense fallback={<LoadingSpinner />}>
-              <Outlet />
+              {renderTabContent()}
             </Suspense>
           </div>
         </main>
