@@ -15,37 +15,65 @@ const LoadingSpinner = () => (
 
 const Analytics = () => {
   return (
-    <div className="space-y-8">
+    <section className="dashboard-section active">
+      <h2 style={{ 
+        marginBottom: 'var(--space-24)', 
+        fontSize: 'var(--font-size-2xl)', 
+        color: 'var(--color-text)',
+        fontWeight: 'var(--font-weight-semibold)'
+      }}>
+        Advanced Analytics
+      </h2>
       <Suspense fallback={<LoadingSpinner />}>
-        <div>
-          <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+        <div style={{ marginBottom: 'var(--space-32)' }}>
+          <h3 style={{ 
+            marginBottom: 'var(--space-16)', 
+            fontSize: 'var(--font-size-xl)', 
+            color: 'var(--color-text)',
+            fontWeight: 'var(--font-weight-medium)'
+          }}>
             Risk Analytics
-          </h2>
+          </h3>
           <RiskSection />
         </div>
         
-        <div>
-          <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+        <div style={{ marginBottom: 'var(--space-32)' }}>
+          <h3 style={{ 
+            marginBottom: 'var(--space-16)', 
+            fontSize: 'var(--font-size-xl)', 
+            color: 'var(--color-text)',
+            fontWeight: 'var(--font-weight-medium)'
+          }}>
             Efficient Frontier Analysis
-          </h2>
+          </h3>
           <EfficientFrontierSection />
         </div>
         
-        <div>
-          <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+        <div style={{ marginBottom: 'var(--space-32)' }}>
+          <h3 style={{ 
+            marginBottom: 'var(--space-16)', 
+            fontSize: 'var(--font-size-xl)', 
+            color: 'var(--color-text)',
+            fontWeight: 'var(--font-weight-medium)'
+          }}>
             Monte Carlo Simulation
-          </h2>
+          </h3>
           <MonteCarloSection />
         </div>
         
-        <div>
-          <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+        <div style={{ marginBottom: 'var(--space-32)' }}>
+          <h3 style={{ 
+            marginBottom: 'var(--space-16)', 
+            fontSize: 'var(--font-size-xl)', 
+            color: 'var(--color-text)',
+            fontWeight: 'var(--font-weight-medium)'
+          }}>
             CPPI Strategy
-          </h2>
+          </h3>
           <CPPISection />
         </div>
       </Suspense>
-    </div>
+    </section>
   );
 };
 

@@ -65,7 +65,7 @@ const DashboardLayout = () => {
   };
 
   return (
-    <div className="min-h-screen flex"> 
+    <div className="min-h-screen flex bg-gray-100 dark:bg-gray-900"> 
       <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} darkMode={darkMode} toggleDarkMode={toggleTheme} />
 
       <div className="flex-1 flex flex-col"> 
@@ -115,7 +115,7 @@ const DashboardLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto"> 
+        <main className="flex-1 overflow-y-auto dashboard"> 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
             <Suspense fallback={<LoadingSpinner />}>
               <Outlet />

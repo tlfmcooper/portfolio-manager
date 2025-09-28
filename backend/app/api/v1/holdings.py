@@ -18,7 +18,6 @@ from app.crud import (
     update_holding,
     delete_holding
 )
-from app.crud.holding import update_holding as update_holding_crud
 from app.crud.transaction import create_transaction
 from app.schemas.transaction import TransactionCreate
 from app.utils.dependencies import get_current_active_user

@@ -520,6 +520,137 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Sidebar specific styling */
+.sidebar-nav-link {
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+
+.sidebar-nav-link:hover {
+  background-color: var(--color-secondary);
+  color: var(--color-text);
+  transform: translateX(4px);
+}
+
+.sidebar-nav-link.active {
+  background-color: var(--color-primary);
+  color: var(--color-btn-primary-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar-nav-link.active:hover {
+  transform: none;
+  background-color: var(--color-primary-hover);
+}
+
+/* Enhanced hover effects */
+.hover\\:transform:hover {
+  transform: translateX(4px);
+}
+
+/* Smooth transitions for all elements */
+.transition-all {
+  transition: all var(--duration-normal) var(--ease-standard);
+}
+
+/* Focus ring improvements */
+.focus\\:ring-2:focus {
+  box-shadow: var(--focus-ring);
+}
+
+/* Spacing utilities for sidebar */
+.space-x-4 > * + * {
+  margin-left: var(--space-16);
+}
+
+.space-y-1 > * + * {
+  margin-top: var(--space-4);
+}
+
+/* Additional layout utilities */
+.allocation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-24);
+  margin-bottom: var(--space-32);
+}
+
+.explanation-card {
+  background-color: var(--color-bg-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-20);
+  margin-bottom: var(--space-24);
+}
+
+.explanation-card p {
+  margin: 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  line-height: var(--line-height-normal);
+}
+
+/* Dashboard section styling */
+.dashboard-section {
+  display: block;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .allocation-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .metric-value {
+    font-size: var(--font-size-3xl);
+  }
+  
+  .portfolio-info h1 {
+    font-size: var(--font-size-2xl);
+  }
+  
+  .dashboard-header {
+    padding: var(--space-12) 0;
+  }
+  
+  .dashboard-main {
+    padding: var(--space-16) 0;
+  }
+  
+  .chart-container {
+    padding: var(--space-16);
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-header .container {
+    flex-direction: column;
+    gap: var(--space-12);
+    text-align: center;
+  }
+}
+
 /* Margin utilities */
 .mr-2 {
   margin-right: var(--space-8);

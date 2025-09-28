@@ -14,30 +14,53 @@ const LoadingSpinner = () => (
 
 const Portfolio = () => {
   return (
-    <div className="space-y-8">
+    <section className="dashboard-section active">
+      <h2 style={{ 
+        marginBottom: 'var(--space-24)', 
+        fontSize: 'var(--font-size-2xl)', 
+        color: 'var(--color-text)',
+        fontWeight: 'var(--font-weight-semibold)'
+      }}>
+        Portfolio Management
+      </h2>
       <Suspense fallback={<LoadingSpinner />}>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="allocation-grid" style={{ marginBottom: 'var(--space-32)' }}>
           <div>
-            <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+            <h3 style={{ 
+              marginBottom: 'var(--space-16)', 
+              fontSize: 'var(--font-size-xl)', 
+              color: 'var(--color-text)',
+              fontWeight: 'var(--font-weight-medium)'
+            }}>
               Asset Allocation
-            </h2>
+            </h3>
             <AllocationSection />
           </div>
           <div>
-            <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+            <h3 style={{ 
+              marginBottom: 'var(--space-16)', 
+              fontSize: 'var(--font-size-xl)', 
+              color: 'var(--color-text)',
+              fontWeight: 'var(--font-weight-medium)'
+            }}>
               Holdings Overview
-            </h2>
+            </h3>
             <HoldingsView />
           </div>
         </div>
         <div>
-          <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+          <h3 style={{ 
+            marginBottom: 'var(--space-16)', 
+            fontSize: 'var(--font-size-xl)', 
+            color: 'var(--color-text)',
+            fontWeight: 'var(--font-weight-medium)'
+          }}>
             Performance Metrics
-          </h2>
+          </h3>
           <PerformanceView />
         </div>
       </Suspense>
-    </div>
+    </section>
   );
 };
 
