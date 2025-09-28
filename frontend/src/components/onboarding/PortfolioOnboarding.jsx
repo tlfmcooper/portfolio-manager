@@ -83,15 +83,15 @@ const PortfolioOnboarding = () => {
             <div key={idx} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-4 flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Ticker</label>
-                <input type="text" value={asset.ticker} onChange={e => handleAssetChange(idx, 'ticker', e.target.value)} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                <input type="text" value={asset.ticker} onChange={e => handleAssetChange(idx, 'ticker', e.target.value)} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-2 px-3 text-gray-900 dark:text-white dark:bg-gray-700 dark:border-gray-600" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantity</label>
-                <input type="number" value={asset.quantity} onChange={e => handleAssetChange(idx, 'quantity', e.target.value)} required min="0" step="any" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                <input type="number" value={asset.quantity} onChange={e => handleAssetChange(idx, 'quantity', e.target.value)} required min="0" step="any" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-2 px-3 text-gray-900 dark:text-white dark:bg-gray-700 dark:border-gray-600" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Unit Cost</label>
-                <input type="number" value={asset.unit_cost} onChange={e => handleAssetChange(idx, 'unit_cost', e.target.value)} required min="0" step="any" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                <input type="number" value={asset.unit_cost} onChange={e => handleAssetChange(idx, 'unit_cost', e.target.value)} required min="0" step="any" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-base py-2 px-3 text-gray-900 dark:text-white dark:bg-gray-700 dark:border-gray-600" />
               </div>
               {assets.length > 1 && (
                 <button type="button" onClick={() => removeAsset(idx)} className="text-red-600 hover:underline self-end">Remove</button>
