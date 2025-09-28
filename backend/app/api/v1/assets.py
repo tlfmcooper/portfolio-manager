@@ -16,6 +16,11 @@ from typing import List
 from datetime import datetime
 import logging
 
+from app.utils.dependencies import get_current_active_user # Import current user dependency
+from app.models import User # Import User model
+from app.crud import get_user_portfolio, create_portfolio # Import portfolio CRUD operations
+from app.schemas import PortfolioCreate # Import schema for creating portfolio
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -39,7 +44,9 @@ class AssetOnboardingResponse(BaseModel):
 
 @router.post("/onboard", status_code=201, response_model=dict)
 async def onboard_asset(
-    data: List[AssetOnboardingRequest], db: AsyncSession = Depends(get_db)
+    data: List[AssetOnboardingRequest],
+    current_user: User = Depends(get_current_active_user), # Get current user
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Onboard multiple assets with their holdings.
@@ -47,6 +54,25 @@ async def onboard_asset(
     """
     created_assets = []
     errors = []
+
+    # Find or create portfolio for the current user
+    portfolio = await get_user_portfolio(db, current_user.id)
+    if not portfolio:
+        # Create a default portfolio for the user
+        default_portfolio_name = f"{current_user.username}'s Portfolio"
+        portfolio_create_schema = PortfolioCreate(
+            name=default_portfolio_name,
+            description="Default portfolio created during onboarding",
+            initial_value=0.0,
+            currency="USD",
+            risk_tolerance="Moderate",
+            investment_objective="Growth",
+            time_horizon="Long-term"
+        )
+        portfolio = await create_portfolio(db, current_user.id, portfolio_create_schema)
+        logger.info(f"Created new default portfolio for user {current_user.id}: {portfolio.id}")
+
+    portfolio_id = portfolio.id
 
     for item in data:
         try:
@@ -77,24 +103,50 @@ async def onboard_asset(
                     current_price = await FinanceService.get_current_price(ticker)
                     if current_price:
                         asset_obj.current_price = current_price
-            # Create holding
-            holding = Holding(
-                asset_id=asset_obj.id,
-                ticker=asset_obj.ticker,  # Add ticker here
-                quantity=item.quantity,
-                average_cost=item.unit_cost,
-                portfolio_id=1,  # TODO: Replace with actual portfolio/user logic
-                cost_basis=item.quantity * item.unit_cost,
-                market_value=item.quantity
-                * (asset_obj.current_price or item.unit_cost),
-                current_price=asset_obj.current_price,
+            # Check if holding already exists for this portfolio and ticker
+            existing_holding_stmt = select(Holding).where(
+                Holding.portfolio_id == portfolio_id,
+                Holding.ticker == ticker
             )
-            db.add(holding)
-            await db.flush()  # Get the holding ID
+            existing_holding = (await db.execute(existing_holding_stmt)).scalar_one_or_none()
+
+            if existing_holding:
+                # Update existing holding
+                new_total_quantity = existing_holding.quantity + item.quantity
+                new_total_cost = (existing_holding.quantity * existing_holding.average_cost) + \
+                                 (item.quantity * item.unit_cost)
+                new_average_cost = new_total_cost / new_total_quantity
+
+                existing_holding.quantity = new_total_quantity
+                existing_holding.average_cost = new_average_cost
+                existing_holding.cost_basis = new_total_quantity * new_average_cost
+                existing_holding.market_value = new_total_quantity * (asset_obj.current_price or new_average_cost)
+                existing_holding.current_price = asset_obj.current_price # Update current price
+                
+                holding_to_use = existing_holding
+                logger.info(f"Updated existing holding for {ticker}. New quantity: {new_total_quantity}")
+            else:
+                # Create new holding
+                holding = Holding(
+                    asset_id=asset_obj.id,
+                    ticker=asset_obj.ticker,
+                                    quantity=item.quantity,
+                                    average_cost=item.unit_cost,
+                                    portfolio_id=portfolio_id,
+                                    cost_basis=item.quantity * item.unit_cost,                    market_value=item.quantity
+                    * (asset_obj.current_price or item.unit_cost),
+                    current_price=asset_obj.current_price,
+                )
+                db.add(holding)
+                holding_to_use = holding
+                logger.info(f"Created new holding for {ticker}.")
+
+            await db.flush()  # Ensure holding_to_use has an ID if new, or is updated
+
             # Create transaction (buy)
             transaction = Transaction(
-                portfolio_id=holding.portfolio_id,
-                asset_id=asset_obj.id,  # Use asset_id instead of ticker
+                portfolio_id=holding_to_use.portfolio_id,
+                asset_id=asset_obj.id,
                 transaction_type="BUY",
                 quantity=item.quantity,
                 price=item.unit_cost,
@@ -106,17 +158,17 @@ async def onboard_asset(
                 {
                     "ticker": ticker,
                     "name": asset_obj.name or ticker,
-                    "quantity": item.quantity,
+                    "quantity": item.quantity, # This quantity is for the current transaction
                     "unit_cost": item.unit_cost,
                     "current_price": asset_obj.current_price,
-                    "market_value": holding.market_value,
+                    "market_value": holding_to_use.market_value,
                     "asset_id": asset_obj.id,
-                    "holding_id": holding.id,
+                    "holding_id": holding_to_use.id,
                     "transaction_id": transaction.id,
                 }
             )
             logger.info(
-                f"Successfully onboarded {ticker}: {item.quantity} shares at ${item.unit_cost}"
+                f"Successfully processed {ticker}: {item.quantity} shares at ${item.unit_cost}"
             )
         except Exception as e:
             logger.error(f"Error processing {item.ticker}: {str(e)}")

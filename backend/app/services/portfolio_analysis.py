@@ -22,8 +22,8 @@ class PortfolioPosition:
     symbol: str
     name: str
     shares: float
-    current_price: float
-    cost_basis: float
+    current_price: Optional[float] # Make optional
+    cost_basis: Optional[float] # Make optional
     sector: str
     
     @property
@@ -64,8 +64,8 @@ class AdvancedPortfolioAnalytics:
                 symbol=holding.asset.ticker,
                 name=holding.asset.name,
                 shares=holding.quantity,
-                current_price=holding.current_price,
-                cost_basis=holding.average_cost,
+                current_price=holding.current_price if holding.current_price is not None else holding.average_cost, # Use average_cost as fallback
+                cost_basis=holding.quantity * holding.average_cost, # Calculate total cost basis
                 sector=holding.asset.sector or "Unknown"
             )
             positions.append(position)

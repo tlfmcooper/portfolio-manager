@@ -10,7 +10,7 @@ import Sidebar from './components/Sidebar'; // Import Sidebar component
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
-const Onboarding = lazy(() => import('./pages/Onboarding'));
+import Onboarding from './pages/Onboarding'; // Directly import Onboarding
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Lazy load dashboard sections
@@ -252,18 +252,24 @@ const ProtectedLayout = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect to onboarding if user is logged in but not onboarded
-  if (user && !loading && !isOnboarded) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <Routes>
-        <Route path="/dashboard" element={<DashboardLayout />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<NotFound />} />
+        {/* If user is not onboarded, only allow onboarding route */}
+        {!isOnboarded ? (
+          <>
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="*" element={<Navigate to="/onboarding" replace />} />
+          </>
+        ) : (
+          <>
+            {/* If user is onboarded, allow dashboard routes */}
+            <Route path="/dashboard" element={<DashboardLayout />} />
+            <Route path="/onboarding" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<NotFound />} />
+          </>
+        )}
       </Routes>
     </Suspense>
   );

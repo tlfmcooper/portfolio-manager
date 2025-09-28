@@ -87,9 +87,11 @@ export const AuthProvider = ({ children }) => {
     }
     try {
       const analysis = await portfolioService.getPortfolioAnalysis();
-      setIsOnboarded(!!analysis); // If analysis exists, user is onboarded
+      // Check if the analysis object is not empty to determine onboarding status
+      const hasPortfolioData = Object.keys(analysis).length > 0;
+      setIsOnboarded(hasPortfolioData);
     } catch (err) {
-      console.error('Error checking onboarding status:', err);
+      console.error('AuthContext: Error checking onboarding status:', err);
       setIsOnboarded(false); // Assume not onboarded if there\'s an error
     }
   };
@@ -106,10 +108,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const validateToken = async () => {
-    // Ensure a clean state before validation
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-
     const token = localStorage.getItem('access_token');
     if (!token) {
       setLoading(false);
@@ -244,6 +242,7 @@ export const AuthProvider = ({ children }) => {
     changePassword,
     isAuthenticated: !!user,
     isOnboarded, // Expose onboarding status
+    checkOnboardingStatus, // Expose function to refresh onboarding status
     api, // Expose the configured axios instance
   };
 

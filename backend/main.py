@@ -43,6 +43,8 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
+    print(f"CORS origins configured: {settings.BACKEND_CORS_ORIGINS}") # Debug print
+
     # Set up CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -72,20 +74,6 @@ async def root():
         "docs_url": "/docs" if settings.DEBUG else None,
     }
 
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://172.26.208.1:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 if __name__ == "__main__":
     uvicorn.run(

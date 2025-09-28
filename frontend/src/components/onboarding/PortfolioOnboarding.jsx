@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 const PortfolioOnboarding = () => {
+  console.log('PortfolioOnboarding component rendered.'); // Debug log
   const navigate = useNavigate();
+  const { checkOnboardingStatus, user } = useAuth();
   const [assets, setAssets] = useState([
     { ticker: '', quantity: '', unit_cost: '' }
   ]);
@@ -41,9 +44,13 @@ const PortfolioOnboarding = () => {
     }
     
     try {
-      const response = await fetch('/api/v1/assets/onboard', {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('http://127.0.0.1:8000/api/v1/assets/onboard', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(validAssets)
       });
       
@@ -62,6 +69,8 @@ const PortfolioOnboarding = () => {
       // FIX: Remove check for data.success, just check if assets were created
       if (data.assets && data.assets.length > 0) {
         console.log('Successfully saved assets:', data.assets);
+        // Refresh onboarding status in AuthContext
+        await checkOnboardingStatus(user);
         navigate('/dashboard');
       }
       

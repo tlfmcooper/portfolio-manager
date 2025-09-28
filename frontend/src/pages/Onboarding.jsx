@@ -3,18 +3,48 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import PortfolioOnboarding from '../components/onboarding/PortfolioOnboarding';
 import { Loader2 } from 'lucide-react';
+import PortfolioService from '../services/portfolioService';
+import axios from 'axios';
 
 const Onboarding = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [checkingOnboarded, setCheckingOnboarded] = useState(true);
+  const [shouldShowForm, setShouldShowForm] = useState(false);
 
   useEffect(() => {
-    // Redirect to login if not authenticated
     if (!loading && !user) {
       navigate('/login');
+      return;
     }
+    
+    const checkOnboarded = async () => {
+      if (!loading && user) {
+        try {
+          const api = axios.create({
+            baseURL: 'http://127.0.0.1:8000/api/v1',
+            timeout: 10000,
+            headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+          });
+          const portfolioService = new PortfolioService(api);
+          const analysis = await portfolioService.getPortfolioAnalysis();
+          const hasPortfolioData = analysis && Object.keys(analysis).length > 0;
+          if (hasPortfolioData) {
+            navigate('/dashboard');
+          } else {
+            setShouldShowForm(true);
+          }
+        } catch (err) {
+          console.error('Error checking onboarding status:', err);
+          setShouldShowForm(true); // Show form if we can't determine status
+        } finally {
+          setCheckingOnboarded(false);
+        }
+      }
+    };
+    checkOnboarded();
   }, [user, loading, navigate]);
 
   const handleOnboardingComplete = async (portfolioData) => {
@@ -38,7 +68,7 @@ const Onboarding = () => {
     }
   };
 
-  if (loading) {
+  if (loading || checkingOnboarded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
@@ -62,8 +92,12 @@ const Onboarding = () => {
           </div>
         </div>
       )}
-      
-      <PortfolioOnboarding />
+      {shouldShowForm && <PortfolioOnboarding />}
+      {!shouldShowForm && !checkingOnboarded && (
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <p className="text-gray-600 dark:text-gray-400">Loading onboarding...</p>
+        </div>
+      )}
     </div>
   );
 };

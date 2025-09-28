@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock } from 'lucide-react';
+import PortfolioService from '../services/portfolioService';
+import axios from 'axios';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -42,10 +44,26 @@ const Login = () => {
       setIsLoading(false);
       return;
     }
-    
-    // Redirect to onboarding if it's the user's first login
-    // Otherwise, go to dashboard
-    navigate('/dashboard');
+
+    // Check onboarding status directly after login
+    try {
+      const api = axios.create({
+        baseURL: 'http://127.0.0.1:8000/api/v1',
+        timeout: 10000,
+        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
+      });
+      const portfolioService = new PortfolioService(api);
+      const analysis = await portfolioService.getPortfolioAnalysis();
+      const hasPortfolioData = analysis && Object.keys(analysis).length > 0;
+      if (hasPortfolioData) {
+        navigate('/dashboard');
+      } else {
+        navigate('/onboarding');
+      }
+    } catch (err) {
+      navigate('/onboarding');
+    }
+    setIsLoading(false);
   };
 
   return (

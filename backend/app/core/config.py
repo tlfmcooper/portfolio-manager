@@ -27,13 +27,7 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
     
     # CORS settings
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-        "http://172.26.208.1:5173",
-    ]
+    BACKEND_CORS_ORIGINS: List[str] = ["*"] # TEMPORARY: Allow all origins for debugging CORS
     
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
