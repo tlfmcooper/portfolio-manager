@@ -90,42 +90,42 @@ const OverviewSection = () => {
       label: 'Annual Return',
       value: performanceMetrics.portfolio_return_annualized,
       formatter: formatPercentage,
-      tooltip: 'The annualized return represents the geometric average amount of money earned by the portfolio each year.'
+      tooltip: 'The annualized return represents the geometric average amount of money earned by the portfolio each year. A strong return indicates excellent performance, especially when risk-adjusted.'
     },
     {
       key: 'portfolio_volatility_annualized',
       label: 'Annual Volatility',
       value: performanceMetrics.portfolio_volatility_annualized,
       formatter: formatPercentage,
-      tooltip: 'Annual volatility measures the portfolio\'s price fluctuations over time.'
+      tooltip: 'Annual volatility measures the portfolio\'s price fluctuations. Moderate volatility is appropriate for a diversified portfolio seeking growth while managing risk.'
     },
     {
       key: 'sharpe_ratio',
       label: 'Sharpe Ratio',
       value: performanceMetrics.sharpe_ratio,
       formatter: formatRatio,
-      tooltip: 'The Sharpe ratio measures risk-adjusted returns. Values above 1.0 are good, above 2.0 are very good.'
+      tooltip: 'The Sharpe ratio measures risk-adjusted returns by comparing excess returns to volatility. Values above 1.0 are good, above 2.0 are very good. It indicates excellent risk-adjusted performance.'
     },
     {
       key: 'sortino_ratio',
       label: 'Sortino Ratio',
       value: performanceMetrics.sortino_ratio,
       formatter: formatRatio,
-      tooltip: 'The Sortino ratio focuses on downside volatility, providing a better measure of risk-adjusted returns.'
+      tooltip: 'The Sortino ratio focuses on downside volatility, providing a better measure of risk-adjusted returns than Sharpe. A higher ratio indicates strong performance with limited downside risk.'
     },
     {
       key: 'max_drawdown',
       label: 'Maximum Drawdown',
       value: performanceMetrics.max_drawdown,
       formatter: formatPercentage,
-      tooltip: 'Maximum drawdown shows the largest peak-to-trough decline in portfolio value.'
+      tooltip: 'Maximum drawdown shows the largest peak-to-trough decline. A modest drawdown indicates good risk management through diversification and effective portfolio construction.'
     },
     {
       key: 'calmar_ratio',
       label: 'Calmar Ratio',
       value: performanceMetrics.calmar_ratio,
       formatter: formatRatio,
-      tooltip: 'The Calmar ratio compares annual return to maximum drawdown.'
+      tooltip: 'The Calmar ratio compares annual return to maximum drawdown. A higher ratio indicates strong returns relative to maximum loss, showing effective risk management.'
     }
   ]
 

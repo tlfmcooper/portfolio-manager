@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import Tooltip from './components/Tooltip';
 
 // Lazy load components for better performance
 const Login = lazy(() => import('./pages/Login'));
@@ -95,6 +96,7 @@ function App() {
               <Route path="/*" element={<ProtectedLayout />} />
             </Routes>
           </Suspense>
+          <Tooltip />
         </div>
       </AuthProvider>
     </Router>
