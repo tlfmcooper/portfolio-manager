@@ -8,7 +8,7 @@ import sys
 
 def check_database():
     try:
-        conn = sqlite3.connect('portfolio.db')
+        conn = sqlite3.connect('backend/portfolio.db')
         cursor = conn.cursor()
         
         print("=== DATABASE CONTENTS ===\n")
@@ -62,7 +62,7 @@ def check_database():
         
         # Check users
         print("USERS:")
-        cursor.execute("SELECT id, username, email, display_name FROM users")
+        cursor.execute("SELECT id, username, email, full_name FROM users")
         users = cursor.fetchall()
         if users:
             print("ID | Username | Email | Display Name")
