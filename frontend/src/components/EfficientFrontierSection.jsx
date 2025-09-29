@@ -36,7 +36,7 @@ const EfficientFrontierSection = () => {
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A'
-    return `${(value * 100).toFixed(1)}%`
+    return `${(value * 100).toFixed(2)}%`
   }
 
   // Prepare data for the scatter chart
@@ -70,8 +70,8 @@ const EfficientFrontierSection = () => {
           <p className="font-medium">
             {data.name || (data.type === 'frontier' ? 'Efficient Frontier' : 'Portfolio')}
           </p>
-          <p className="text-sm">Risk: {data.risk.toFixed(1)}%</p>
-          <p className="text-sm">Return: {data.return.toFixed(1)}%</p>
+          <p className="text-sm">Risk: {data.risk.toFixed(2)}%</p>
+          <p className="text-sm">Return: {data.return.toFixed(2)}%</p>
           {data.type !== 'frontier' && (
             <p className="text-xs text-gray-300 mt-1">
               Sharpe Ratio: {((data.return - 2) / data.risk).toFixed(3)}
@@ -184,6 +184,7 @@ const EfficientFrontierSection = () => {
                   domain={['dataMin - 1', 'dataMax + 1']}
                   tick={{ fontSize: 12, fill: '#6B7280' }}
                   stroke="#6B7280"
+                  tickFormatter={(value) => `${value.toFixed(2)}%`}
                   label={{ 
                     value: 'Risk (Volatility %)', 
                     position: 'insideBottom', 
@@ -197,6 +198,8 @@ const EfficientFrontierSection = () => {
                   domain={['dataMin - 1', 'dataMax + 1']}
                   tick={{ fontSize: 12, fill: '#6B7280' }}
                   stroke="#6B7280"
+                  tickFormatter={(value) => `${value.toFixed(2)}%`}
+                  width={80}
                   label={{ 
                     value: 'Expected Return (%)', 
                     angle: -90, 

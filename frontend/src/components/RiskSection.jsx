@@ -54,15 +54,37 @@ const RiskSection = () => {
     switch (metricType) {
       case 'value_at_risk_95':
         return '5% Probability'
+      case 'value_at_risk_99':
+        return '1% Probability'
+      case 'cvar':
+        return 'Tail Risk'
+      case 'semideviation':
+        return 'Downside Volatility'
       default:
         return 'Risk Metric'
     }
   }
 
-  const getTooltipText = (metricType) => {
-    switch (metricType) {
+  // Dynamic tooltip generator based on risk metric values
+  const getRiskTooltip = (key, value) => {
+    if (typeof value !== 'number') return 'No data available for this metric.'
+    
+    const absValue = Math.abs(value * 100).toFixed(2)
+    
+    switch (key) {
       case 'value_at_risk_95':
-        return 'Value at Risk (95%) indicates there\'s only a 5% chance of losing more than this amount in any given period.'
+        return `Value at Risk (95%) indicates there's only a 5% chance of losing more than ${absValue}% in any given period. This helps quantify downside risk exposure.`
+      
+      case 'value_at_risk_99':
+        return `Value at Risk (99%) shows the potential loss in extreme scenarios (1% probability). ${(value * 100).toFixed(2)}% represents the tail risk of the portfolio.`
+      
+      case 'cvar':
+        return `Conditional VaR shows the expected loss when VaR is exceeded. ${(value * 100).toFixed(2)}% represents the average loss in worst-case scenarios beyond the 95% threshold.`
+      
+      case 'semideviation':
+        let semidevInterpretation = value < 0.05 ? 'low' : value < 0.10 ? 'moderate' : value < 0.15 ? 'elevated' : 'high'
+        return `Semideviation measures downside volatility only, focusing on negative returns. ${(value * 100).toFixed(2)}% indicates ${semidevInterpretation} downside risk relative to total volatility.`
+      
       default:
         return 'Risk metric for portfolio analysis.'
     }
@@ -73,25 +95,25 @@ const RiskSection = () => {
       key: 'value_at_risk_95',
       label: 'VaR (95%)',
       value: riskAnalytics.value_at_risk_95,
-      type: 'warning'
+      type: 'warning',
     },
     {
       key: 'value_at_risk_99',
       label: 'VaR (99%)',
       value: riskAnalytics.value_at_risk_99,
-      type: 'negative'
+      type: 'negative',
     },
     {
       key: 'cvar',
       label: 'CVaR (Expected Shortfall)',
       value: riskAnalytics.cvar,
-      type: 'negative'
+      type: 'negative',
     },
     {
       key: 'semideviation',
       label: 'Semideviation',
       value: riskAnalytics.semideviation,
-      type: 'neutral'
+      type: 'neutral',
     }
   ]
 
@@ -153,7 +175,7 @@ const RiskSection = () => {
         <div className="metrics-grid">
           {riskMetrics.map((metric) => {
             const status = getRiskStatus(metric.key, metric.value)
-            const tooltip = getTooltipText(metric.key)
+            const tooltip = getRiskTooltip(metric.key, metric.value)
             
             return (
               <div 

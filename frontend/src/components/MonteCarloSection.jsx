@@ -187,13 +187,13 @@ const MonteCarloSection = () => {
             </h3>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={pathData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <LineChart data={pathData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                   <XAxis 
                     dataKey="day" 
                     tick={{ fontSize: 12, fill: '#6B7280' }}
                     stroke="#6B7280"
-                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -10 }}
+                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
                   />
                   <YAxis 
                     tick={{ fontSize: 12, fill: '#6B7280' }}

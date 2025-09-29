@@ -451,12 +451,12 @@ function createEfficientFrontierChart() {
           pointStyle: 'triangle'
         },
         {
-          label: 'Min Volatility',
+          label: 'Global Minimum Volatility',
           data: [specialPortfolios[0]],
           backgroundColor: chartColors[3],
           borderColor: chartColors[3],
           pointRadius: 8,
-          pointStyle: 'rect'
+          pointStyle: 'circle'
         }
       ]
     },
@@ -466,15 +466,26 @@ function createEfficientFrontierChart() {
       plugins: {
         title: {
           display: true,
-          text: 'Efficient Frontier Analysis'
+          text: 'Risk-Return Optimization',
+          font: {
+            size: 16,
+            weight: 'bold'
+          }
         },
         legend: {
-          position: 'top'
+          position: 'top',
+          labels: {
+            usePointStyle: true,
+            padding: 15,
+            font: {
+              size: 12
+            }
+          }
         },
         tooltip: {
           callbacks: {
             label: function(context) {
-              return `${context.dataset.label}: Risk ${context.parsed.x.toFixed(1)}%, Return ${context.parsed.y.toFixed(1)}%`;
+              return `${context.dataset.label}: Risk ${context.parsed.x.toFixed(2)}%, Return ${context.parsed.y.toFixed(2)}%`;
             }
           }
         }
@@ -484,12 +495,22 @@ function createEfficientFrontierChart() {
           title: {
             display: true,
             text: 'Risk (Volatility %)'
+          },
+          ticks: {
+            callback: function(value) {
+              return value.toFixed(2) + '%';
+            }
           }
         },
         y: {
           title: {
             display: true,
             text: 'Expected Return (%)'
+          },
+          ticks: {
+            callback: function(value) {
+              return value.toFixed(2) + '%';
+            }
           }
         }
       }
