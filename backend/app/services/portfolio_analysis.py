@@ -43,6 +43,8 @@ class AdvancedPortfolioAnalytics:
         self.db = db
         self.risk_free_rate = 0.042  # 4.2% risk-free rate
         self.provider = YFinanceProvider()
+        self._cached_portfolio = None
+        self._cached_portfolio_value = None  # Store the actual market value
 
     async def _build_portfolio(self) -> Optional[Portfolio]:
         """
@@ -129,7 +131,17 @@ class AdvancedPortfolioAnalytics:
         if abs(total_weight - 1.0) > 0.01:  # Allow small floating point errors
             print(f"[WARNING] Weights don't sum to 1.0: {total_weight}")
         
+        # Store the actual portfolio market value for use in simulations
+        self._cached_portfolio_value = total_portfolio_value
+        print(f"[INFO] Cached portfolio value: ${total_portfolio_value:.2f}")
+        
         return portfolio if portfolio.assets else None
+
+    async def get_current_portfolio_value(self) -> float:
+        """Get the current market value of the portfolio."""
+        if self._cached_portfolio_value is None:
+            await self._build_portfolio()
+        return self._cached_portfolio_value or 0.0
 
     async def calculate_portfolio_metrics(self) -> Dict:
         """Calculate comprehensive portfolio metrics using the portfolio_manager package."""
@@ -204,7 +216,8 @@ class AdvancedPortfolioAnalytics:
                                     "volatility": annualize_vol(asset_return_series, 252),
                                 }
 
-            total_value = portfolio.get_total_value()
+            total_value = self._cached_portfolio_value or portfolio.get_total_value()
+            print(f"[INFO] Using portfolio value: ${total_value:.2f}")
 
             # Handle potential NaN or inf values before returning
             def clean_value(value):
@@ -350,7 +363,10 @@ class AdvancedPortfolioAnalytics:
         try:
             annual_ret = annualize_rets(portfolio_returns, 252)
             annual_vol_sim = annualize_vol(portfolio_returns, 252)
-            total_value = portfolio.get_total_value()
+            
+            # Use the actual calculated portfolio value, not portfolio.get_total_value()
+            total_value = self._cached_portfolio_value or portfolio.get_total_value()
+            print(f"[INFO] Monte Carlo using portfolio value: ${total_value:.2f}")
 
             mc_results = gbm(
                 n_years=time_horizon / 252,
@@ -446,8 +462,9 @@ class AdvancedPortfolioAnalytics:
         print(f"CPPI: Clean returns count: {len(portfolio_returns)}")
         print(f"CPPI: Returns sample (first 5): {portfolio_returns.head()}")
         
-        total_value = portfolio.get_total_value()
-        print(f"CPPI: total_value: {total_value}")
+        # Use the actual calculated portfolio value, not portfolio.get_total_value()
+        total_value = self._cached_portfolio_value or portfolio.get_total_value()
+        print(f"CPPI: Using actual portfolio value: ${total_value:.2f}")
 
         try:
             cppi_results = run_cppi(
