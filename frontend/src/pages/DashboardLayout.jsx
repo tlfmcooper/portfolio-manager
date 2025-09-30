@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +25,7 @@ const DashboardLayout = () => {
   const [error, setError] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const { api, user, logout } = useAuth();
   const location = useLocation();
@@ -40,7 +40,6 @@ const DashboardLayout = () => {
     { id: 'strategy', label: 'CPPI Strategy', icon: TrendingDown },
   ];
 
-  // Initialize portfolio service
   const portfolioService = new PortfolioService(api);
 
   useEffect(() => {
@@ -49,7 +48,6 @@ const DashboardLayout = () => {
     }
   }, [user]);
 
-  // Set active tab based on current route
   useEffect(() => {
     const path = location.pathname;
     if (path.includes('overview')) {
@@ -57,17 +55,16 @@ const DashboardLayout = () => {
     } else if (path.includes('portfolio')) {
       setActiveTab('allocation');
     } else if (path.includes('analytics')) {
-      setActiveTab('risk'); // Default to risk for analytics page
+      setActiveTab('risk');
     } else if (path.includes('update-portfolio')) {
-      setActiveTab('overview'); // Default for update-portfolio
+      setActiveTab('overview');
     } else if (path === '/dashboard' || path === '/dashboard/') {
-      setActiveTab('overview'); // Default to overview
+      setActiveTab('overview');
     }
   }, [location]);
 
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
-    // No need to navigate - just change the active tab state
   };
 
   const getTabTitle = () => {
@@ -90,12 +87,10 @@ const DashboardLayout = () => {
   };
 
   const renderTabContent = () => {
-    // If on update-portfolio route, show the outlet for the UpdatePortfolio component
     if (location.pathname.includes('update-portfolio')) {
       return <Outlet />;
     }
     
-    // Otherwise, show the tab-based content
     switch (activeTab) {
       case 'overview':
         return <TabOverview />;
@@ -119,19 +114,16 @@ const DashboardLayout = () => {
       setLoading(true);
       setError(null);
 
-      // Try to get portfolio analysis first (most comprehensive)
       const analysis = await portfolioService.getPortfolioAnalysis();
       
       if (analysis) {
         setPortfolioData(analysis);
       } else {
-        // Fallback to mock data if no analysis available
         setPortfolioData(portfolioService.getMockPortfolioData());
       }
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
       
-      // Use mock data as fallback
       try {
         setPortfolioData(portfolioService.getMockPortfolioData());
         setError('Using sample data. Connect your portfolio to see real metrics.');
@@ -150,45 +142,70 @@ const DashboardLayout = () => {
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-100 dark:bg-gray-900"> 
-      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} darkMode={darkMode} toggleDarkMode={toggleTheme} />
+    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--color-background)' }}> 
+      <Sidebar 
+        sidebarOpen={sidebarOpen} 
+        setSidebarOpen={setSidebarOpen} 
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
+        darkMode={darkMode} 
+        toggleDarkMode={toggleTheme} 
+      />
 
-      <div className="flex-1 flex flex-col"> 
-        <header className="dashboard-header">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-            <div className="flex items-center"> 
+      <div className="flex-1 flex flex-col overflow-hidden"> 
+        {/* Sticky Header */}
+        <header className="sticky top-0 z-30 dashboard-header" style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4"> 
+              {/* Mobile menu button */}
               <button
                 type="button"
-                className="md:hidden p-1 text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+                className="md:hidden p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-inset"
+                style={{ color: 'var(--color-text-secondary)' }}
                 onClick={() => setSidebarOpen(true)}
               >
                 <span className="sr-only">Open sidebar</span>
                 <Menu className="h-6 w-6" aria-hidden="true" />
               </button>
-              <div className="portfolio-info ml-4"> 
-                <h1>Strategic Multi-Asset Portfolio</h1>
+
+              {/* Desktop sidebar toggle - show when sidebar is collapsed */}
+              {sidebarCollapsed && (
+                <button
+                  type="button"
+                  className="hidden md:block p-2 rounded-lg focus:outline-none focus:ring-2"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="Show sidebar"
+                >
+                  <Menu className="h-6 w-6" aria-hidden="true" />
+                </button>
+              )}
+
+              <div className="portfolio-info"> 
+                <h1 className="font-bold" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)', margin: 0 }}>Strategic Multi-Asset Portfolio</h1>
                 {user && (
-                  <p className="portfolio-meta">
+                  <p className="portfolio-meta" style={{ color: 'var(--color-text-secondary)' }}>
                     Welcome back, {user.display_name || user.username} • Last Updated: {new Date().toLocaleDateString()}
                   </p>
                 )}
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+
+            <div className="flex items-center space-x-3">
               <button
                 onClick={toggleTheme}
-                className="px-4 py-2 rounded-lg border transition-all duration-200"
+                className="hidden sm:flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{
-                  backgroundColor: darkMode ? 'var(--color-surface)' : 'var(--color-surface)',
-                  borderColor: 'var(--color-border)',
-                  color: 'var(--color-text)'
+                  backgroundColor: 'var(--color-secondary)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-border)'
                 }}
               >
                 {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
               </button>
               <button
                 onClick={logout}
-                className="px-4 py-2 rounded-lg transition-colors"
+                className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
                 style={{
                   backgroundColor: 'var(--color-error)',
                   color: 'var(--color-white)'
@@ -200,9 +217,9 @@ const DashboardLayout = () => {
           </div>
         </header>
 
-        {/* Navigation Tabs - Hide on update-portfolio route */}
+        {/* Sticky Navigation Tabs */}
         {!location.pathname.includes('update-portfolio') && (
-          <nav className="dashboard-nav">
+          <nav className="sticky top-16 z-20 dashboard-nav" style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="nav-tabs">
                 {tabs.map((tab) => {
@@ -225,9 +242,8 @@ const DashboardLayout = () => {
           </nav>
         )}
 
-        <main className="flex-1 overflow-y-auto dashboard"> 
+        <main className="flex-1 overflow-y-auto dashboard" style={{ backgroundColor: 'var(--color-background)' }}> 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
-            {/* Show dynamic title for tab-based content */}
             {!location.pathname.includes('update-portfolio') && (
               <h2 style={{ 
                 marginBottom: 'var(--space-24)', 

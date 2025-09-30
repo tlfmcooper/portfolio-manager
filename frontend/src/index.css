@@ -265,7 +265,7 @@ body {
 }
 
 .portfolio-info h1 {
-  font-size: var(--font-size-3xl);
+  font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   margin: 0;
   color: var(--color-text);
@@ -627,7 +627,7 @@ body {
   }
   
   .portfolio-info h1 {
-    font-size: var(--font-size-2xl);
+    font-size: var(--font-size-xl);
   }
   
   .dashboard-header {
@@ -871,4 +871,15 @@ html {
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(to bottom, rgb(37, 99, 235), rgb(126, 34, 206));
+}
+
+
+/* Hide scrollbar on navigation tabs */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
 }
