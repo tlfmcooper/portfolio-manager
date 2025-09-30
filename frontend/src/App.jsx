@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import Tooltip from './components/Tooltip';
+import LandingPage from './pages/LandingPage'; // Import LandingPage
 
 // Lazy load components for better performance
 const Login = lazy(() => import('./pages/Login'));
@@ -89,6 +90,7 @@ function App() {
           <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               {/* Public routes */}
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               
