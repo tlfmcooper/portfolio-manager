@@ -37,8 +37,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
             </button>
           </div>
           <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
-            <div className="flex-shrink-0 flex items-center px-4">
-              <h1 className="font-bold" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)' }}>Portfolio Dashboard</h1>
+            <div className="flex-shrink-0 flex items-center justify-center px-4">
+              <h1 className="font-bold leading-tight" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)' }}>Portfolio Dashboard</h1>
             </div>
             <nav className="mt-5 px-2 space-y-1">
               {navigation.map((item) => {
@@ -99,7 +99,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
         <div className={`flex flex-col border-r transition-all duration-300 overflow-hidden ${sidebarCollapsed ? 'w-0 border-0' : 'w-64'}`} style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
           <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
             <div className="flex items-center justify-between flex-shrink-0 px-4">
-              <h1 className="font-bold" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)' }}>
+              <h1 className="font-bold leading-tight" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)' }}>
                 Portfolio Dashboard
               </h1>
               <button

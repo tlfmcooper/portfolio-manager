@@ -1,5 +1,6 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Lazy load the CPPI section
 const CPPISection = React.lazy(() => import('../CPPISection'));
@@ -11,6 +12,39 @@ const LoadingSpinner = () => (
 );
 
 const TabCPPI = () => {
+  const [cppiData, setCppiData] = useState(null);
+  const { api } = useAuth();
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await api.get('/analysis/portfolios/1/analysis/cppi');
+        setCppiData(response.data);
+      } catch (err) {
+        console.error('Failed to fetch CPPI data:', err);
+      }
+    };
+
+    fetchData();
+  }, [api]);
+
+  const formatPercentage = (value) => {
+    if (typeof value !== 'number') return 'N/A';
+    return `${(value * 100).toFixed(1)}%`;
+  };
+
+  const getPerformanceText = () => {
+    if (!cppiData || typeof cppiData.outperformance !== 'number') {
+      return 'The strategy performance is being calculated.';
+    }
+    
+    const outperformance = cppiData.outperformance;
+    const performanceWord = outperformance >= 0 ? 'outperformed' : 'underperformed';
+    const absPerformance = formatPercentage(Math.abs(outperformance));
+    
+    return `The strategy ${performanceWord} buy-and-hold by ${absPerformance}.`;
+  };
+
   return (
     <>
       <div className="explanation-card" style={{
@@ -26,7 +60,7 @@ const TabCPPI = () => {
           color: 'var(--color-text)', 
           lineHeight: 'var(--line-height-normal)' 
         }}>
-          CPPI (Constant Proportion Portfolio Insurance) is a dynamic strategy that adjusts risk exposure to provide downside protection while maintaining upside participation. The strategy outperformed buy-and-hold by 4.9%.
+          CPPI (Constant Proportion Portfolio Insurance) is a dynamic strategy that adjusts risk exposure to provide downside protection while maintaining upside participation. {getPerformanceText()}
         </p>
       </div>
       <Suspense fallback={<LoadingSpinner />}>

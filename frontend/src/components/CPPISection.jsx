@@ -134,7 +134,7 @@ const CPPISection = () => {
                 CPPI (Constant Proportion Portfolio Insurance) is a dynamic strategy that adjusts risk exposure 
                 to provide downside protection while maintaining upside participation. The strategy uses a multiplier 
                 of {multiplier}x and maintains a floor protection at {formatPercentage(floor)} of initial investment. 
-                The strategy outperformed buy-and-hold by {formatPercentage(outperformance)}.
+                The strategy {outperformance >= 0 ? 'outperformed' : 'underperformed'} buy-and-hold by {formatPercentage(Math.abs(outperformance))}.
               </p>
             </div>
           </div>

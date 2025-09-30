@@ -160,7 +160,7 @@ const DashboardLayout = () => {
               {/* Mobile menu button */}
               <button
                 type="button"
-                className="md:hidden p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-inset"
+                className="md:hidden p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-inset flex items-center justify-center"
                 style={{ color: 'var(--color-text-secondary)' }}
                 onClick={() => setSidebarOpen(true)}
               >
@@ -172,7 +172,7 @@ const DashboardLayout = () => {
               {sidebarCollapsed && (
                 <button
                   type="button"
-                  className="hidden md:block p-2 rounded-lg focus:outline-none focus:ring-2"
+                  className="hidden md:flex p-2 rounded-lg focus:outline-none focus:ring-2 items-center justify-center"
                   style={{ color: 'var(--color-text-secondary)' }}
                   onClick={() => setSidebarCollapsed(false)}
                   title="Show sidebar"
@@ -181,10 +181,10 @@ const DashboardLayout = () => {
                 </button>
               )}
 
-              <div className="portfolio-info"> 
-                <h1 className="font-bold" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)', margin: 0 }}>Strategic Multi-Asset Portfolio</h1>
+              <div className="flex flex-col justify-center"> 
+                <h1 className="font-bold leading-tight" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)', margin: 0 }}>Strategic Multi-Asset Portfolio</h1>
                 {user && (
-                  <p className="portfolio-meta" style={{ color: 'var(--color-text-secondary)' }}>
+                  <p className="text-sm leading-tight mt-1" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
                     Welcome back, {user.display_name || user.username} • Last Updated: {new Date().toLocaleDateString()}
                   </p>
                 )}
