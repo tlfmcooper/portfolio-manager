@@ -10,6 +10,7 @@ backend/app/models/__pycache__/
 backend/app/schemas/__pycache__/
 backend/app/services/__pycache__/
 backend/app/utils/__pycache__/
+backend/portfolio_dashboard.egg-info/
 
 env/
 node_modules/
