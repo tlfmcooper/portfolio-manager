@@ -15,6 +15,7 @@ const Overview = lazy(() => import('./pages/Overview'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const UpdatePortfolio = lazy(() => import('./pages/UpdatePortfolio'));
+const LiveMarket = lazy(() => import('./pages/LiveMarket'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Loading component for Suspense fallback
@@ -53,6 +54,7 @@ const ProtectedLayout = () => {
               <Route path="overview" element={<Overview />} />
               <Route path="portfolio" element={<Portfolio />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="live-market" element={<LiveMarket />} />
               <Route path="update-portfolio" element={<UpdatePortfolio />} />
             </Route>
             <Route path="/onboarding" element={<Navigate to="/dashboard" replace />} />

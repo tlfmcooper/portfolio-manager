@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, PieChart, BarChart3, RefreshCw, LogOut, User, Sun, Moon, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, PieChart, BarChart3, Activity, RefreshCw, LogOut, User, Sun, Moon, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, darkMode, toggleDarkMode }) => {
@@ -11,6 +11,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
     { name: 'Overview', href: '/dashboard/overview', icon: Home },
     { name: 'Portfolio', href: '/dashboard/portfolio', icon: PieChart },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
+    { name: 'Live Market', href: '/dashboard/live-market', icon: Activity },
     { name: 'Update Portfolio', href: '/dashboard/update-portfolio', icon: RefreshCw },
   ];
 

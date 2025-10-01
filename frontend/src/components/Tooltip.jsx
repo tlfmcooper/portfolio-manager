@@ -10,6 +10,9 @@ const Tooltip = () => {
 
   useEffect(() => {
     const handleMouseEnter = (e) => {
+      // Check if target is an Element before calling closest
+      if (!e.target || typeof e.target.closest !== 'function') return;
+      
       const tooltipContent = e.target.closest('[data-tooltip]')?.getAttribute('data-tooltip');
       if (tooltipContent) {
         setTooltip({
@@ -22,6 +25,8 @@ const Tooltip = () => {
     };
 
     const handleMouseMove = (e) => {
+      if (!e.target || typeof e.target.closest !== 'function') return;
+      
       if (tooltip.visible && e.target.closest('[data-tooltip]')) {
         setTooltip(prev => ({
           ...prev,
@@ -32,6 +37,8 @@ const Tooltip = () => {
     };
 
     const handleMouseLeave = (e) => {
+      if (!e.target || typeof e.target.closest !== 'function') return;
+      
       if (!e.target.closest('[data-tooltip]')) {
         setTooltip(prev => ({ ...prev, visible: false }));
       }

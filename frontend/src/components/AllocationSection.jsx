@@ -1,40 +1,53 @@
-import React, { useState, useEffect } from 'react'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
-import { useAuth } from '../contexts/AuthContext'
+import React, { useState, useEffect } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { useAuth } from '../contexts/AuthContext';
+import { TrendingUp, DollarSign, Percent, PieChart as PieChartIcon } from 'lucide-react';
 
 const AllocationSection = () => {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const { api } = useAuth()
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { api } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // TODO: Replace with dynamic portfolio ID
-        const response = await api.get('/analysis/portfolios/1/analysis/sector-allocation')
-        setData(response.data)
+        const response = await api.get('/analysis/portfolios/1/analysis/sector-allocation');
+        setData(response.data);
       } catch (err) {
-        setError('Failed to fetch allocation data')
-        console.error(err)
+        setError('Failed to fetch allocation data');
+        console.error(err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [api])
+    fetchData();
+  }, [api]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: 'var(--color-primary)' }}></div>
+      </div>
+    );
+  }
 
-  if (loading) return <div>Loading...</div>
-  if (error) return <div className="text-red-500">{error}</div>
-  if (!data) return null
+  if (error) {
+    return (
+      <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>
+        <p style={{ color: 'var(--color-error)' }}>{error}</p>
+      </div>
+    );
+  }
 
-  const assetAllocation = data || {}
+  if (!data) return null;
+
+  const assetAllocation = data || {};
 
   const formatPercentage = (value) => {
-    if (typeof value !== 'number') return 'N/A'
-    return `${value.toFixed(1)}%`
-  }
+    if (typeof value !== 'number') return 'N/A';
+    return `${value.toFixed(1)}%`;
+  };
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
@@ -42,209 +55,268 @@ const AllocationSection = () => {
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value)
-  }
+    }).format(value);
+  };
 
   // Prepare data for pie chart
-  const pieData = Object.entries(assetAllocation).map(([sector, allocation], index) => ({
+  const pieData = Object.entries(assetAllocation).map(([sector, allocation]) => ({
     name: sector,
     value: allocation.percentage,
-    color: `hsl(${index * 36}, 70%, 50%)`
-  }))
+    amount: allocation.value
+  }));
 
-  // Prepare data for bar chart (asset values)
-  const barData = Object.entries(assetAllocation).map(([sector, allocation]) => ({
-    sector,
-    value: allocation.value,
-    percentage: allocation.percentage
-  }))
-
-  // Colors for charts
+  // Modern, professional color palette
   const COLORS = [
-    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', 
-    '#06B6D4', '#F97316', '#84CC16', '#F43F5E', '#6366F1'
-  ]
+    '#3B82F6', // Blue
+    '#10B981', // Green  
+    '#F59E0B', // Amber
+    '#EF4444', // Red
+    '#8B5CF6', // Purple
+    '#06B6D4', // Cyan
+    '#F97316', // Orange
+    '#84CC16', // Lime
+    '#EC4899', // Pink
+    '#14B8A6', // Teal
+  ];
 
+  // FIXED: Custom tooltip that properly shows PERCENTAGE (not dollar amount)
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload
+      const data = payload[0].payload;
       return (
-        <div className="bg-gray-900 text-white p-3 rounded-lg border border-gray-700">
-          <p className="font-medium">{data.name || data.sector}</p>
-          <p className="text-sm">{formatCurrency(data.value)}</p>
-          <p className="text-sm">{formatPercentage(data.percentage)}</p>
+        <div 
+          className="rounded-lg p-3 border shadow-lg" 
+          style={{ 
+            backgroundColor: 'var(--color-surface)', 
+            borderColor: 'var(--color-border)',
+            color: 'var(--color-text)'
+          }}
+        >
+          <p className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{data.name}</p>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
+            {formatPercentage(data.value)}
+          </p>
+          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            {formatCurrency(data.amount)}
+          </p>
         </div>
-      )
+      );
     }
-    return null
-  }
+    return null;
+  };
 
-  const totalSectors = Object.keys(assetAllocation).length
-  const largestAllocation = Math.max(...Object.values(assetAllocation).map(a => a.percentage))
+  // FIXED: Custom Legend with proper wrapping to prevent text cutoff
+  const renderCustomLegend = (props) => {
+    const { payload } = props;
+    return (
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 mt-6 px-4">
+        {payload.map((entry, index) => (
+          <div key={`legend-${index}`} className="flex items-center gap-2 min-w-0">
+            <div 
+              className="w-3 h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: entry.color }}
+            />
+            <span className="text-sm whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+              {entry.value}
+            </span>
+            <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              {formatPercentage(entry.payload.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const totalSectors = Object.keys(assetAllocation).length;
+  const totalValue = Object.values(assetAllocation).reduce((acc, a) => acc + a.value, 0);
+  const largestAllocation = Math.max(...Object.values(assetAllocation).map(a => a.percentage));
+  const largestSector = Object.entries(assetAllocation).find(([_, a]) => a.percentage === largestAllocation)?.[0] || 'N/A';
 
   return (
-    <div className="space-y-8">
-      <div>
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Total Sectors</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{totalSectors}</p>
+    <div className="space-y-6">
+      {/* Stats Cards - Polished Design */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Total Portfolio Value */}
+        <div 
+          className="rounded-xl p-5 border transition-all hover:shadow-lg" 
+          style={{ 
+            backgroundColor: 'var(--color-surface)', 
+            borderColor: 'var(--color-border)'
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              Total Value
+            </p>
+            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--color-primary-light)' }}>
+              <DollarSign className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Total Allocated</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(Object.values(assetAllocation).reduce((acc, a) => acc + a.value, 0))}</p>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="text-center">
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Largest Sector</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{formatPercentage(largestAllocation)}</p>
-            </div>
-          </div>
+          <p className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
+            {formatCurrency(totalValue)}
+          </p>
         </div>
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Pie Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Sector Composition
-            </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name} ${value.toFixed(1)}%`}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
+        {/* Total Sectors */}
+        <div 
+          className="rounded-xl p-5 border transition-all hover:shadow-lg" 
+          style={{ 
+            backgroundColor: 'var(--color-surface)', 
+            borderColor: 'var(--color-border)'
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              Total Sectors
+            </p>
+            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--color-primary-light)' }}>
+              <PieChartIcon className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
             </div>
           </div>
-
-          {/* Bar Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Sector Values
-            </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="sector" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                  />
-                  <Tooltip 
-                    content={<CustomTooltip />}
-                    formatter={(value) => [`$${(value / 1000).toFixed(0)}K`, 'Value']}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="#3B82F6"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <p className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
+            {totalSectors}
+          </p>
         </div>
 
-        {/* Asset Breakdown Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sector Breakdown</h3>
+        {/* Largest Allocation */}
+        <div 
+          className="rounded-xl p-5 border transition-all hover:shadow-lg" 
+          style={{ 
+            backgroundColor: 'var(--color-surface)', 
+            borderColor: 'var(--color-border)'
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+              Largest Sector
+            </p>
+            <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--color-primary-light)' }}>
+              <TrendingUp className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Sector
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Value
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Weight
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Allocation Bar
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {Object.entries(assetAllocation)
-                  .sort(([,a], [,b]) => b.value - a.value)
-                  .map(([sector, allocation], index) => (
-                  <tr key={sector} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div 
-                          className="h-3 w-3 rounded-full mr-3"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        ></div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {sector}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(allocation.value)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="text-sm text-gray-900 dark:text-white">
-                        {formatPercentage(allocation.percentage)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end">
-                        <div className="w-20 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                          <div 
-                            className="h-2 rounded-full transition-all duration-300"
-                            style={{ 
-                              width: `${allocation.percentage}%`,
-                              backgroundColor: COLORS[index % COLORS.length]
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
+          <p className="text-lg font-bold mb-1" style={{ color: 'var(--color-text)' }}>
+            {largestSector}
+          </p>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
+            {formatPercentage(largestAllocation)}
+          </p>
+        </div>
+      </div>
+
+      {/* Pie Chart - Improved Design */}
+      <div 
+        className="rounded-xl p-6 border" 
+        style={{ 
+          backgroundColor: 'var(--color-surface)', 
+          borderColor: 'var(--color-border)'
+        }}
+      >
+        <div className="flex items-center gap-2 mb-6">
+          <PieChartIcon className="h-5 w-5" style={{ color: 'var(--color-primary)' }} />
+          <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+            Sector Allocation
+          </h3>
+        </div>
+        
+        <div style={{ height: '400px' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                outerRadius={120}
+                innerRadius={60}
+                fill="#8884d8"
+                dataKey="value"
+                animationDuration={800}
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
-              </tbody>
-            </table>
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend content={renderCustomLegend} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Sector Breakdown Table - Modern Design */}
+      <div 
+        className="rounded-xl border overflow-hidden" 
+        style={{ 
+          backgroundColor: 'var(--color-surface)', 
+          borderColor: 'var(--color-border)'
+        }}
+      >
+        <div className="p-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-2">
+            <Percent className="h-5 w-5" style={{ color: 'var(--color-primary)' }} />
+            <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+              Detailed Breakdown
+            </h3>
           </div>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr style={{ backgroundColor: 'var(--color-background)' }}>
+                <th className="px-6 py-4 text-left text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Sector
+                </th>
+                <th className="px-6 py-4 text-right text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Allocation
+                </th>
+                <th className="px-6 py-4 text-right text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Value
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(assetAllocation)
+                .sort((a, b) => b[1].percentage - a[1].percentage)
+                .map(([sector, allocation], index) => (
+                <tr 
+                  key={sector}
+                  className="border-t hover:bg-opacity-50 transition-colors"
+                  style={{ 
+                    borderColor: 'var(--color-border)',
+                    backgroundColor: index % 2 === 0 ? 'transparent' : 'var(--color-background)'
+                  }}
+                >
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <span className="font-medium" style={{ color: 'var(--color-text)' }}>
+                        {sector}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>
+                      {formatPercentage(allocation.percentage)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="font-medium" style={{ color: 'var(--color-text)' }}>
+                      {formatCurrency(allocation.value)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default AllocationSection
+export default AllocationSection;
