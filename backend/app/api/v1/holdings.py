@@ -41,8 +41,17 @@ async def get_holdings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Portfolio not found"
         )
-    
+
     holdings = await get_portfolio_holdings(db, portfolio.id)
+
+    # CRITICAL FIX: Always calculate cost_basis and market_value from database fields before returning
+    for holding in holdings:
+        holding.cost_basis = holding.quantity * holding.average_cost
+        holding.market_value = holding.quantity * (holding.current_price or holding.average_cost)
+        if holding.cost_basis > 0:
+            holding.unrealized_gain_loss = holding.market_value - holding.cost_basis
+            holding.unrealized_gain_loss_percentage = (holding.unrealized_gain_loss / holding.cost_basis) * 100
+
     return holdings
 
 
@@ -81,7 +90,7 @@ async def get_holding_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Holding not found"
         )
-    
+
     # Verify holding belongs to current user
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio or holding.portfolio_id != portfolio.id:
@@ -89,7 +98,14 @@ async def get_holding_detail(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this holding"
         )
-    
+
+    # CRITICAL FIX: Always calculate cost_basis and market_value from database fields before returning
+    holding.cost_basis = holding.quantity * holding.average_cost
+    holding.market_value = holding.quantity * (holding.current_price or holding.average_cost)
+    if holding.cost_basis > 0:
+        holding.unrealized_gain_loss = holding.market_value - holding.cost_basis
+        holding.unrealized_gain_loss_percentage = (holding.unrealized_gain_loss / holding.cost_basis) * 100
+
     return holding
 
 

@@ -68,7 +68,8 @@ class AdvancedPortfolioAnalytics:
         # Step 1: Fetch price data and calculate market values for each holding
         assets_data = {}
         total_portfolio_value = 0.0
-        
+        total_portfolio_value_realtime = 0.0  # CRITICAL FIX: Track real-time value from DB
+
         for holding in holdings:
             asset_model = holding.asset
             try:
@@ -76,11 +77,18 @@ class AdvancedPortfolioAnalytics:
                     asset_model.ticker, start_date, end_date
                 )
                 if not price_data.empty and len(price_data) > 100:  # Ensure sufficient data
-                    # Get current market price (most recent closing price)
-                    current_price = float(price_data['Close'].iloc[-1])
-                    
-                    # Calculate market value: quantity × current_price
-                    market_value = holding.quantity * current_price
+                    # Get current market price (most recent closing price from yfinance)
+                    yfinance_price = float(price_data['Close'].iloc[-1])
+
+                    # CRITICAL FIX: Use real-time price from database if available
+                    realtime_price = holding.current_price or yfinance_price
+
+                    # Calculate market value using yfinance price (for weight calculations)
+                    market_value = holding.quantity * yfinance_price
+
+                    # CRITICAL FIX: Calculate real-time market value from database
+                    realtime_market_value = holding.quantity * realtime_price
+                    total_portfolio_value_realtime += realtime_market_value
                     
                     asset = Asset(
                         symbol=asset_model.ticker,
@@ -93,11 +101,11 @@ class AdvancedPortfolioAnalytics:
                         'price_data': price_data,
                         'market_value': market_value,
                         'quantity': holding.quantity,
-                        'current_price': current_price
+                        'current_price': yfinance_price  # Use yfinance price for consistency
                     }
                     total_portfolio_value += market_value
-                    
-                    print(f"Asset {asset_model.ticker}: qty={holding.quantity}, price=${current_price:.2f}, value=${market_value:.2f}")
+
+                    print(f"Asset {asset_model.ticker}: qty={holding.quantity}, yfinance=${yfinance_price:.2f}, realtime=${realtime_price:.2f}, value=${market_value:.2f}")
 
             except Exception as e:
                 print(f"[ERROR] Could not fetch data for {asset_model.ticker}: {e}")
@@ -130,11 +138,14 @@ class AdvancedPortfolioAnalytics:
         print(f"Total weight: {total_weight:.6f} (should be 1.0)")
         if abs(total_weight - 1.0) > 0.01:  # Allow small floating point errors
             print(f"[WARNING] Weights don't sum to 1.0: {total_weight}")
-        
-        # Store the actual portfolio market value for use in simulations
-        self._cached_portfolio_value = total_portfolio_value
-        print(f"[INFO] Cached portfolio value: ${total_portfolio_value:.2f}")
-        
+
+        # CRITICAL FIX: Store the REAL-TIME portfolio market value for use in simulations
+        # Use real-time prices from database instead of stale yfinance closing prices
+        self._cached_portfolio_value = total_portfolio_value_realtime if total_portfolio_value_realtime > 0 else total_portfolio_value
+        print(f"[INFO] Cached portfolio value (real-time): ${self._cached_portfolio_value:.2f}")
+        print(f"[INFO] Portfolio value (yfinance closing): ${total_portfolio_value:.2f}")
+        print(f"[INFO] Price difference: ${abs(self._cached_portfolio_value - total_portfolio_value):.2f}")
+
         return portfolio if portfolio.assets else None
 
     async def get_current_portfolio_value(self) -> float:

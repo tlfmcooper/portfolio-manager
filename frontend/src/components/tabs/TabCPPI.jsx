@@ -13,12 +13,14 @@ const LoadingSpinner = () => (
 
 const TabCPPI = () => {
   const [cppiData, setCppiData] = useState(null);
-  const { api } = useAuth();
+  const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!portfolioId) return; // Wait for portfolioId to load
+
       try {
-        const response = await api.get('/analysis/portfolios/1/analysis/cppi');
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/cppi`); // CRITICAL FIX: Use dynamic portfolioId
         setCppiData(response.data);
       } catch (err) {
         console.error('Failed to fetch CPPI data:', err);
@@ -26,7 +28,7 @@ const TabCPPI = () => {
     };
 
     fetchData();
-  }, [api]);
+  }, [api, portfolioId]); // CRITICAL FIX: Add portfolioId to dependencies
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A';

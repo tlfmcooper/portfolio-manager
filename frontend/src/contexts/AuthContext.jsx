@@ -72,6 +72,7 @@ const LoadingSpinner = () => (
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [portfolioId, setPortfolioId] = useState(null); // CRITICAL FIX: Store portfolio ID
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOnboarded, setIsOnboarded] = useState(true); // New state for onboarding status
@@ -115,16 +116,30 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await api.get('/users/me');
-      const userData = response.data;
-      setUser(userData);
+      // CRITICAL FIX: Fetch both user data and portfolio info in parallel
+      const [userResponse, portfolioResponse] = await Promise.allSettled([
+        api.get('/users/me'),
+        api.get('/portfolios')
+      ]);
+
+      if (userResponse.status === 'fulfilled') {
+        const userData = userResponse.value.data;
+        setUser(userData);
+      }
+
+      if (portfolioResponse.status === 'fulfilled') {
+        const portfolioData = portfolioResponse.value.data;
+        setPortfolioId(portfolioData.id); // Store portfolio ID
+      }
+
       setError(null);
-      await checkOnboardingStatus(userData); // Check onboarding status after setting user
+      await checkOnboardingStatus(userResponse.value?.data); // Check onboarding status after setting user
     } catch (err) {
       console.error('Token validation failed:', err);
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       setUser(null);
+      setPortfolioId(null);
       setIsOnboarded(false); // Not onboarded if token validation fails
     } finally {
       setLoading(false);
@@ -157,15 +172,21 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
 
-      // Fetch user data and onboarding status in parallel
-      const [userResponse, analysisResponse] = await Promise.allSettled([
+      // CRITICAL FIX: Fetch user data, portfolio info, and onboarding status in parallel
+      const [userResponse, portfolioResponse, analysisResponse] = await Promise.allSettled([
         api.get('/users/me'),
+        api.get('/portfolios'),
         portfolioService.getPortfolioAnalysis()
       ]);
 
       if (userResponse.status === 'fulfilled') {
         const userData = userResponse.value.data;
         setUser(userData);
+      }
+
+      if (portfolioResponse.status === 'fulfilled') {
+        const portfolioData = portfolioResponse.value.data;
+        setPortfolioId(portfolioData.id); // Store portfolio ID
       }
 
       // Check onboarding status from analysis response
@@ -220,6 +241,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       setUser(null);
+      setPortfolioId(null); // CRITICAL FIX: Clear portfolio ID on logout
       navigate('/login');
       toast.success('Logged out successfully');
     }
@@ -243,6 +265,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
+    portfolioId, // CRITICAL FIX: Expose portfolio ID
     loading,
     error,
     login,

@@ -60,18 +60,23 @@ async def get_live_market_data(
         # Still return holdings even if no Finnhub-supported tickers
         enriched_holdings = []
         for holding in holdings:
+            # CRITICAL FIX: Always calculate cost_basis and market_value from database fields
+            calculated_cost_basis = holding.quantity * holding.average_cost
+            current_price_fallback = holding.current_price or holding.average_cost
+            calculated_market_value = holding.quantity * current_price_fallback
+
             holding_dict = {
                 "id": holding.id,
                 "ticker": holding.ticker,
                 "quantity": holding.quantity,
                 "average_cost": holding.average_cost,
-                "cost_basis": holding.cost_basis,
+                "cost_basis": calculated_cost_basis,  # Always calculate fresh
                 "asset": {
                     "name": holding.asset.name if holding.asset else holding.ticker,
                     "ticker": holding.ticker
                 },
-                "current_price": holding.average_cost,
-                "market_value": holding.market_value,
+                "current_price": current_price_fallback,
+                "market_value": calculated_market_value,  # Always calculate fresh
                 "change_percent": 0,
                 "change": 0
             }
@@ -116,12 +121,15 @@ async def get_live_market_data(
     # Enrich holdings with live market data
     enriched_holdings = []
     for holding in holdings:
+        # CRITICAL FIX: Always calculate cost_basis from database fields, never use cached value
+        calculated_cost_basis = holding.quantity * holding.average_cost
+
         holding_dict = {
             "id": holding.id,
             "ticker": holding.ticker,
             "quantity": holding.quantity,
             "average_cost": holding.average_cost,
-            "cost_basis": holding.cost_basis,
+            "cost_basis": calculated_cost_basis,  # Always calculate fresh
             "asset": {
                 "name": holding.asset.name if holding.asset else holding.ticker,
                 "ticker": holding.ticker
@@ -137,8 +145,10 @@ async def get_live_market_data(
             holding_dict["change"] = quote["change"]
         else:
             # Use stored price if live data not available (e.g., MAU.TO)
-            holding_dict["current_price"] = holding.current_price or holding.average_cost
-            holding_dict["market_value"] = holding.market_value
+            # CRITICAL FIX: Always calculate market_value from quantity and price
+            current_price_fallback = holding.current_price or holding.average_cost
+            holding_dict["current_price"] = current_price_fallback
+            holding_dict["market_value"] = holding.quantity * current_price_fallback
             holding_dict["change_percent"] = 0
             holding_dict["change"] = 0
 

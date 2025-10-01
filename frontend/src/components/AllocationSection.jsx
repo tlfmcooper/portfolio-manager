@@ -7,12 +7,14 @@ const AllocationSection = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { api } = useAuth();
+  const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!portfolioId) return; // Wait for portfolioId to load
+
       try {
-        const response = await api.get('/analysis/portfolios/1/analysis/sector-allocation');
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/sector-allocation`); // CRITICAL FIX: Use dynamic portfolioId
         setData(response.data);
       } catch (err) {
         setError('Failed to fetch allocation data');
@@ -23,7 +25,7 @@ const AllocationSection = () => {
     };
 
     fetchData();
-  }, [api]);
+  }, [api, portfolioId]); // CRITICAL FIX: Add portfolioId to dependencies
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">

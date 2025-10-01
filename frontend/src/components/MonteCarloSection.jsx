@@ -7,13 +7,14 @@ const MonteCarloSection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { api } = useAuth()
+  const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!portfolioId) return; // Wait for portfolioId to load
+
       try {
-        // TODO: Replace with dynamic portfolio ID
-        const response = await api.get('/analysis/portfolios/1/analysis/monte-carlo')
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/monte-carlo`) // CRITICAL FIX: Use dynamic portfolioId
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch Monte Carlo simulation data')
@@ -24,7 +25,7 @@ const MonteCarloSection = () => {
     }
 
     fetchData()
-  }, [api])
+  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>
