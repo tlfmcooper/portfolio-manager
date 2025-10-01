@@ -29,16 +29,18 @@ async def create_holding(db: AsyncSession, portfolio_id: int, holding_create: Ho
                         (holding_create.quantity * holding_create.average_cost)
         new_total_quantity = existing_holding.quantity + holding_create.quantity
         new_average_cost = new_total_cost / new_total_quantity
-        
+
         existing_holding.quantity = new_total_quantity
         existing_holding.average_cost = new_average_cost
+        existing_holding.cost_basis = new_total_quantity * new_average_cost  # CRITICAL FIX: Recalculate cost_basis
+        existing_holding.market_value = new_total_quantity * (existing_holding.current_price or new_average_cost)  # Update market_value
         existing_holding.updated_at = datetime.utcnow()
-        
+
         if holding_create.target_allocation is not None:
             existing_holding.target_allocation = holding_create.target_allocation
         if holding_create.notes:
             existing_holding.notes = holding_create.notes
-        
+
         await db.commit()
         await db.refresh(existing_holding)
         return existing_holding
@@ -47,6 +49,7 @@ async def create_holding(db: AsyncSession, portfolio_id: int, holding_create: Ho
     db_holding = Holding(
         portfolio_id=portfolio_id,
         asset_id=asset.id,
+        ticker=holding_create.asset_ticker,  # CRITICAL FIX: Add ticker to new holdings
         quantity=holding_create.quantity,
         average_cost=holding_create.average_cost,
         target_allocation=holding_create.target_allocation,

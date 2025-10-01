@@ -200,14 +200,17 @@ const LiveMarket = () => {
   };
 
   const calculateUnrealizedGainLoss = (holding) => {
-    const costBasis = holding.cost_basis;
-    const currentValue = holding.market_value;
+    // CRITICAL FIX: Always calculate from quantity and prices, don't trust cached cost_basis
+    const costBasis = holding.quantity * holding.average_cost;
+    const currentValue = holding.quantity * holding.current_price;
     return currentValue - costBasis;
   };
 
   const calculateUnrealizedGainLossPercentage = (holding) => {
+    // CRITICAL FIX: Calculate return % directly from prices
+    const costBasis = holding.quantity * holding.average_cost;
     const gainLoss = calculateUnrealizedGainLoss(holding);
-    return (gainLoss / holding.cost_basis) * 100;
+    return (gainLoss / costBasis) * 100;
   };
 
   const getTotalUnrealizedGainLoss = () => {
@@ -217,7 +220,8 @@ const LiveMarket = () => {
   };
 
   const getTotalUnrealizedGainLossPercentage = () => {
-    const totalCostBasis = holdings.reduce((sum, h) => sum + h.cost_basis, 0);
+    // CRITICAL FIX: Calculate total cost basis from quantity * average_cost
+    const totalCostBasis = holdings.reduce((sum, h) => sum + (h.quantity * h.average_cost), 0);
     const totalGainLoss = getTotalUnrealizedGainLoss();
     return totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0;
   };
