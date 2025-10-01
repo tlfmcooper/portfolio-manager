@@ -30,7 +30,7 @@ const Login = () => {
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.email) newErrors.email = 'Email is required';
+    if (!formData.email) newErrors.email = 'Username or email is required';
     if (!formData.password) newErrors.password = 'Password is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -39,36 +39,23 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    
+
     setIsLoading(true);
     const { email, password } = formData;
-    const { success, error } = await login(email, password);
-    
-    if (!success) {
-      setErrors({ form: error });
+    const result = await login(email, password);
+
+    if (!result.success) {
+      setErrors({ form: result.error });
       setIsLoading(false);
       return;
     }
 
-    // Check onboarding status directly after login
-    try {
-      const api = axios.create({
-        baseURL: 'http://127.0.0.1:8000/api/v1',
-        timeout: 10000,
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-      });
-      const portfolioService = new PortfolioService(api);
-      const analysis = await portfolioService.getPortfolioAnalysis();
-      const hasPortfolioData = analysis && Object.keys(analysis).length > 0;
-      if (hasPortfolioData) {
-        navigate('/dashboard');
-      } else {
-        navigate('/onboarding');
-      }
-    } catch (err) {
+    // Redirect immediately based on onboarding status
+    if (result.isOnboarded) {
+      navigate('/dashboard');
+    } else {
       navigate('/onboarding');
     }
-    setIsLoading(false);
   };
 
   return (
@@ -107,10 +94,10 @@ const Login = () => {
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
+              {/* Email or Username Field */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                  Email Address
+                  Username or Email
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -119,13 +106,13 @@ const Login = () => {
                   <input
                     id="email"
                     name="email"
-                    type="email"
-                    autoComplete="email"
+                    type="text"
+                    autoComplete="username"
                     required
                     className={`w-full pl-11 pr-4 py-3 bg-gray-900/50 border ${
                       errors.email ? 'border-red-500/50' : 'border-gray-700/50'
                     } rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all duration-200`}
-                    placeholder="you@example.com"
+                    placeholder="username or email@example.com"
                     value={formData.email}
                     onChange={handleChange}
                   />

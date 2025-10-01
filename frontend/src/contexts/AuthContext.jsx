@@ -7,7 +7,7 @@ import PortfolioService from '../services/portfolioService'; // Import Portfolio
 
 const AuthContext = createContext(null);
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 // Create axios instance with interceptors
 const api = axios.create({
@@ -134,14 +134,13 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       setError(null);
-      setLoading(true);
-      
+
       // Create form data for OAuth2 login
       const formData = new FormData();
       formData.append('username', username);
       formData.append('password', password);
       formData.append('grant_type', 'password');
-      
+
       const response = await axios.post(
         `${API_BASE_URL}/auth/login`,
         formData,
@@ -151,32 +150,42 @@ export const AuthProvider = ({ children }) => {
           }
         }
       );
-      
+
       const { access_token, refresh_token } = response.data;
-      
+
       // Store tokens
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
-      
-      // Fetch user data
-      const userResponse = await api.get('/users/me');
-      const userData = userResponse.data;
-      setUser(userData);
-      
-      await checkOnboardingStatus(userData); // Check onboarding status after setting user
-      
+
+      // Fetch user data and onboarding status in parallel
+      const [userResponse, analysisResponse] = await Promise.allSettled([
+        api.get('/users/me'),
+        portfolioService.getPortfolioAnalysis()
+      ]);
+
+      if (userResponse.status === 'fulfilled') {
+        const userData = userResponse.value.data;
+        setUser(userData);
+      }
+
+      // Check onboarding status from analysis response
+      const hasPortfolioData = analysisResponse.status === 'fulfilled' &&
+                               analysisResponse.value &&
+                               Object.keys(analysisResponse.value).length > 0;
+      setIsOnboarded(hasPortfolioData);
+
       toast.success('Login successful!');
-      // navigate('/dashboard'); // Navigation will be handled by ProtectedLayout
-      
-      return { success: true };
+
+      return {
+        success: true,
+        isOnboarded: hasPortfolioData
+      };
     } catch (err) {
       console.error('Login error:', err);
       const errorMsg = err.response?.data?.detail || 'Login failed. Please check your credentials.';
       setError(errorMsg);
       toast.error(errorMsg);
       return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
     }
   };
 

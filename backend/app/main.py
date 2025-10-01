@@ -16,9 +16,16 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     await create_tables()
+
+    # Initialize Redis connection
+    from app.core.redis_client import get_redis_client
+    redis_client = await get_redis_client()
+
     yield
-    # Shutdown (if needed)
-    pass
+
+    # Shutdown
+    if redis_client:
+        await redis_client.disconnect()
 
 
 def create_application() -> FastAPI:
@@ -42,8 +49,9 @@ def create_application() -> FastAPI:
             "http://localhost:5173",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:5173",
+            "http://192.168.4.27:5173",  # Your computer's local IP
             "http://172.26.208.1:5173",
-            "*",
+            "*",  # Allow all for development (remove in production)
         ],
         allow_credentials=True,
         allow_methods=["*"],

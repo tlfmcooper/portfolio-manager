@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     # Finnhub API
     FINNHUB_API_KEY: str
 
+    # Redis settings
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+    # WebSocket settings
+    WS_HEARTBEAT_INTERVAL: int = 30  # seconds
+    STOCK_DATA_CACHE_TTL: int = 3600  # 1 hour cache for stock data
+
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str]:
         """Parse CORS origins from string or list."""
@@ -72,6 +79,7 @@ class Settings(BaseSettings):
     class Config:
         case_sensitive = True
         env_file = ".env"
+        extra = "ignore"  # Ignore extra fields in .env file
 
 
 # Create settings instance

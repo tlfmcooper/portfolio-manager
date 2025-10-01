@@ -14,25 +14,122 @@ const LiveMarket = () => {
   const [error, setError] = useState(null);
   const [selectedStock, setSelectedStock] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [wsConnected, setWsConnected] = useState(false);
   const { api } = useAuth();
-  const intervalRef = useRef(null);
+  const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
   const priceHistoryRef = useRef({});
 
   useEffect(() => {
     fetchLiveMarketData();
-    
-    // Poll every 15 seconds to respect Finnhub rate limits (60 calls/min)
-    // With 10 stocks + 1.1s delay each = ~12 seconds per fetch
-    intervalRef.current = setInterval(() => {
-      fetchLiveMarketData(true);
-    }, 15000);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      // Cleanup WebSocket connection
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
       }
     };
   }, [api]);
+
+  // WebSocket connection setup
+  const connectWebSocket = (symbols) => {
+    if (!symbols || symbols.length === 0) return;
+
+    const wsUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1')
+      .replace('http://', 'ws://')
+      .replace('https://', 'wss://');
+
+    try {
+      const ws = new WebSocket(`${wsUrl}/market/ws`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        setWsConnected(true);
+
+        // Subscribe to symbols
+        ws.send(JSON.stringify({
+          type: 'subscribe',
+          symbols: symbols
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+
+        if (message.type === 'historical') {
+          // Received historical cached data
+          console.log('Received historical data', message.data);
+
+          Object.entries(message.data).forEach(([symbol, history]) => {
+            if (!priceHistoryRef.current[symbol]) {
+              priceHistoryRef.current[symbol] = [];
+            }
+            // Replace with historical data
+            priceHistoryRef.current[symbol] = history;
+          });
+
+          setChartData({...priceHistoryRef.current});
+          setLastUpdate(new Date());
+
+        } else if (message.type === 'update') {
+          // Received live data update
+          console.log('Received live update', message.data);
+
+          const now = Date.now();
+          const currentTime = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+
+          Object.entries(message.data).forEach(([symbol, quote]) => {
+            if (!priceHistoryRef.current[symbol]) {
+              priceHistoryRef.current[symbol] = [];
+            }
+
+            // Add new data point
+            priceHistoryRef.current[symbol].push({
+              time: currentTime,
+              price: quote.current_price,
+              timestamp: now
+            });
+
+            // Keep last 200 points
+            if (priceHistoryRef.current[symbol].length > 200) {
+              priceHistoryRef.current[symbol].shift();
+            }
+          });
+
+          setChartData({...priceHistoryRef.current});
+          setLastUpdate(new Date());
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setWsConnected(false);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+        setWsConnected(false);
+
+        // Attempt to reconnect after 5 seconds
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('Attempting to reconnect WebSocket...');
+          connectWebSocket(symbols);
+        }, 5000);
+      };
+
+    } catch (err) {
+      console.error('Error creating WebSocket:', err);
+      setWsConnected(false);
+    }
+  };
 
   const fetchLiveMarketData = async (silentUpdate = false) => {
     try {
@@ -42,46 +139,12 @@ const LiveMarket = () => {
       setError(null);
 
       const response = await api.get('/market/live', {
-        timeout: 30000 // 30 second timeout for multiple stock quotes
+        timeout: 30000 // 30 second timeout for initial fetch with many holdings
       });
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
       setLastUpdate(new Date());
-      
-      // Build chart data from price updates
-      const now = Date.now();
-      const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      
-      holdingsData.forEach(holding => {
-        // Skip unsupported tickers
-        if (UNSUPPORTED_TICKERS.includes(holding.ticker)) {
-          return;
-        }
-        
-        const ticker = holding.ticker;
-        const price = holding.current_price;
-        
-        // Initialize history if needed
-        if (!priceHistoryRef.current[ticker]) {
-          priceHistoryRef.current[ticker] = [];
-        }
-        
-        // Add new data point
-        priceHistoryRef.current[ticker].push({
-          time: currentTime,
-          price: price,
-          timestamp: now
-        });
-        
-        // Keep last 100 points (about 25 minutes at 15-second intervals)
-        if (priceHistoryRef.current[ticker].length > 100) {
-          priceHistoryRef.current[ticker].shift();
-        }
-      });
-      
-      // Update chart data state
-      setChartData({...priceHistoryRef.current});
-      
+
       // Set initial selected stock
       if (!selectedStock && holdingsData.length > 0) {
         const supported = holdingsData.filter(h => !UNSUPPORTED_TICKERS.includes(h.ticker));
@@ -89,12 +152,23 @@ const LiveMarket = () => {
           setSelectedStock(supported[0].ticker);
         }
       }
-      
+
+      // Extract symbols for WebSocket subscription
+      const symbols = holdingsData
+        .map(h => h.ticker)
+        .filter(ticker => ticker && !UNSUPPORTED_TICKERS.includes(ticker));
+
+      // Connect to WebSocket for live updates
+      if (symbols.length > 0 && !wsRef.current) {
+        connectWebSocket(symbols);
+      }
+
     } catch (err) {
       console.error('Error fetching live market data:', err);
       if (!silentUpdate) {
-        setError('Failed to fetch live market data');
-        toast.error('Failed to fetch live market data');
+        const errorMsg = err.response?.data?.detail || err.message || 'Failed to fetch live market data';
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } finally {
       if (!silentUpdate) {
@@ -104,9 +178,16 @@ const LiveMarket = () => {
   };
 
   const handleRefresh = () => {
-    // Clear history and restart
+    // Clear history and restart WebSocket
     priceHistoryRef.current = {};
     setChartData({});
+
+    // Close existing WebSocket and reconnect
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     fetchLiveMarketData();
     toast.success('Refreshing market data...');
   };
@@ -234,12 +315,14 @@ const LiveMarket = () => {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Live Market Data</span>
             <div className="flex items-center space-x-2">
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs" style={{ color: 'var(--color-success)' }}>Live</span>
+              <div className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+              <span className="text-xs" style={{ color: wsConnected ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                {wsConnected ? 'Live (WebSocket)' : 'Polling'}
+              </span>
             </div>
           </div>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            {lastUpdate ? `Updated: ${lastUpdate.toLocaleTimeString()}` : 'Updates every 15 seconds'}
+            {lastUpdate ? `Updated: ${lastUpdate.toLocaleTimeString()}` : 'Connecting...'}
           </p>
           <button
             onClick={handleRefresh}
@@ -352,7 +435,7 @@ const LiveMarket = () => {
               </ResponsiveContainer>
               
               <p className="text-xs text-center mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-                Chart shows real-time price updates (collected since page load)
+                {wsConnected ? 'Chart shows historical + live WebSocket updates' : 'Chart shows real-time price updates'}
               </p>
             </div>
           )}

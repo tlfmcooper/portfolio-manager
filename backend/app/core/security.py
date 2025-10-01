@@ -66,13 +66,25 @@ def verify_token(token: str, token_type: str = "access") -> Dict[str, Any]:
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    """
+    Hash a password using bcrypt.
+    Bcrypt has a 72-byte limit, so we truncate if needed.
+    """
+    # Truncate to 72 bytes to comply with bcrypt limit
+    password_bytes = password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.hash(password_truncated)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verify a password against its hash.
+    Bcrypt has a 72-byte limit, so we truncate if needed.
+    """
+    # Truncate to 72 bytes to comply with bcrypt limit
+    password_bytes = plain_password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.verify(password_truncated, hashed_password)
 
 
 def validate_password_strength(password: str) -> bool:
