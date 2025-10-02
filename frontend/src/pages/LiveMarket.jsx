@@ -138,9 +138,12 @@ const LiveMarket = () => {
       }
       setError(null);
 
+      console.log('Fetching live market data...');
+      const startTime = Date.now();
       const response = await api.get('/market/live', {
-        timeout: 30000 // 30 second timeout for initial fetch with many holdings
+        timeout: 60000 // 60 second timeout for initial fetch with many holdings
       });
+      console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
       setLastUpdate(new Date());

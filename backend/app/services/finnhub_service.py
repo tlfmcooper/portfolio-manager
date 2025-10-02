@@ -118,7 +118,7 @@ class FinnhubService:
     async def get_multiple_quotes_async(self, symbols: List[str]) -> Dict[str, Dict]:
         """
         Get quotes for multiple symbols (async version for async contexts).
-        Fetches quotes with rate limiting to respect Finnhub free tier limits (60/min).
+        Fetches quotes concurrently with rate limiting to respect Finnhub free tier limits (60/min).
 
         Args:
             symbols: List of stock ticker symbols
@@ -131,22 +131,25 @@ class FinnhubService:
 
         import asyncio
 
-        results = {}
-        
-        # Finnhub free tier: 60 calls/min = 1 call/second
-        # Add 1.1 second delay between requests to be safe
-        for symbol in symbols:
-            try:
-                quote = await self.get_quote(symbol)
-                if quote:
-                    results[symbol.upper()] = quote
-                
-                # Rate limiting delay (1.1 seconds between calls)
-                if len(symbols) > 1:  # Only delay if there are more symbols
-                    await asyncio.sleep(1.1)
-                    
-            except Exception as e:
-                logger.warning(f"Failed to fetch quote for {symbol}: {e}")
+        # Finnhub free tier: 60 calls/min
+        # Use semaphore to limit concurrent requests (allow 30 concurrent requests)
+        semaphore = asyncio.Semaphore(30)
+
+        async def fetch_with_limit(symbol: str):
+            async with semaphore:
+                try:
+                    quote = await self.get_quote(symbol)
+                    return symbol.upper(), quote
+                except Exception as e:
+                    logger.warning(f"Failed to fetch quote for {symbol}: {e}")
+                    return symbol.upper(), None
+
+        # Fetch all quotes concurrently
+        tasks = [fetch_with_limit(symbol) for symbol in symbols]
+        results_list = await asyncio.gather(*tasks)
+
+        # Convert to dict, filtering out None values
+        results = {symbol: quote for symbol, quote in results_list if quote is not None}
 
         return results
 

@@ -6,7 +6,12 @@
       "Bash(curl:*)",
       "Bash(podman ps:*)",
       "Bash(podman exec:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(ipconfig)",
+      "Bash(findstr:*)",
+      "Bash(netsh advfirewall firewall show rule:*)",
+      "Bash(netsh advfirewall firewall add rule name=\"Portfolio Dashboard Backend\" dir=in action=allow protocol=TCP localport=8000)",
+      "Bash(netsh advfirewall firewall add rule name=\"Portfolio Dashboard Frontend\" dir=in action=allow protocol=TCP localport=5173)"
     ],
     "deny": [],
     "ask": []
