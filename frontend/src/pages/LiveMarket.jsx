@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, TrendingDown, Activity, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, RefreshCw, Search } from 'lucide-react';
 import { Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -15,6 +15,8 @@ const LiveMarket = () => {
   const [selectedStock, setSelectedStock] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const { api } = useAuth();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -250,6 +252,73 @@ const LiveMarket = () => {
     return value >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
   };
 
+  // Filter holdings
+  const filteredHoldings = holdings.filter(holding =>
+    holding.ticker.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (holding.asset?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Sort holdings
+  const sortedHoldings = React.useMemo(() => {
+    let sortable = [...filteredHoldings];
+    if (sortConfig.key) {
+      sortable.sort((a, b) => {
+        let aVal, bVal;
+
+        switch(sortConfig.key) {
+          case 'asset':
+            aVal = a.asset?.name || a.ticker;
+            bVal = b.asset?.name || b.ticker;
+            break;
+          case 'symbol':
+            aVal = a.ticker;
+            bVal = b.ticker;
+            break;
+          case 'quantity':
+            aVal = a.quantity;
+            bVal = b.quantity;
+            break;
+          case 'price':
+            aVal = a.current_price;
+            bVal = b.current_price;
+            break;
+          case 'value':
+            aVal = a.market_value;
+            bVal = b.market_value;
+            break;
+          case 'dayChange':
+            aVal = a.change_percent || 0;
+            bVal = b.change_percent || 0;
+            break;
+          case 'return':
+            aVal = calculateUnrealizedGainLossPercentage(a);
+            bVal = calculateUnrealizedGainLossPercentage(b);
+            break;
+          default:
+            return 0;
+        }
+
+        if (typeof aVal === 'string') {
+          return sortConfig.direction === 'asc'
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal);
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortable;
+  }, [filteredHoldings, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -452,42 +521,124 @@ const LiveMarket = () => {
       {/* Holdings Table */}
       <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
         <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
-            Detailed Holdings
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+              Detailed Holdings
+            </h3>
+            {/* Search bar */}
+            <div className="relative w-80">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-secondary)' }} />
+              <input
+                type="text"
+                placeholder="Search by symbol or name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pr-4 py-2 rounded-md focus:ring-2 focus:outline-none"
+                style={{
+                  paddingLeft: '2.5rem',
+                  backgroundColor: 'var(--color-secondary)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+              />
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y" style={{ borderColor: 'var(--color-border)' }}>
             <thead style={{ backgroundColor: 'var(--color-secondary)' }}>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Asset
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('asset')}
+                >
+                  <div className="flex items-center">
+                    Asset
+                    {sortConfig.key === 'asset' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Symbol
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('symbol')}
+                >
+                  <div className="flex items-center">
+                    Symbol
+                    {sortConfig.key === 'symbol' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Quantity
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('quantity')}
+                >
+                  <div className="flex items-center justify-end">
+                    Quantity
+                    {sortConfig.key === 'quantity' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Current Price
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('price')}
+                >
+                  <div className="flex items-center justify-end">
+                    Current Price
+                    {sortConfig.key === 'price' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Market Value
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('value')}
+                >
+                  <div className="flex items-center justify-end">
+                    Market Value
+                    {sortConfig.key === 'value' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Day Change
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('dayChange')}
+                >
+                  <div className="flex items-center justify-end">
+                    Day Change
+                    {sortConfig.key === 'dayChange' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
                   Unrealized Gain/Loss
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
-                  Return %
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('return')}
+                >
+                  <div className="flex items-center justify-end">
+                    Return %
+                    {sortConfig.key === 'return' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-              {holdings.map((holding) => {
+              {sortedHoldings.map((holding) => {
                 const unrealizedGainLoss = calculateUnrealizedGainLoss(holding);
                 const unrealizedGainLossPercentage = calculateUnrealizedGainLossPercentage(holding);
                 const dayChange = holding.change_percent || 0;
