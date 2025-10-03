@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.3"
+__generated_with = "0.16.5"
 app = marimo.App(width="medium")
 
 
@@ -14,16 +14,16 @@ def _():
 def _():
     import sqlalchemy
 
-    DATABASE_URL = "sqlite:///../portfolio.db"
+    DATABASE_URL = "sqlite:///portfolio.db"
     engine = sqlalchemy.create_engine(DATABASE_URL)
     return (engine,)
 
 
 @app.cell
-def _(engine, holdings, mo):
+def _(engine, mo):
     df = mo.sql(
         f"""
-        SELECT * FROM holdings LIMIT 100
+        SELECT * FROM transactions LIMIT 100
         """,
         engine=engine
     )
@@ -32,7 +32,7 @@ def _(engine, holdings, mo):
 
 @app.cell
 def _(df):
-    df.head()
+    df
     return
 
 

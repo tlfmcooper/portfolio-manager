@@ -197,11 +197,9 @@ const LiveMarket = () => {
     toast.success('Refreshing market data...');
   };
 
-  const calculateIntradayChange = (ticker) => {
-    if (!chartData[ticker] || chartData[ticker].length < 2) return 0;
-    const firstPrice = chartData[ticker][0].price;
-    const lastPrice = chartData[ticker][chartData[ticker].length - 1].price;
-    return ((lastPrice - firstPrice) / firstPrice) * 100;
+  const getDayChangePercent = (ticker) => {
+    const holding = holdings.find(h => h.ticker === ticker);
+    return holding?.change_percent || 0;
   };
 
   const calculateUnrealizedGainLoss = (holding) => {
@@ -421,7 +419,7 @@ const LiveMarket = () => {
           {/* Stock Selector Tabs */}
           <div className="flex flex-wrap gap-2 mb-6">
             {supportedHoldings.map((holding) => {
-              const intradayChange = calculateIntradayChange(holding.ticker);
+              const dayChangePercent = getDayChangePercent(holding.ticker);
               return (
                 <button
                   key={holding.ticker}
@@ -435,11 +433,9 @@ const LiveMarket = () => {
                 >
                   <div className="flex items-center space-x-2">
                     <span>{holding.ticker}</span>
-                    {chartData[holding.ticker] && chartData[holding.ticker].length > 1 && (
-                      <span className={getColorClass(intradayChange)}>
-                        {formatPercentage(intradayChange)}
-                      </span>
-                    )}
+                    <span className={getColorClass(dayChangePercent)}>
+                      {formatPercentage(dayChangePercent)}
+                    </span>
                   </div>
                 </button>
               );
@@ -462,11 +458,9 @@ const LiveMarket = () => {
                   <p className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
                     {formatCurrency(chartData[selectedStock][chartData[selectedStock].length - 1].price)}
                   </p>
-                  {chartData[selectedStock].length > 1 && (
-                    <p className={`text-sm font-medium ${getColorClass(calculateIntradayChange(selectedStock))}`}>
-                      {formatPercentage(calculateIntradayChange(selectedStock))}
-                    </p>
-                  )}
+                  <p className={`text-sm font-medium ${getColorClass(getDayChangePercent(selectedStock))}`}>
+                    {formatPercentage(getDayChangePercent(selectedStock))}
+                  </p>
                 </div>
               </div>
 
