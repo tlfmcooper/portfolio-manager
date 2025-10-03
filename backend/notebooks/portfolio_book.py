@@ -20,7 +20,7 @@ def _():
 
 
 @app.cell
-def _(engine, mo):
+def _(engine, mo, transactions):
     df = mo.sql(
         f"""
         SELECT * FROM transactions LIMIT 100
@@ -37,21 +37,32 @@ def _(df):
 
 
 @app.cell
-def _():
+def _(assets, engine, mo):
+    asset_df = mo.sql(
+        f"""
+        SELECT * FROM assets
+        """,
+        engine=engine
+    )
+    return (asset_df,)
+
+
+@app.cell
+def _(assets, engine, mo):
+    _df = mo.sql(
+        f"""
+        UPDATE assets 
+            SET currency='CAD'
+            WHERE ticker='MAU.TO' 
+        """,
+        engine=engine
+    )
     return
 
 
 @app.cell
-def _():
-    from vega_datasets import data
-
-    stocks = data.stocks()
-
-    import altair as alt
-
-    alt.Chart(stocks).mark_line().encode(
-        x="date:T", y="price", color="symbol"
-    ).interactive(bind_y=False)
+def _(asset_df):
+    asset_df[['ticker','currency']]
     return
 
 

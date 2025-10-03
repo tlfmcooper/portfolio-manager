@@ -219,6 +219,67 @@ class FinanceService:
             logger.error(f"Error fetching price for {ticker}: {str(e)}")
             return None
 
+    @staticmethod
+    async def get_ohlc_data(ticker: str) -> Optional[Dict[str, Any]]:
+        """
+        Get OHLC (Open, High, Low, Close) data for a stock from Yahoo Finance.
+        Uses the most recent trading day data.
+
+        Args:
+            ticker: Stock ticker symbol
+
+        Returns:
+            Dictionary with OHLC data and change percentage, or None if not found
+        """
+        try:
+            stock = yf.Ticker(ticker)
+
+            # Get last 2 days of history to ensure we have data even if market is closed
+            hist = stock.history(period='2d')
+
+            if hist.empty:
+                logger.warning(f"No OHLC data found for ticker: {ticker}")
+                return None
+
+            # Get the most recent trading day
+            latest = hist.iloc[-1]
+            close_price = float(latest['Close'])
+            open_price = float(latest['Open'])
+            high_price = float(latest['High'])
+            low_price = float(latest['Low'])
+
+            # Get previous day's close for change calculation
+            previous_close = None
+            change_percent = None
+
+            if len(hist) >= 2:
+                previous = hist.iloc[-2]
+                previous_close = float(previous['Close'])
+                change_percent = ((close_price - previous_close) / previous_close) * 100
+            else:
+                # If only one day available, calculate change from open to close
+                change_percent = ((close_price - open_price) / open_price) * 100
+
+            ohlc_data = {
+                'ticker': ticker.upper(),
+                'current_price': close_price,
+                'open': open_price,
+                'high': high_price,
+                'low': low_price,
+                'close': close_price,
+                'previous_close': previous_close,
+                'change_percent': change_percent,
+                'change': close_price - (previous_close if previous_close else open_price),
+                'last_updated': datetime.utcnow()
+            }
+
+            logger.info(f"Successfully fetched OHLC data for {ticker}: close={close_price}, change%={change_percent}")
+            return ohlc_data
+
+        except Exception as e:
+            logger.error(f"Error fetching OHLC data for {ticker}: {str(e)}")
+            return None
+
 
 def _determine_asset_type(info: Dict[str, Any]) -> str:
     """

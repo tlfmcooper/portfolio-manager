@@ -55,9 +55,10 @@ async def get_live_market_data(
     stock_symbols = []
     mutual_fund_holdings = []
     crypto_holdings = []
+    unsupported_stock_holdings = []
 
     for holding in holdings:
-        if not holding.ticker or holding.ticker in UNSUPPORTED_TICKERS:
+        if not holding.ticker:
             continue
 
         asset_type = holding.asset.asset_type if holding.asset else 'stock'
@@ -66,6 +67,9 @@ async def get_live_market_data(
             mutual_fund_holdings.append(holding)
         elif asset_type == 'crypto':
             crypto_holdings.append(holding)
+        elif holding.ticker in UNSUPPORTED_TICKERS:
+            # Unsupported by Finnhub, will use Yahoo Finance OHLC
+            unsupported_stock_holdings.append(holding)
         else:
             stock_symbols.append(holding.ticker)
 
@@ -77,10 +81,15 @@ async def get_live_market_data(
         try:
             mf_data = await FinanceService.get_asset_info(holding.ticker, 'mutual_fund')
             if mf_data and 'current_price' in mf_data:
-                # Update holding's current price and change_percent in database
+                # Update holding's current price
                 holding.current_price = mf_data['current_price']
                 # Store change_percent temporarily (we'll use it below)
                 holding._temp_change_percent = mf_data.get('change_percent', 0)
+
+                # Update asset's current price in database
+                if holding.asset:
+                    holding.asset.current_price = mf_data['current_price']
+                    holding.asset.last_price_update = datetime.utcnow()
             else:
                 holding._temp_change_percent = 0
         except Exception as e:
@@ -100,11 +109,40 @@ async def get_live_market_data(
                     holding._temp_change_percent = ((new_price - old_price) / old_price) * 100
                 else:
                     holding._temp_change_percent = 0
+
+                # Update asset's current price in database
+                if holding.asset:
+                    holding.asset.current_price = crypto_data['current_price']
+                    holding.asset.last_price_update = datetime.utcnow()
             else:
                 holding._temp_change_percent = 0
         except Exception as e:
             logger.error(f"Error fetching crypto data for {holding.ticker}: {e}")
             holding._temp_change_percent = 0
+
+    # Fetch data for unsupported stocks using Yahoo Finance OHLC
+    for holding in unsupported_stock_holdings:
+        try:
+            ohlc_data = await FinanceService.get_ohlc_data(holding.ticker)
+            if ohlc_data and 'current_price' in ohlc_data:
+                holding.current_price = ohlc_data['current_price']
+                holding._temp_change_percent = ohlc_data.get('change_percent', 0)
+                holding._temp_change = ohlc_data.get('change', 0)
+
+                # Update asset's current price in database
+                if holding.asset:
+                    holding.asset.current_price = ohlc_data['current_price']
+                    holding.asset.last_price_update = datetime.utcnow()
+            else:
+                holding._temp_change_percent = 0
+                holding._temp_change = 0
+        except Exception as e:
+            logger.error(f"Error fetching OHLC data for {holding.ticker}: {e}")
+            holding._temp_change_percent = 0
+            holding._temp_change = 0
+
+    # Commit database updates for prices
+    await db.commit()
 
     if not stock_symbols:
         # Still return holdings even if no Finnhub-supported tickers
@@ -129,10 +167,13 @@ async def get_live_market_data(
                 "market_value": calculated_market_value,  # Always calculate fresh
             }
 
-            # Check if we have temp change_percent (for mutual funds and crypto)
+            # Check if we have temp change_percent (for mutual funds, crypto, and unsupported stocks)
             if hasattr(holding, '_temp_change_percent'):
                 holding_dict["change_percent"] = holding._temp_change_percent
-                if holding._temp_change_percent and current_price_fallback:
+                # Use temp_change if available (from OHLC), otherwise calculate
+                if hasattr(holding, '_temp_change'):
+                    holding_dict["change"] = holding._temp_change
+                elif holding._temp_change_percent and current_price_fallback:
                     holding_dict["change"] = (current_price_fallback * holding._temp_change_percent) / 100
                 else:
                     holding_dict["change"] = 0
@@ -212,11 +253,13 @@ async def get_live_market_data(
             holding_dict["current_price"] = current_price_fallback
             holding_dict["market_value"] = holding.quantity * current_price_fallback
 
-            # Check if we have temp change_percent (for mutual funds and crypto)
+            # Check if we have temp change_percent (for mutual funds, crypto, and unsupported stocks)
             if hasattr(holding, '_temp_change_percent'):
                 holding_dict["change_percent"] = holding._temp_change_percent
-                # Calculate dollar change
-                if holding._temp_change_percent and current_price_fallback:
+                # Use temp_change if available (from OHLC), otherwise calculate
+                if hasattr(holding, '_temp_change'):
+                    holding_dict["change"] = holding._temp_change
+                elif holding._temp_change_percent and current_price_fallback:
                     holding_dict["change"] = (current_price_fallback * holding._temp_change_percent) / 100
                 else:
                     holding_dict["change"] = 0
