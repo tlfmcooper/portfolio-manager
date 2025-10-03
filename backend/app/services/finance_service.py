@@ -1,8 +1,12 @@
 """
-Finance service for fetching asset data from Yahoo Finance.
+Finance service for fetching asset data from Yahoo Finance and other sources.
 """
 import yfinance as yf
 import logging
+import requests
+import ast
+import re
+from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -10,35 +14,48 @@ logger = logging.getLogger(__name__)
 
 
 class FinanceService:
-    """Service for fetching financial data from Yahoo Finance."""
-    
+    """Service for fetching financial data from Yahoo Finance and other sources."""
+
     @staticmethod
-    async def get_asset_info(ticker: str) -> Optional[Dict[str, Any]]:
+    async def get_asset_info(ticker: str, asset_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Fetch comprehensive asset information from Yahoo Finance.
-        
+        Fetch comprehensive asset information based on asset type.
+
         Args:
-            ticker: Stock ticker symbol
-            
+            ticker: Asset ticker/symbol
+            asset_type: Type of asset (stock, mutual_fund, crypto) - if None, will auto-detect
+
         Returns:
             Dictionary with asset information or None if not found
         """
+        # Route to appropriate fetcher based on asset_type
+        if asset_type == 'mutual_fund':
+            return await FinanceService._get_mutual_fund_info(ticker)
+        elif asset_type == 'crypto':
+            return await FinanceService._get_crypto_info(ticker)
+        else:
+            # Default to stock/ETF via Yahoo Finance
+            return await FinanceService._get_stock_info(ticker, asset_type)
+
+    @staticmethod
+    async def _get_stock_info(ticker: str, asset_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Fetch stock/ETF information from Yahoo Finance."""
         try:
             # Create yfinance ticker object
             stock = yf.Ticker(ticker.upper())
-            
+
             # Get basic info
             info = stock.info
-            
+
             if not info or 'symbol' not in info:
                 logger.warning(f"No data found for ticker: {ticker}")
                 return None
-            
+
             # Extract relevant information
             asset_data = {
                 'ticker': ticker.upper(),
                 'name': info.get('longName') or info.get('shortName'),
-                'asset_type': _determine_asset_type(info),
+                'asset_type': asset_type or _determine_asset_type(info),
                 'sector': info.get('sector'),
                 'industry': info.get('industry'),
                 'description': info.get('longBusinessSummary'),
@@ -51,7 +68,7 @@ class FinanceService:
                 'beta': info.get('beta'),
                 'last_price_update': datetime.utcnow()
             }
-            
+
             # Clean up None values and convert to appropriate types
             cleaned_data = {}
             for key, value in asset_data.items():
@@ -63,32 +80,141 @@ class FinanceService:
                             pass
                     else:
                         cleaned_data[key] = value
-                        
-            logger.info(f"Successfully fetched data for {ticker}")
+
+            logger.info(f"Successfully fetched stock data for {ticker}")
             return cleaned_data
-            
+
         except Exception as e:
-            logger.error(f"Error fetching data for {ticker}: {str(e)}")
+            logger.error(f"Error fetching stock data for {ticker}: {str(e)}")
+            return None
+
+    @staticmethod
+    async def _get_mutual_fund_info(ticker: str) -> Optional[Dict[str, Any]]:
+        """Fetch mutual fund information from Barchart."""
+        try:
+            headers = {
+                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36",
+            }
+            regex = r"{.*}"
+
+            URL = f"https://www.barchart.com/etfs-funds/quotes/{ticker}"
+
+            response = requests.get(URL, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            mf_data_bs_element = soup.find_all("div", class_="bc-quote-overview row")
+
+            if not mf_data_bs_element:
+                logger.warning(f"No mutual fund data found for ticker: {ticker}")
+                return None
+
+            mf_data_bs_str = str(mf_data_bs_element[0])
+            mf_data_list = re.findall(regex, mf_data_bs_str)
+
+            if not mf_data_list:
+                logger.warning(f"Could not parse mutual fund data for ticker: {ticker}")
+                return None
+
+            mf_data_json = mf_data_list[0]
+            parsed_data = ast.literal_eval(mf_data_json)
+
+            # Extract price information
+            raw_data = parsed_data[2].get('raw', {})
+            last_price = raw_data.get('lastPrice')
+            previous_price = raw_data.get('previousPrice')
+
+            # Calculate day change percentage
+            change_percent = None
+            if last_price and previous_price:
+                try:
+                    change_percent = ((float(last_price) - float(previous_price)) / float(previous_price)) * 100
+                except (ValueError, ZeroDivisionError):
+                    pass
+
+            asset_data = {
+                'ticker': ticker.upper(),
+                'name': ticker,  # Could be enhanced with more scraping
+                'asset_type': 'mutual_fund',
+                'currency': 'USD',
+                'current_price': float(last_price) if last_price else None,
+                'last_price_update': datetime.utcnow(),
+                # Store change_percent for mutual funds (will be used in holdings)
+                'change_percent': change_percent,
+                'previous_close': float(previous_price) if previous_price else None
+            }
+
+            logger.info(f"Successfully fetched mutual fund data for {ticker}: price={last_price}, prev={previous_price}, change={change_percent}")
+            return asset_data
+
+        except Exception as e:
+            logger.error(f"Error fetching mutual fund data for {ticker}: {str(e)}")
+            return None
+
+    @staticmethod
+    async def _get_crypto_info(ticker: str) -> Optional[Dict[str, Any]]:
+        """Fetch cryptocurrency information from Yahoo Finance or CoinGecko."""
+        try:
+            # Try Yahoo Finance first (e.g., BTC-USD, ETH-USD)
+            crypto_ticker = ticker if '-USD' in ticker.upper() else f"{ticker.upper()}-USD"
+
+            stock = yf.Ticker(crypto_ticker)
+            info = stock.info
+
+            if not info or 'symbol' not in info:
+                logger.warning(f"No crypto data found for ticker: {ticker}")
+                return None
+
+            asset_data = {
+                'ticker': ticker.upper(),
+                'name': info.get('longName') or info.get('shortName') or ticker.upper(),
+                'asset_type': 'crypto',
+                'description': info.get('description'),
+                'currency': 'USD',
+                'exchange': info.get('exchange'),
+                'current_price': info.get('currentPrice') or info.get('regularMarketPrice'),
+                'market_cap': info.get('marketCap'),
+                'last_price_update': datetime.utcnow()
+            }
+
+            # Clean up None values
+            cleaned_data = {}
+            for key, value in asset_data.items():
+                if value is not None:
+                    if key in ['current_price', 'market_cap']:
+                        try:
+                            cleaned_data[key] = float(value)
+                        except (ValueError, TypeError):
+                            pass
+                    else:
+                        cleaned_data[key] = value
+
+            logger.info(f"Successfully fetched crypto data for {ticker}")
+            return cleaned_data
+
+        except Exception as e:
+            logger.error(f"Error fetching crypto data for {ticker}: {str(e)}")
             return None
     
     @staticmethod
-    async def get_current_price(ticker: str) -> Optional[float]:
+    async def get_current_price(ticker: str, asset_type: Optional[str] = None) -> Optional[float]:
         """
-        Get just the current price for a ticker.
-        
+        Get just the current price for a ticker based on asset type.
+
         Args:
-            ticker: Stock ticker symbol
-            
+            ticker: Asset ticker/symbol
+            asset_type: Type of asset (stock, mutual_fund, crypto)
+
         Returns:
             Current price or None if not found
         """
         try:
-            stock = yf.Ticker(ticker.upper())
-            info = stock.info
-            
-            price = info.get('currentPrice') or info.get('regularMarketPrice')
-            return float(price) if price else None
-            
+            # Get full asset info and extract price
+            asset_info = await FinanceService.get_asset_info(ticker, asset_type)
+            if asset_info and 'current_price' in asset_info:
+                return asset_info['current_price']
+            return None
+
         except Exception as e:
             logger.error(f"Error fetching price for {ticker}: {str(e)}")
             return None

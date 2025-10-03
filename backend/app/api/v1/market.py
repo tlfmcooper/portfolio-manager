@@ -13,6 +13,7 @@ from app.utils.dependencies import get_current_active_user
 from app.models import User
 from app.services.finnhub_service import get_finnhub_service
 from app.services.market_websocket import get_ws_manager
+from app.services.finance_service import FinanceService
 from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -50,13 +51,62 @@ async def get_live_market_data(
             "message": "No holdings found in portfolio"
         }
 
-    # Extract unique ticker symbols, excluding unsupported ones
-    symbols = list(set([
-        holding.ticker for holding in holdings
-        if holding.ticker and holding.ticker not in UNSUPPORTED_TICKERS
-    ]))
+    # Separate holdings by asset type
+    stock_symbols = []
+    mutual_fund_holdings = []
+    crypto_holdings = []
 
-    if not symbols:
+    for holding in holdings:
+        if not holding.ticker or holding.ticker in UNSUPPORTED_TICKERS:
+            continue
+
+        asset_type = holding.asset.asset_type if holding.asset else 'stock'
+
+        if asset_type == 'mutual_fund':
+            mutual_fund_holdings.append(holding)
+        elif asset_type == 'crypto':
+            crypto_holdings.append(holding)
+        else:
+            stock_symbols.append(holding.ticker)
+
+    # Remove duplicates
+    stock_symbols = list(set(stock_symbols))
+
+    # Fetch mutual fund data
+    for holding in mutual_fund_holdings:
+        try:
+            mf_data = await FinanceService.get_asset_info(holding.ticker, 'mutual_fund')
+            if mf_data and 'current_price' in mf_data:
+                # Update holding's current price and change_percent in database
+                holding.current_price = mf_data['current_price']
+                # Store change_percent temporarily (we'll use it below)
+                holding._temp_change_percent = mf_data.get('change_percent', 0)
+            else:
+                holding._temp_change_percent = 0
+        except Exception as e:
+            logger.error(f"Error fetching mutual fund data for {holding.ticker}: {e}")
+            holding._temp_change_percent = 0
+
+    # Fetch crypto data
+    for holding in crypto_holdings:
+        try:
+            crypto_data = await FinanceService.get_asset_info(holding.ticker, 'crypto')
+            if crypto_data and 'current_price' in crypto_data:
+                holding.current_price = crypto_data['current_price']
+                # Calculate change percent if available
+                if holding.asset and holding.asset.current_price:
+                    old_price = holding.asset.current_price
+                    new_price = crypto_data['current_price']
+                    holding._temp_change_percent = ((new_price - old_price) / old_price) * 100
+                else:
+                    holding._temp_change_percent = 0
+            else:
+                holding._temp_change_percent = 0
+        except Exception as e:
+            logger.error(f"Error fetching crypto data for {holding.ticker}: {e}")
+            holding._temp_change_percent = 0
+
+    if not stock_symbols:
         # Still return holdings even if no Finnhub-supported tickers
         enriched_holdings = []
         for holding in holdings:
@@ -77,9 +127,19 @@ async def get_live_market_data(
                 },
                 "current_price": current_price_fallback,
                 "market_value": calculated_market_value,  # Always calculate fresh
-                "change_percent": 0,
-                "change": 0
             }
+
+            # Check if we have temp change_percent (for mutual funds and crypto)
+            if hasattr(holding, '_temp_change_percent'):
+                holding_dict["change_percent"] = holding._temp_change_percent
+                if holding._temp_change_percent and current_price_fallback:
+                    holding_dict["change"] = (current_price_fallback * holding._temp_change_percent) / 100
+                else:
+                    holding_dict["change"] = 0
+            else:
+                holding_dict["change_percent"] = 0
+                holding_dict["change"] = 0
+
             enriched_holdings.append(holding_dict)
 
         return {
@@ -88,9 +148,10 @@ async def get_live_market_data(
             "updated_at": datetime.utcnow().isoformat()
         }
 
-    # Update active symbols for WebSocket background task
-    ws_manager = get_ws_manager()
-    await ws_manager.update_active_symbols(symbols)
+    # Update active symbols for WebSocket background task (only for stocks)
+    if stock_symbols:
+        ws_manager = get_ws_manager()
+        await ws_manager.update_active_symbols(stock_symbols)
 
     # Try to get cached data first for faster response
     redis_client = await get_redis_client()
@@ -98,7 +159,7 @@ async def get_live_market_data(
     uncached_symbols = []
 
     # Check cache for each symbol
-    for symbol in symbols:
+    for symbol in stock_symbols:
         cache_key = f"stock:quote:{symbol}"
         cached_quote = await redis_client.get(cache_key)
         if cached_quote:
@@ -138,19 +199,30 @@ async def get_live_market_data(
 
         # Add live market data if available
         if holding.ticker in market_data:
+            # Stock data from Finnhub
             quote = market_data[holding.ticker]
             holding_dict["current_price"] = quote["current_price"]
             holding_dict["market_value"] = quote["current_price"] * holding.quantity
             holding_dict["change_percent"] = quote["change_percent"]
             holding_dict["change"] = quote["change"]
         else:
-            # Use stored price if live data not available (e.g., MAU.TO)
+            # Use stored price if live data not available (e.g., MAU.TO, mutual funds, crypto)
             # CRITICAL FIX: Always calculate market_value from quantity and price
             current_price_fallback = holding.current_price or holding.average_cost
             holding_dict["current_price"] = current_price_fallback
             holding_dict["market_value"] = holding.quantity * current_price_fallback
-            holding_dict["change_percent"] = 0
-            holding_dict["change"] = 0
+
+            # Check if we have temp change_percent (for mutual funds and crypto)
+            if hasattr(holding, '_temp_change_percent'):
+                holding_dict["change_percent"] = holding._temp_change_percent
+                # Calculate dollar change
+                if holding._temp_change_percent and current_price_fallback:
+                    holding_dict["change"] = (current_price_fallback * holding._temp_change_percent) / 100
+                else:
+                    holding_dict["change"] = 0
+            else:
+                holding_dict["change_percent"] = 0
+                holding_dict["change"] = 0
 
         enriched_holdings.append(holding_dict)
 

@@ -6,7 +6,9 @@ const BuyAssetForm = ({ onAssetAdded }) => {
   const [formData, setFormData] = useState({
     ticker: '',
     quantity: '',
-    unit_cost: ''
+    unit_cost: '',
+    asset_type: 'stock',
+    currency: 'USD'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { api } = useAuth();
@@ -34,7 +36,9 @@ const BuyAssetForm = ({ onAssetAdded }) => {
         body: JSON.stringify([{
           ticker: formData.ticker.toUpperCase().trim(),
           quantity: parseFloat(formData.quantity),
-          unit_cost: parseFloat(formData.unit_cost)
+          unit_cost: parseFloat(formData.unit_cost),
+          asset_type: formData.asset_type,
+          currency: formData.currency
         }])
       });
 
@@ -46,7 +50,7 @@ const BuyAssetForm = ({ onAssetAdded }) => {
 
       if (data.assets && data.assets.length > 0) {
         toast.success(`Successfully bought ${formData.quantity} shares of ${formData.ticker.toUpperCase()}`);
-        setFormData({ ticker: '', quantity: '', unit_cost: '' });
+        setFormData({ ticker: '', quantity: '', unit_cost: '', asset_type: 'stock', currency: 'USD' });
         if (onAssetAdded) {
           onAssetAdded();
         }
@@ -68,8 +72,91 @@ const BuyAssetForm = ({ onAssetAdded }) => {
     <div>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label 
-            htmlFor="ticker" 
+          <label
+            htmlFor="asset_type"
+            className="form-label"
+            style={{
+              display: 'block',
+              marginBottom: 'var(--space-8)',
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-sm)',
+              color: 'var(--color-text)'
+            }}
+          >
+            Asset Type
+          </label>
+          <select
+            id="asset_type"
+            name="asset_type"
+            value={formData.asset_type}
+            onChange={handleChange}
+            required
+            className="form-control"
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: 'var(--space-12)',
+              fontSize: 'var(--font-size-base)',
+              lineHeight: '1.5',
+              color: 'var(--color-text)',
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-base)',
+              transition: 'border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)'
+            }}
+          >
+            <option value="stock">Stock</option>
+            <option value="mutual_fund">Mutual Fund</option>
+            <option value="crypto">Cryptocurrency</option>
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="currency"
+            className="form-label"
+            style={{
+              display: 'block',
+              marginBottom: 'var(--space-8)',
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-sm)',
+              color: 'var(--color-text)'
+            }}
+          >
+            Currency
+          </label>
+          <select
+            id="currency"
+            name="currency"
+            value={formData.currency}
+            onChange={handleChange}
+            required
+            className="form-control"
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: 'var(--space-12)',
+              fontSize: 'var(--font-size-base)',
+              lineHeight: '1.5',
+              color: 'var(--color-text)',
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-base)',
+              transition: 'border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)'
+            }}
+          >
+            <option value="USD">USD - US Dollar</option>
+            <option value="CAD">CAD - Canadian Dollar</option>
+            <option value="EUR">EUR - Euro</option>
+            <option value="GBP">GBP - British Pound</option>
+            <option value="JPY">JPY - Japanese Yen</option>
+            <option value="CNY">CNY - Chinese Yuan</option>
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="ticker"
             className="form-label"
             style={{
               display: 'block',
@@ -87,7 +174,11 @@ const BuyAssetForm = ({ onAssetAdded }) => {
             name="ticker"
             value={formData.ticker}
             onChange={handleChange}
-            placeholder="e.g., AAPL, MSFT"
+            placeholder={
+              formData.asset_type === 'stock' ? 'e.g., AAPL, MSFT' :
+              formData.asset_type === 'mutual_fund' ? 'e.g., PHN9756.CF' :
+              'e.g., BTC, ETH'
+            }
             required
             className="form-control"
             style={{

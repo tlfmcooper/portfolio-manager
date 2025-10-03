@@ -12,7 +12,7 @@ from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.services.finance_service import FinanceService
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import logging
 
@@ -29,6 +29,8 @@ class AssetOnboardingRequest(BaseModel):
     ticker: str
     quantity: float
     unit_cost: float
+    asset_type: Optional[str] = "stock"  # stock, mutual_fund, crypto
+    currency: Optional[str] = "USD"  # USD, CAD, EUR, etc.
 
 
 class AssetOnboardingResponse(BaseModel):
@@ -84,13 +86,17 @@ async def onboard_asset(
             asset_obj = result.scalar_one_or_none()
 
             if not asset_obj:
-                # Fetch asset data from Yahoo Finance
-                logger.info(f"Fetching data for new ticker: {ticker}")
-                asset_data = await FinanceService.get_asset_info(ticker)
+                # Fetch asset data based on asset_type
+                logger.info(f"Fetching data for new ticker: {ticker} (type: {item.asset_type}, currency: {item.currency})")
+                asset_data = await FinanceService.get_asset_info(ticker, item.asset_type)
 
                 if not asset_data:
                     errors.append(f"Could not fetch data for ticker: {ticker}")
                     continue
+
+                # Override currency with user-provided value
+                if item.currency:
+                    asset_data['currency'] = item.currency
 
                 # Merge form data (quantity, unit_cost) into asset_data
                 asset_obj = Asset(**asset_data)
@@ -100,7 +106,7 @@ async def onboard_asset(
             else:
                 # Update existing asset with fresh data if needed
                 if not asset_obj.current_price:
-                    current_price = await FinanceService.get_current_price(ticker)
+                    current_price = await FinanceService.get_current_price(ticker, asset_obj.asset_type or item.asset_type)
                     if current_price:
                         asset_obj.current_price = current_price
             # Check if holding already exists for this portfolio and ticker
