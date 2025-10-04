@@ -66,5 +66,42 @@ def _(asset_df):
     return
 
 
+@app.cell
+def _(engine, holdings, mo):
+    _df = mo.sql(
+        f"""
+        SELECT * FROM holdings WHERE ticker='MU'
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _(engine, holdings, mo):
+    _df = mo.sql(
+        f"""
+        UPDATE holdings 
+        SET quantity=80 , average_cost=6.49
+        WHERE portfolio_id=2 and ticker='MAU.TO';
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _(engine, holdings, mo):
+    _df = mo.sql(
+        f"""
+        UPDATE holdings 
+        SET quantity=108.10
+        WHERE ticker='MU';
+        """,
+        engine=engine
+    )
+    return
+
+
 if __name__ == "__main__":
     app.run()
