@@ -1,0 +1,32 @@
+# FastAPI and ASGI server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# Pydantic settings
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Redis
+redis>=5.0.0
+
+# Anthropic AI / MCP
+anthropic>=0.25.0
+
+# SSE
+sse-starlette>=1.6.0
+
+# CORS
+python-dotenv>=1.0.0
+
+# Existing portfolio-manager library (local)
+# The library is in the parent src/ directory
+-e ../
