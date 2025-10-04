@@ -1,0 +1,28 @@
+# FastAPI and Server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+sse-starlette>=1.6.0
+
+# Pydantic Settings
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Redis
+redis[hiredis]>=5.0.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# Anthropic AI / MCP
+anthropic>=0.25.0
+mcp>=1.0.0
+
+# Data & Analytics (use existing portfolio_manager package)
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
