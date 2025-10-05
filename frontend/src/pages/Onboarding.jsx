@@ -19,32 +19,13 @@ const Onboarding = () => {
       navigate('/login');
       return;
     }
-    
-    const checkOnboarded = async () => {
-      if (!loading && user) {
-        try {
-          const api = axios.create({
-            baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1',
-            timeout: 10000,
-            headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-          });
-          const portfolioService = new PortfolioService(api);
-          const analysis = await portfolioService.getPortfolioAnalysis();
-          const hasPortfolioData = analysis && Object.keys(analysis).length > 0;
-          if (hasPortfolioData) {
-            navigate('/dashboard');
-          } else {
-            setShouldShowForm(true);
-          }
-        } catch (err) {
-          console.error('Error checking onboarding status:', err);
-          setShouldShowForm(true); // Show form if we can't determine status
-        } finally {
-          setCheckingOnboarded(false);
-        }
-      }
-    };
-    checkOnboarded();
+
+    // Allow access to onboarding page even if user already has portfolio data
+    // This enables users to upload CSV files to add more assets
+    if (!loading && user) {
+      setShouldShowForm(true);
+      setCheckingOnboarded(false);
+    }
   }, [user, loading, navigate]);
 
   const handleOnboardingComplete = async (portfolioData) => {

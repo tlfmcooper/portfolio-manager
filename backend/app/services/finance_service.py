@@ -124,7 +124,7 @@ class FinanceService:
             last_price = raw_data.get('lastPrice')
             previous_price = raw_data.get('previousPrice')
 
-            # Calculate day change percentage
+            # Calculate day change percentage (not stored in Asset model)
             change_percent = None
             if last_price and previous_price:
                 try:
@@ -138,10 +138,9 @@ class FinanceService:
                 'asset_type': 'mutual_fund',
                 'currency': 'USD',
                 'current_price': float(last_price) if last_price else None,
-                'last_price_update': datetime.utcnow(),
-                # Store change_percent for mutual funds (will be used in holdings)
-                'change_percent': change_percent,
-                'previous_close': float(previous_price) if previous_price else None
+                'last_price_update': datetime.utcnow()
+                # Note: change_percent and previous_close are calculated but not stored in Asset model
+                # They can be calculated on-the-fly when needed for display
             }
 
             logger.info(f"Successfully fetched mutual fund data for {ticker}: price={last_price}, prev={previous_price}, change={change_percent}")

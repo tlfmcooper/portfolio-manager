@@ -48,7 +48,7 @@ const ProtectedLayout = () => {
           </>
         ) : (
           <>
-            {/* If user is onboarded, allow dashboard routes */}
+            {/* If user is onboarded, allow dashboard routes and onboarding (for CSV uploads) */}
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Navigate to="/dashboard/overview" replace />} />
               <Route path="overview" element={<Overview />} />
@@ -57,7 +57,7 @@ const ProtectedLayout = () => {
               <Route path="live-market" element={<LiveMarket />} />
               <Route path="update-portfolio" element={<UpdatePortfolio />} />
             </Route>
-            <Route path="/onboarding" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
           </>
