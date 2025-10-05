@@ -21,6 +21,17 @@ def _():
 
 @app.cell
 def _(engine, mo, transactions):
+    _df = mo.sql(
+        f"""
+        DELETE FROM transactions WHERE id=11;
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _(engine, mo, transactions):
     df = mo.sql(
         f"""
         SELECT * FROM transactions LIMIT 100
@@ -53,7 +64,7 @@ def _(assets, engine, mo):
         f"""
         UPDATE assets 
             SET currency='CAD'
-            WHERE ticker='MAU.TO' 
+            WHERE ticker='MAU.TO'
         """,
         engine=engine
     )
@@ -62,18 +73,7 @@ def _(assets, engine, mo):
 
 @app.cell
 def _(asset_df):
-    asset_df[['ticker','currency']]
-    return
-
-
-@app.cell
-def _(engine, holdings, mo):
-    _df = mo.sql(
-        f"""
-        SELECT * FROM holdings WHERE ticker='MU'
-        """,
-        engine=engine
-    )
+    asset_df.shape
     return
 
 

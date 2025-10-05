@@ -6,7 +6,7 @@ const BuyAssetForm = ({ onAssetAdded }) => {
   const [formData, setFormData] = useState({
     ticker: '',
     quantity: '',
-    unit_cost: '',
+    average_cost: '',
     asset_type: 'stock',
     currency: 'USD'
   });
@@ -36,7 +36,7 @@ const BuyAssetForm = ({ onAssetAdded }) => {
         body: JSON.stringify([{
           ticker: formData.ticker.toUpperCase().trim(),
           quantity: parseFloat(formData.quantity),
-          unit_cost: parseFloat(formData.unit_cost),
+          average_cost: parseFloat(formData.average_cost),
           asset_type: formData.asset_type,
           currency: formData.currency
         }])
@@ -50,7 +50,7 @@ const BuyAssetForm = ({ onAssetAdded }) => {
 
       if (data.assets && data.assets.length > 0) {
         toast.success(`Successfully bought ${formData.quantity} shares of ${formData.ticker.toUpperCase()}`);
-        setFormData({ ticker: '', quantity: '', unit_cost: '', asset_type: 'stock', currency: 'USD' });
+        setFormData({ ticker: '', quantity: '', average_cost: '', asset_type: 'stock', currency: 'USD' });
         if (onAssetAdded) {
           onAssetAdded();
         }
@@ -237,8 +237,8 @@ const BuyAssetForm = ({ onAssetAdded }) => {
         </div>
 
         <div>
-          <label 
-            htmlFor="unit_cost" 
+          <label
+            htmlFor="average_cost"
             className="form-label"
             style={{
               display: 'block',
@@ -248,13 +248,13 @@ const BuyAssetForm = ({ onAssetAdded }) => {
               color: 'var(--color-text)'
             }}
           >
-            Unit Cost ($)
+            Average Cost ($)
           </label>
           <input
             type="number"
-            id="unit_cost"
-            name="unit_cost"
-            value={formData.unit_cost}
+            id="average_cost"
+            name="average_cost"
+            value={formData.average_cost}
             onChange={handleChange}
             placeholder="Price per share"
             required

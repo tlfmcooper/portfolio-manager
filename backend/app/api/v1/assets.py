@@ -2,7 +2,7 @@
 API endpoints for asset onboarding (ticker, quantity, unit cost).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -46,6 +46,28 @@ class AssetOnboardingResponse(BaseModel):
     holding_id: int
 
 
+def normalize_asset_type(asset_type: str) -> str:
+    """
+    Normalize asset type from CSV format to internal format.
+    Maps: "Stock" -> "stock", "Mutual Fund" -> "mutual_fund", "Crypto" -> "crypto"
+    """
+    normalized = asset_type.lower().strip()
+
+    # Map common variations
+    type_mapping = {
+        'stock': 'stock',
+        'mutual fund': 'mutual_fund',
+        'mutualfund': 'mutual_fund',
+        'mutual_fund': 'mutual_fund',
+        'crypto': 'crypto',
+        'cryptocurrency': 'crypto',
+        'etf': 'etf',
+        'bond': 'bond'
+    }
+
+    return type_mapping.get(normalized, 'stock')  # Default to stock
+
+
 async def parse_csv_file(file: UploadFile) -> List[AssetOnboardingRequest]:
     """Parse CSV file and return list of AssetOnboardingRequest objects."""
     contents = await file.read()
@@ -58,8 +80,11 @@ async def parse_csv_file(file: UploadFile) -> List[AssetOnboardingRequest]:
         ticker = row.get('TICKER', row.get('ticker', '')).strip()
         quantity = float(row.get('Quantity', row.get('quantity', 0)))
         average_cost = float(row.get('Cost', row.get('cost', row.get('average_cost', 0))))
-        asset_type = row.get('ASSET_TYPE', row.get('asset_type', 'Stock')).strip()
+        asset_type_raw = row.get('ASSET_TYPE', row.get('asset_type', 'Stock')).strip()
         currency = row.get('CURRENCY', row.get('currency', 'USD')).strip()
+
+        # Normalize asset_type to match FinanceService expectations
+        asset_type = normalize_asset_type(asset_type_raw)
 
         if ticker and quantity > 0 and average_cost > 0:
             assets.append(AssetOnboardingRequest(
@@ -75,10 +100,9 @@ async def parse_csv_file(file: UploadFile) -> List[AssetOnboardingRequest]:
 
 @router.post("/onboard", status_code=201, response_model=dict)
 async def onboard_asset(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-    data: Optional[List[AssetOnboardingRequest]] = None,
-    file: Optional[UploadFile] = File(None)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Onboard multiple assets with their holdings.
@@ -86,19 +110,44 @@ async def onboard_asset(
     Fetches asset data from Yahoo Finance and creates holdings.
 
     CSV Format: TICKER,CURRENCY,ASSET_TYPE,Quantity,Cost
+
+    For JSON: Send array of objects with ticker, quantity, average_cost, asset_type, currency
+    For CSV: Upload file via 'file' form field
     """
     created_assets = []
     errors = []
+    data = None
 
-    # Parse data from CSV file if provided, otherwise use JSON data
-    if file:
+    # Check content type to determine how to parse the request
+    content_type = request.headers.get('content-type', '')
+
+    if 'multipart/form-data' in content_type:
+        # Handle file upload
+        form = await request.form()
+        file = form.get('file')
+        if file and hasattr(file, 'filename') and file.filename:
+            try:
+                data = await parse_csv_file(file)
+                if not data:
+                    raise HTTPException(status_code=400, detail="No valid data found in CSV file")
+            except Exception as e:
+                logger.error(f"Error parsing CSV file: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Error parsing CSV file: {str(e)}")
+        else:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+    elif 'application/json' in content_type:
+        # Handle JSON body
         try:
-            data = await parse_csv_file(file)
-            if not data:
-                raise HTTPException(status_code=400, detail="No valid data found in CSV file")
+            json_data = await request.json()
+            if isinstance(json_data, list):
+                data = [AssetOnboardingRequest(**item) for item in json_data]
+            else:
+                raise HTTPException(status_code=400, detail="JSON data must be an array")
         except Exception as e:
-            logger.error(f"Error parsing CSV file: {str(e)}")
-            raise HTTPException(status_code=400, detail=f"Error parsing CSV file: {str(e)}")
+            logger.error(f"Error parsing JSON data: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid JSON data: {str(e)}")
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported content type. Use application/json or multipart/form-data")
 
     if not data:
         raise HTTPException(status_code=400, detail="No data provided. Send JSON data or upload CSV file.")
