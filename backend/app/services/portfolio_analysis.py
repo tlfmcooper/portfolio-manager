@@ -102,6 +102,20 @@ class AdvancedPortfolioAnalytics:
 
         for holding in holdings:
             asset_model = holding.asset
+
+            # CRITICAL FIX: Always add to real-time portfolio value, even if no historical data
+            realtime_price = holding.current_price or holding.average_cost
+            if realtime_price and realtime_price > 0:
+                realtime_market_value = holding.quantity * realtime_price
+                total_portfolio_value_realtime += realtime_market_value
+                print(f"Adding {asset_model.ticker} to real-time total: qty={holding.quantity}, price=${realtime_price:.2f}, value=${realtime_market_value:.2f}")
+
+            # CRITICAL FIX: Skip yfinance for crypto and mutual_fund - they don't have historical data
+            # Use only database prices for these asset types
+            if asset_model.asset_type in ['crypto', 'mutual_fund']:
+                print(f"[INFO] Skipping yfinance for {asset_model.ticker} (asset_type={asset_model.asset_type}), using DB price only")
+                continue
+
             try:
                 price_data = self.provider.get_price_data(
                     asset_model.ticker, start_date, end_date
@@ -110,15 +124,8 @@ class AdvancedPortfolioAnalytics:
                     # Get current market price (most recent closing price from yfinance)
                     yfinance_price = float(price_data['Close'].iloc[-1])
 
-                    # CRITICAL FIX: Use real-time price from database if available
-                    realtime_price = holding.current_price or yfinance_price
-
                     # Calculate market value using yfinance price (for weight calculations)
                     market_value = holding.quantity * yfinance_price
-
-                    # CRITICAL FIX: Calculate real-time market value from database
-                    realtime_market_value = holding.quantity * realtime_price
-                    total_portfolio_value_realtime += realtime_market_value
 
                     # Map database asset_type to portfolio_manager AssetType enum
                     mapped_asset_type = map_asset_type(asset_model.asset_type)
@@ -128,7 +135,7 @@ class AdvancedPortfolioAnalytics:
                         name=asset_model.name or asset_model.ticker,
                         asset_type=mapped_asset_type,
                     )
-                    
+
                     assets_data[asset_model.ticker] = {
                         'asset': asset,
                         'price_data': price_data,
@@ -138,7 +145,7 @@ class AdvancedPortfolioAnalytics:
                     }
                     total_portfolio_value += market_value
 
-                    print(f"Asset {asset_model.ticker}: qty={holding.quantity}, yfinance=${yfinance_price:.2f}, realtime=${realtime_price:.2f}, value=${market_value:.2f}")
+                    print(f"Asset {asset_model.ticker}: qty={holding.quantity}, yfinance=${yfinance_price:.2f}, value=${market_value:.2f}")
 
             except Exception as e:
                 print(f"[ERROR] Could not fetch data for {asset_model.ticker}: {e}")
@@ -581,6 +588,9 @@ class AdvancedPortfolioAnalytics:
 
     async def sector_analysis(self) -> Dict:
         """Analyze portfolio by sector."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         result = await self.db.execute(
             select(Holding)
             .where(Holding.portfolio_id == self.portfolio_id)
@@ -599,19 +609,26 @@ class AdvancedPortfolioAnalytics:
         if not portfolio:
             return {}
 
+        logger.info(f"[SECTOR_ANALYSIS] Processing {len(holdings)} holdings")
+
         for holding in holdings:
             asset_symbol = holding.asset.ticker
+            print(f"[SECTOR_ANALYSIS] Processing {asset_symbol}, asset_type={holding.asset.asset_type}, in_portfolio={asset_symbol in portfolio.assets}")
 
             # Check if asset exists in portfolio (stocks with historical data)
             # For mutual funds and crypto, use holding's current_price from database
             if asset_symbol in portfolio.assets:
+                print(f"[SECTOR_ANALYSIS] {asset_symbol} found in portfolio.assets")
                 asset_obj = portfolio.assets[asset_symbol]
                 current_price = asset_obj.get_current_price()
+                print(f"[SECTOR_ANALYSIS] {asset_symbol} current_price from portfolio: {current_price}")
                 if current_price is None:
                     continue
             else:
                 # For assets not in portfolio (mutual funds, crypto), use database price
+                print(f"[SECTOR_ANALYSIS] {asset_symbol} NOT in portfolio.assets, using DB price")
                 current_price = holding.current_price or holding.average_cost
+                print(f"[SECTOR_ANALYSIS] {asset_symbol} holding.current_price={holding.current_price}, holding.average_cost={holding.average_cost}")
                 if current_price is None:
                     continue
 
@@ -629,12 +646,15 @@ class AdvancedPortfolioAnalytics:
             else:
                 sector = "Other"
 
+            print(f"[SECTOR_ANALYSIS] {asset_symbol}: qty={holding.quantity}, price={current_price}, market_value={market_value}, sector={sector}, asset_type={holding.asset.asset_type}")
+            logger.info(f"[SECTOR_ANALYSIS] {asset_symbol}: qty={holding.quantity}, price={current_price}, market_value={market_value}, sector={sector}, asset_type={holding.asset.asset_type}")
+
             if sector not in sector_data:
                 sector_data[sector] = {
                     "value": 0,
                     "positions": 0,
                 }
-            
+
             sector_data[sector]["value"] += market_value
             sector_data[sector]["positions"] += 1
             total_value += market_value
@@ -644,5 +664,7 @@ class AdvancedPortfolioAnalytics:
                 sector_data[sector]["percentage"] = (
                     sector_data[sector]["value"] / total_value * 100
                 )
-        
+
+        print(f"[SECTOR_ANALYSIS] Final result: {sector_data}, total_value={total_value}")
+        logger.info(f"[SECTOR_ANALYSIS] Final result: {sector_data}, total_value={total_value}")
         return sector_data
