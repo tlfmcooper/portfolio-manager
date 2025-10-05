@@ -83,8 +83,9 @@ async def get_live_market_data(
             if mf_data and 'current_price' in mf_data:
                 # Update holding's current price
                 holding.current_price = mf_data['current_price']
-                # Store change_percent temporarily (we'll use it below)
+                # Store change_percent and change temporarily (we'll use them below)
                 holding._temp_change_percent = mf_data.get('change_percent', 0)
+                holding._temp_change = mf_data.get('change', 0)
 
                 # Update asset's current price in database
                 if holding.asset:
@@ -92,9 +93,11 @@ async def get_live_market_data(
                     holding.asset.last_price_update = datetime.utcnow()
             else:
                 holding._temp_change_percent = 0
+                holding._temp_change = 0
         except Exception as e:
             logger.error(f"Error fetching mutual fund data for {holding.ticker}: {e}")
             holding._temp_change_percent = 0
+            holding._temp_change = 0
 
     # Fetch crypto data
     for holding in crypto_holdings:

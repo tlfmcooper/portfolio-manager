@@ -193,8 +193,17 @@ async def onboard_asset(
                 if item.currency:
                     asset_data['currency'] = item.currency
 
-                # Merge form data (quantity, unit_cost) into asset_data
-                asset_obj = Asset(**asset_data)
+                # Filter out fields that are not part of the Asset model
+                # (e.g., change_percent, change, previous_close from mutual fund data)
+                asset_model_fields = {
+                    'ticker', 'name', 'asset_type', 'sector', 'industry', 'description',
+                    'currency', 'exchange', 'current_price', 'market_cap', 'dividend_yield',
+                    'pe_ratio', 'beta', 'last_price_update'
+                }
+                filtered_asset_data = {k: v for k, v in asset_data.items() if k in asset_model_fields}
+
+                # Create Asset object with filtered data
+                asset_obj = Asset(**filtered_asset_data)
                 db.add(asset_obj)
                 await db.flush()  # Get the ID
                 logger.info(f"Created new asset: {ticker} with ID: {asset_obj.id}")
