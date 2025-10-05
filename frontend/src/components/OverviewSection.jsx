@@ -14,7 +14,7 @@ const OverviewSection = () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/metrics`) // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`) // CRITICAL FIX: Use dynamic portfolioId
         console.log('API Response:', response.data)
         console.log('Individual Performance:', response.data?.individual_performance)
         setData(response.data)

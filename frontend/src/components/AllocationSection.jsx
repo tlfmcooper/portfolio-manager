@@ -14,7 +14,7 @@ const AllocationSection = () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/sector-allocation`); // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`); // CRITICAL FIX: Use dynamic portfolioId
         setData(response.data);
       } catch (err) {
         setError('Failed to fetch allocation data');

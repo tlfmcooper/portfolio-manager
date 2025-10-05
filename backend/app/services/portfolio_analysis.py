@@ -35,6 +35,36 @@ from portfolio_manager.analytics import (
 from app.models.holding import Holding
 
 
+def map_asset_type(asset_type_str: Optional[str]) -> AssetType:
+    """
+    Map database asset_type string to portfolio_manager AssetType enum.
+
+    Args:
+        asset_type_str: Asset type string from database (e.g., 'stock', 'mutual_fund', 'crypto')
+
+    Returns:
+        AssetType enum value
+    """
+    if not asset_type_str:
+        return AssetType.STOCK  # Default
+
+    asset_type_lower = asset_type_str.lower().replace(' ', '_')
+
+    type_mapping = {
+        'stock': AssetType.STOCK,
+        'mutual_fund': AssetType.MUTUAL_FUND,
+        'mutualfund': AssetType.MUTUAL_FUND,
+        'crypto': AssetType.CRYPTOCURRENCY,
+        'cryptocurrency': AssetType.CRYPTOCURRENCY,
+        'etf': AssetType.ETF,
+        'bond': AssetType.BOND,
+        'cash': AssetType.CASH,
+        'commodity': AssetType.COMMODITY,
+    }
+
+    return type_mapping.get(asset_type_lower, AssetType.OTHER)
+
+
 class AdvancedPortfolioAnalytics:
     """Advanced analytics engine for portfolio management - Production version"""
 
@@ -89,11 +119,14 @@ class AdvancedPortfolioAnalytics:
                     # CRITICAL FIX: Calculate real-time market value from database
                     realtime_market_value = holding.quantity * realtime_price
                     total_portfolio_value_realtime += realtime_market_value
-                    
+
+                    # Map database asset_type to portfolio_manager AssetType enum
+                    mapped_asset_type = map_asset_type(asset_model.asset_type)
+
                     asset = Asset(
                         symbol=asset_model.ticker,
                         name=asset_model.name or asset_model.ticker,
-                        asset_type=AssetType.STOCK,
+                        asset_type=mapped_asset_type,
                     )
                     
                     assets_data[asset_model.ticker] = {
@@ -568,16 +601,33 @@ class AdvancedPortfolioAnalytics:
 
         for holding in holdings:
             asset_symbol = holding.asset.ticker
-            asset_obj = portfolio.assets[asset_symbol]
-            if not asset_obj:
-                continue
-            
-            current_price = asset_obj.get_current_price()
-            if current_price is None:
-                continue
+
+            # Check if asset exists in portfolio (stocks with historical data)
+            # For mutual funds and crypto, use holding's current_price from database
+            if asset_symbol in portfolio.assets:
+                asset_obj = portfolio.assets[asset_symbol]
+                current_price = asset_obj.get_current_price()
+                if current_price is None:
+                    continue
+            else:
+                # For assets not in portfolio (mutual funds, crypto), use database price
+                current_price = holding.current_price or holding.average_cost
+                if current_price is None:
+                    continue
 
             market_value = holding.quantity * current_price
-            sector = holding.asset.sector or "Unknown"
+
+            # Assign sector based on asset type if not available
+            if holding.asset.sector:
+                sector = holding.asset.sector
+            elif holding.asset.asset_type == 'mutual_fund':
+                sector = "Mutual Funds"
+            elif holding.asset.asset_type == 'crypto':
+                sector = "Cryptocurrency"
+            elif holding.asset.asset_type == 'etf':
+                sector = "ETF"
+            else:
+                sector = "Other"
 
             if sector not in sector_data:
                 sector_data[sector] = {

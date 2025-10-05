@@ -20,7 +20,7 @@ const TabCPPI = () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/cppi`); // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`); // CRITICAL FIX: Use dynamic portfolioId
         setCppiData(response.data);
       } catch (err) {
         console.error('Failed to fetch CPPI data:', err);

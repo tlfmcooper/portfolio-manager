@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/portfolios/{portfolio_id}/analysis/metrics")
+@router.get("/portfolios/{portfolio_id}/metrics")
 async def get_portfolio_metrics(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -39,7 +39,7 @@ async def get_portfolio_metrics(
     return metrics
 
 
-@router.get("/portfolios/{portfolio_id}/analysis/sector-allocation")
+@router.get("/portfolios/{portfolio_id}/sector-allocation")
 async def get_sector_allocation(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -64,7 +64,7 @@ async def get_sector_allocation(
     return allocation
 
 
-@router.get("/portfolios/{portfolio_id}/analysis/efficient-frontier")
+@router.get("/portfolios/{portfolio_id}/efficient-frontier")
 async def get_efficient_frontier(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -75,7 +75,7 @@ async def get_efficient_frontier(
     return frontier_data
 
 
-@router.get("/portfolios/{portfolio_id}/analysis/monte-carlo")
+@router.get("/portfolios/{portfolio_id}/monte-carlo")
 async def run_monte_carlo_simulation(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -90,7 +90,7 @@ async def run_monte_carlo_simulation(
     return simulation_data
 
 
-@router.get("/portfolios/{portfolio_id}/analysis/cppi")
+@router.get("/portfolios/{portfolio_id}/cppi")
 async def run_cppi_simulation(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),

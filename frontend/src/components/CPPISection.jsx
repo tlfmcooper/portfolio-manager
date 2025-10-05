@@ -14,7 +14,7 @@ const CPPISection = () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/analysis/cppi`) // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`) // CRITICAL FIX: Use dynamic portfolioId
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch CPPI analysis data')
