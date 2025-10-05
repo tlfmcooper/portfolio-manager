@@ -1,8 +1,8 @@
 """
 Holdings management API routes.
 """
-from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime
@@ -23,6 +23,7 @@ from app.schemas.transaction import TransactionCreate
 from app.utils.dependencies import get_current_active_user
 from app.models import User
 from app.models.holding import Holding as HoldingModel
+from app.services.exchange_rate_service import get_exchange_rate_service
 
 router = APIRouter()
 
@@ -30,10 +31,14 @@ router = APIRouter()
 @router.get("/", response_model=List[HoldingInDB])
 async def get_holdings(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")
 ) -> Any:
     """
     Get all holdings in current user's portfolio.
+
+    Args:
+        currency: Optional currency to display values in (USD or CAD)
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -44,10 +49,41 @@ async def get_holdings(
 
     holdings = await get_portfolio_holdings(db, portfolio.id)
 
-    # CRITICAL FIX: Always calculate cost_basis and market_value from database fields before returning
+    # Use portfolio currency if not specified
+    display_currency = currency.upper() if currency else portfolio.currency
+    exchange_service = get_exchange_rate_service()
+
+    # Pre-fetch all needed exchange rates
+    exchange_rates = {}
+    currencies_needed = set()
     for holding in holdings:
-        holding.cost_basis = holding.quantity * holding.average_cost
-        holding.market_value = holding.quantity * (holding.current_price or holding.average_cost)
+        if holding.asset:
+            currencies_needed.add(holding.asset.currency)
+
+    # Fetch all needed exchange rates upfront
+    for curr in currencies_needed:
+        if curr != display_currency:
+            rate = await exchange_service.get_exchange_rate(curr, display_currency)
+            exchange_rates[curr] = rate
+
+    # Calculate cost_basis and market_value with currency conversion
+    for holding in holdings:
+        # Get asset currency
+        asset_currency = holding.asset.currency if holding.asset else "USD"
+
+        # Calculate in original currency
+        cost_basis = holding.quantity * holding.average_cost
+        market_value = holding.quantity * (holding.current_price or holding.average_cost)
+
+        # Convert to display currency if different using pre-fetched rate
+        if asset_currency != display_currency and asset_currency in exchange_rates:
+            rate = exchange_rates[asset_currency]
+            cost_basis = cost_basis * rate
+            market_value = market_value * rate
+
+        holding.cost_basis = cost_basis
+        holding.market_value = market_value
+
         if holding.cost_basis > 0:
             holding.unrealized_gain_loss = holding.market_value - holding.cost_basis
             holding.unrealized_gain_loss_percentage = (holding.unrealized_gain_loss / holding.cost_basis) * 100

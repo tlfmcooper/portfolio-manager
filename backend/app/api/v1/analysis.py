@@ -2,7 +2,8 @@
 API endpoints for portfolio analysis.
 """
 import logging
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -42,21 +43,23 @@ async def get_portfolio_metrics(
 @router.get("/portfolios/{portfolio_id}/sector-allocation")
 async def get_sector_allocation(
     portfolio_id: int,
+    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get portfolio sector allocation with caching."""
-    cache_key = f"portfolio:{portfolio_id}:sector-allocation"
+    """Get portfolio sector allocation with currency conversion and caching."""
+    # Include currency in cache key
+    cache_key = f"portfolio:{portfolio_id}:sector-allocation:{currency or 'default'}"
     redis_client = await get_redis_client()
 
     # Try cache first
     cached_allocation = await redis_client.get(cache_key)
     if cached_allocation:
-        logger.info(f"Cache hit for portfolio {portfolio_id} sector allocation")
+        logger.info(f"Cache hit for portfolio {portfolio_id} sector allocation (currency: {currency})")
         return cached_allocation
 
     # Calculate if not cached
     analytics = AdvancedPortfolioAnalytics(portfolio_id, db)
-    allocation = await analytics.sector_analysis()
+    allocation = await analytics.sector_analysis(display_currency=currency)
 
     # Cache for 10 minutes (sector allocation changes less frequently)
     await redis_client.set(cache_key, allocation, ttl=600)

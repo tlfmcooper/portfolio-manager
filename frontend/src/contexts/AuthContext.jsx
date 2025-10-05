@@ -12,7 +12,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/
 // Create axios instance with interceptors
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 120000, // Increased to 120 seconds for portfolio analysis with currency conversion
 });
 
 // Request interceptor to add auth token
@@ -87,13 +87,21 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     try {
-      const analysis = await portfolioService.getPortfolioAnalysis();
-      // Check if the analysis object is not empty to determine onboarding status
-      const hasPortfolioData = Object.keys(analysis).length > 0;
-      setIsOnboarded(hasPortfolioData);
+      // Use portfolio summary instead of analysis for onboarding check
+      // This is simpler and doesn't require heavy computation
+      const portfolio = await portfolioService.getPortfolio();
+      // Check if portfolio exists to determine onboarding status
+      const hasPortfolio = portfolio && portfolio.id;
+      setIsOnboarded(hasPortfolio);
+
+      if (hasPortfolio) {
+        setPortfolioId(portfolio.id); // Store portfolio ID
+      }
     } catch (err) {
       console.error('AuthContext: Error checking onboarding status:', err);
-      setIsOnboarded(false); // Assume not onboarded if there\'s an error
+      console.error('AuthContext: Error details:', err.response?.data || err.message);
+      // If portfolio endpoint fails, user likely needs to onboard
+      setIsOnboarded(false);
     }
   };
 

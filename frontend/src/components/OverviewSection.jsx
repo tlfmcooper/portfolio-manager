@@ -2,19 +2,23 @@ import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const OverviewSection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
+  const { currency } = useCurrency()
 
   useEffect(() => {
     const fetchData = async () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`) // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
+          params: { currency }
+        }) // Pass currency parameter
         console.log('API Response:', response.data)
         console.log('Individual Performance:', response.data?.individual_performance)
         setData(response.data)
@@ -27,7 +31,7 @@ const OverviewSection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency]) // Add currency to dependencies
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { TrendingUp, DollarSign, Percent, PieChart as PieChartIcon } from 'lucide-react';
 
 const AllocationSection = () => {
@@ -8,13 +9,19 @@ const AllocationSection = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
+  const { currency } = useCurrency();
 
   useEffect(() => {
     const fetchData = async () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`); // CRITICAL FIX: Use dynamic portfolioId
+        console.log('[AllocationSection] Fetching sector allocation with currency:', currency);
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`, {
+          params: { currency }
+        }); // Pass currency parameter
+        console.log('[AllocationSection] Received data:', response.data);
+        console.log('[AllocationSection] Currency used:', currency);
         setData(response.data);
       } catch (err) {
         setError('Failed to fetch allocation data');
@@ -25,7 +32,7 @@ const AllocationSection = () => {
     };
 
     fetchData();
-  }, [api, portfolioId]); // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency]); // Add currency to dependencies
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -51,13 +58,15 @@ const AllocationSection = () => {
     return `${value.toFixed(1)}%`;
   };
 
+  // Use currency from context
+  const currencySymbol = currency === 'USD' ? '$' : 'C$';
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value);
+    }).format(value).replace('CA', 'C'); // Replace CA$ with C$
   };
 
   // Prepare data for pie chart
@@ -132,6 +141,7 @@ const AllocationSection = () => {
 
   const totalSectors = Object.keys(assetAllocation).length;
   const totalValue = Object.values(assetAllocation).reduce((acc, a) => acc + a.value, 0);
+  console.log('[AllocationSection] Calculated totalValue:', totalValue, 'from data:', assetAllocation);
   const largestAllocation = Math.max(...Object.values(assetAllocation).map(a => a.percentage));
   const largestSector = Object.entries(assetAllocation).find(([_, a]) => a.percentage === largestAllocation)?.[0] || 'N/A';
 

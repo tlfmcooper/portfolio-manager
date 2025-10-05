@@ -73,7 +73,7 @@ def _(assets, engine, mo):
 
 @app.cell
 def _(asset_df):
-    asset_df.shape
+    asset_df.currency
     return
 
 
@@ -100,6 +100,59 @@ def _(engine, holdings, mo):
         """,
         engine=engine
     )
+    return
+
+
+@app.cell
+def _(engine, mo, transactions):
+    _df = mo.sql(
+        f"""
+        UPDATE transactions 
+        SET price=69.77
+        WHERE id=1;
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _(engine, holdings, mo):
+    _df = mo.sql(
+        f"""
+        SELECT * FROM holdings;
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _(engine, holdings, mo):
+    _df = mo.sql(
+        f"""
+        UPDATE holdings 
+        SET average_cost=69.77
+        WHERE ticker='AAPL';
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _(assets, engine, mo):
+    _df = mo.sql(
+        f"""
+        SELECT * FROM assets;
+        """,
+        engine=engine
+    )
+    return
+
+
+@app.cell
+def _():
     return
 
 

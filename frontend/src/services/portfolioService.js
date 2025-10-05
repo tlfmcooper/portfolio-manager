@@ -20,18 +20,21 @@ export class PortfolioService {
     return response.data;
   }
 
-  async getPortfolioSummary() {
-    const response = await this.api.get('/portfolios/summary');
+  async getPortfolioSummary(currency = null) {
+    const params = currency ? { currency } : {};
+    const response = await this.api.get('/portfolios/summary', { params });
     return response.data;
   }
 
-  async getPortfolioMetrics() {
-    const response = await this.api.get('/portfolios/metrics');
+  async getPortfolioMetrics(currency = null) {
+    const params = currency ? { currency } : {};
+    const response = await this.api.get('/portfolios/metrics', { params });
     return response.data;
   }
 
-  async getPortfolioAnalysis() {
-    const response = await this.api.get('/portfolios/analysis');
+  async getPortfolioAnalysis(currency = null) {
+    const params = currency ? { currency } : {};
+    const response = await this.api.get('/portfolios/analysis', { params });
     return response.data;
   }
 

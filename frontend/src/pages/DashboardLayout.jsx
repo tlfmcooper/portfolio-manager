@@ -1,9 +1,11 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { Loader2, Menu, TrendingUp, Shield, PieChart, Target, BarChart3, TrendingDown } from 'lucide-react';
 import PortfolioService from '../services/portfolioService';
 import Sidebar from '../components/Sidebar';
+import CurrencySwitcher from '../components/CurrencySwitcher';
 
 // Import tab components
 import TabOverview from '../components/tabs/TabOverview';
@@ -28,6 +30,7 @@ const DashboardLayout = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const { api, user, logout } = useAuth();
+  const { currency } = useCurrency();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -46,7 +49,7 @@ const DashboardLayout = () => {
     if (user) {
       fetchPortfolioData();
     }
-  }, [user]);
+  }, [user, currency]); // Re-fetch when currency changes
 
   useEffect(() => {
     const path = location.pathname;
@@ -114,16 +117,18 @@ const DashboardLayout = () => {
       setLoading(true);
       setError(null);
 
-      const analysis = await portfolioService.getPortfolioAnalysis();
-      
-      if (analysis) {
-        setPortfolioData(analysis);
+      // Use lightweight summary endpoint instead of heavy analysis
+      // Analysis is called separately by individual tabs as needed
+      const summary = await portfolioService.getPortfolioSummary(currency);
+
+      if (summary) {
+        setPortfolioData(summary);
       } else {
         setPortfolioData(portfolioService.getMockPortfolioData());
       }
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
-      
+
       try {
         setPortfolioData(portfolioService.getMockPortfolioData());
         setError('Using sample data. Connect your portfolio to see real metrics.');
@@ -192,6 +197,9 @@ const DashboardLayout = () => {
             </div>
 
             <div className="flex items-center space-x-3">
+              {/* Currency Switcher */}
+              <CurrencySwitcher />
+
               <button
                 onClick={toggleTheme}
                 className="hidden sm:flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors"

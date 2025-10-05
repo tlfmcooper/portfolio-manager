@@ -4,11 +4,13 @@ Portfolio analysis service - Production implementation using real market data.
 
 import numpy as np
 import pandas as pd
+import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from concurrent.futures import ThreadPoolExecutor
 
 # Core imports from portfolio_manager
 from portfolio_manager import Portfolio, Asset, YFinanceProvider
@@ -33,6 +35,8 @@ from portfolio_manager.analytics import (
 )
 
 from app.models.holding import Holding
+from app.models.portfolio import Portfolio as DBPortfolio
+from app.services.exchange_rate_service import get_exchange_rate_service
 
 
 def map_asset_type(asset_type_str: Optional[str]) -> AssetType:
@@ -68,18 +72,21 @@ def map_asset_type(asset_type_str: Optional[str]) -> AssetType:
 class AdvancedPortfolioAnalytics:
     """Advanced analytics engine for portfolio management - Production version"""
 
-    def __init__(self, portfolio_id: int, db: AsyncSession):
+    def __init__(self, portfolio_id: int, db: AsyncSession, display_currency: Optional[str] = None):
         self.portfolio_id = portfolio_id
         self.db = db
+        self.display_currency = display_currency
         self.risk_free_rate = 0.042  # 4.2% risk-free rate
         self.provider = YFinanceProvider()
         self._cached_portfolio = None
         self._cached_portfolio_value = None  # Store the actual market value
+        self._building_portfolio = False  # Prevent concurrent builds
 
     async def _build_portfolio(self) -> Optional[Portfolio]:
         """
         Builds a portfolio_manager.Portfolio object from database data.
         Weights are calculated dynamically as: weight = (quantity × current_price) / total_portfolio_value
+        Currency conversion is applied if display_currency is specified.
         """
         result = await self.db.execute(
             select(Holding)
@@ -91,6 +98,30 @@ class AdvancedPortfolioAnalytics:
         if not holdings:
             return None
 
+        # Get portfolio currency
+        portfolio_result = await self.db.execute(
+            select(DBPortfolio).where(DBPortfolio.id == self.portfolio_id)
+        )
+        db_portfolio = portfolio_result.scalar_one_or_none()
+
+        # Use display currency or portfolio's base currency
+        display_currency = self.display_currency or (db_portfolio.currency if db_portfolio else "USD")
+        exchange_service = get_exchange_rate_service()
+
+        # Pre-fetch all needed exchange rates to avoid repeated API calls
+        exchange_rates = {}
+        currencies_needed = set()
+        for holding in holdings:
+            if holding.asset:
+                currencies_needed.add(holding.asset.currency)
+
+        # Fetch all needed exchange rates upfront
+        for currency in currencies_needed:
+            if currency != display_currency:
+                rate = await exchange_service.get_exchange_rate(currency, display_currency)
+                exchange_rates[currency] = rate
+                print(f"[INFO] Pre-fetched exchange rate: {currency}/{display_currency} = {rate}")
+
         portfolio = Portfolio(name="User Portfolio")
         end_date = datetime.now()
         start_date = end_date - timedelta(days=2 * 365)  # 2 years of data
@@ -100,55 +131,92 @@ class AdvancedPortfolioAnalytics:
         total_portfolio_value = 0.0
         total_portfolio_value_realtime = 0.0  # CRITICAL FIX: Track real-time value from DB
 
-        for holding in holdings:
-            asset_model = holding.asset
+        # PERFORMANCE FIX: Fetch yfinance data in parallel
+        async def fetch_holding_data(holding):
+            """Fetch price data for a single holding in parallel."""
+            nonlocal total_portfolio_value_realtime
 
-            # CRITICAL FIX: Always add to real-time portfolio value, even if no historical data
+            asset_model = holding.asset
+            asset_currency = asset_model.currency if asset_model else "USD"
+
+            result = {
+                'realtime_value': 0,
+                'asset_data': None
+            }
+
+            # CRITICAL FIX: Always calculate real-time portfolio value
             realtime_price = holding.current_price or holding.average_cost
             if realtime_price and realtime_price > 0:
                 realtime_market_value = holding.quantity * realtime_price
-                total_portfolio_value_realtime += realtime_market_value
-                print(f"Adding {asset_model.ticker} to real-time total: qty={holding.quantity}, price=${realtime_price:.2f}, value=${realtime_market_value:.2f}")
 
-            # CRITICAL FIX: Skip yfinance for crypto and mutual_fund - they don't have historical data
-            # Use only database prices for these asset types
+                # Convert to display currency if needed using pre-fetched rate
+                if asset_currency != display_currency and asset_currency in exchange_rates:
+                    rate = exchange_rates[asset_currency]
+                    realtime_market_value = realtime_market_value * rate
+
+                result['realtime_value'] = realtime_market_value
+                print(f"Adding {asset_model.ticker} to real-time total: qty={holding.quantity}, price=${realtime_price:.2f}, value=${realtime_market_value:.2f} {display_currency}")
+
+            # CRITICAL FIX: Skip yfinance for crypto and mutual_fund
             if asset_model.asset_type in ['crypto', 'mutual_fund']:
                 print(f"[INFO] Skipping yfinance for {asset_model.ticker} (asset_type={asset_model.asset_type}), using DB price only")
-                continue
+                return result
 
+            # Fetch yfinance data in thread pool (yfinance is blocking/sync)
             try:
-                price_data = self.provider.get_price_data(
-                    asset_model.ticker, start_date, end_date
+                loop = asyncio.get_event_loop()
+                price_data = await loop.run_in_executor(
+                    None,  # Use default thread pool
+                    self.provider.get_price_data,
+                    asset_model.ticker,
+                    start_date,
+                    end_date
                 )
-                if not price_data.empty and len(price_data) > 100:  # Ensure sufficient data
-                    # Get current market price (most recent closing price from yfinance)
-                    yfinance_price = float(price_data['Close'].iloc[-1])
 
-                    # Calculate market value using yfinance price (for weight calculations)
+                if not price_data.empty and len(price_data) > 100:
+                    yfinance_price = float(price_data['Close'].iloc[-1])
                     market_value = holding.quantity * yfinance_price
 
-                    # Map database asset_type to portfolio_manager AssetType enum
-                    mapped_asset_type = map_asset_type(asset_model.asset_type)
+                    # Convert to display currency if needed
+                    if asset_currency != display_currency and asset_currency in exchange_rates:
+                        rate = exchange_rates[asset_currency]
+                        market_value = market_value * rate
 
+                    mapped_asset_type = map_asset_type(asset_model.asset_type)
                     asset = Asset(
                         symbol=asset_model.ticker,
                         name=asset_model.name or asset_model.ticker,
                         asset_type=mapped_asset_type,
                     )
 
-                    assets_data[asset_model.ticker] = {
+                    result['asset_data'] = {
+                        'ticker': asset_model.ticker,
                         'asset': asset,
                         'price_data': price_data,
                         'market_value': market_value,
                         'quantity': holding.quantity,
-                        'current_price': yfinance_price  # Use yfinance price for consistency
+                        'current_price': yfinance_price
                     }
-                    total_portfolio_value += market_value
 
-                    print(f"Asset {asset_model.ticker}: qty={holding.quantity}, yfinance=${yfinance_price:.2f}, value=${market_value:.2f}")
+                    print(f"Asset {asset_model.ticker}: qty={holding.quantity}, yfinance=${yfinance_price:.2f}, value=${market_value:.2f} {display_currency}")
 
             except Exception as e:
                 print(f"[ERROR] Could not fetch data for {asset_model.ticker}: {e}")
+
+            return result
+
+        # Fetch all holdings data in parallel
+        print(f"[INFO] Fetching yfinance data for {len(holdings)} holdings in parallel...")
+        fetch_tasks = [fetch_holding_data(holding) for holding in holdings]
+        results = await asyncio.gather(*fetch_tasks)
+
+        # Process results
+        for result in results:
+            total_portfolio_value_realtime += result['realtime_value']
+            if result['asset_data']:
+                ticker = result['asset_data']['ticker']
+                assets_data[ticker] = result['asset_data']
+                total_portfolio_value += result['asset_data']['market_value']
         
         if not assets_data or total_portfolio_value == 0:
             print("[ERROR] No valid assets or zero portfolio value")
@@ -586,10 +654,12 @@ class AdvancedPortfolioAnalytics:
             traceback.print_exc()
             return {}
 
-    async def sector_analysis(self) -> Dict:
-        """Analyze portfolio by sector."""
+    async def sector_analysis(self, display_currency: Optional[str] = None) -> Dict:
+        """Analyze portfolio by sector with currency conversion."""
         import logging
         logger = logging.getLogger(__name__)
+        from app.services.exchange_rate_service import get_exchange_rate_service
+        from app.models.portfolio import Portfolio as PortfolioModel
 
         result = await self.db.execute(
             select(Holding)
@@ -601,6 +671,33 @@ class AdvancedPortfolioAnalytics:
         if not holdings:
             return {}
 
+        # Get portfolio to determine base currency if needed
+        if not display_currency:
+            portfolio_result = await self.db.execute(
+                select(PortfolioModel).where(PortfolioModel.id == self.portfolio_id)
+            )
+            portfolio_obj = portfolio_result.scalar_one_or_none()
+            if portfolio_obj:
+                display_currency = portfolio_obj.currency
+
+        display_currency = (display_currency or "USD").upper()
+        exchange_service = get_exchange_rate_service()
+
+        logger.info(f"[SECTOR_ANALYSIS] Processing {len(holdings)} holdings, display_currency={display_currency}")
+
+        # Pre-fetch exchange rates
+        exchange_rates = {}
+        currencies_needed = set()
+        for holding in holdings:
+            if holding.asset:
+                currencies_needed.add(holding.asset.currency)
+
+        for currency in currencies_needed:
+            if currency != display_currency:
+                rate = await exchange_service.get_exchange_rate(currency, display_currency)
+                exchange_rates[currency] = rate
+                logger.info(f"[SECTOR_ANALYSIS] Exchange rate {currency} -> {display_currency}: {rate}")
+
         sector_data = {}
         total_value = 0
 
@@ -609,30 +706,32 @@ class AdvancedPortfolioAnalytics:
         if not portfolio:
             return {}
 
-        logger.info(f"[SECTOR_ANALYSIS] Processing {len(holdings)} holdings")
-
         for holding in holdings:
             asset_symbol = holding.asset.ticker
-            print(f"[SECTOR_ANALYSIS] Processing {asset_symbol}, asset_type={holding.asset.asset_type}, in_portfolio={asset_symbol in portfolio.assets}")
+            asset_currency = holding.asset.currency
+            print(f"[SECTOR_ANALYSIS] Processing {asset_symbol}, asset_type={holding.asset.asset_type}, currency={asset_currency}")
 
             # Check if asset exists in portfolio (stocks with historical data)
             # For mutual funds and crypto, use holding's current_price from database
             if asset_symbol in portfolio.assets:
-                print(f"[SECTOR_ANALYSIS] {asset_symbol} found in portfolio.assets")
                 asset_obj = portfolio.assets[asset_symbol]
                 current_price = asset_obj.get_current_price()
-                print(f"[SECTOR_ANALYSIS] {asset_symbol} current_price from portfolio: {current_price}")
                 if current_price is None:
                     continue
             else:
                 # For assets not in portfolio (mutual funds, crypto), use database price
-                print(f"[SECTOR_ANALYSIS] {asset_symbol} NOT in portfolio.assets, using DB price")
                 current_price = holding.current_price or holding.average_cost
-                print(f"[SECTOR_ANALYSIS] {asset_symbol} holding.current_price={holding.current_price}, holding.average_cost={holding.average_cost}")
                 if current_price is None:
                     continue
 
             market_value = holding.quantity * current_price
+
+            # Convert to display currency if different
+            if asset_currency != display_currency and asset_currency in exchange_rates:
+                rate = exchange_rates[asset_currency]
+                original_value = market_value
+                market_value = market_value * rate
+                logger.info(f"[SECTOR_ANALYSIS] {asset_symbol}: {original_value:.2f} {asset_currency} -> {market_value:.2f} {display_currency} (rate: {rate})")
 
             # Assign sector based on asset type if not available
             if holding.asset.sector:
@@ -646,8 +745,7 @@ class AdvancedPortfolioAnalytics:
             else:
                 sector = "Other"
 
-            print(f"[SECTOR_ANALYSIS] {asset_symbol}: qty={holding.quantity}, price={current_price}, market_value={market_value}, sector={sector}, asset_type={holding.asset.asset_type}")
-            logger.info(f"[SECTOR_ANALYSIS] {asset_symbol}: qty={holding.quantity}, price={current_price}, market_value={market_value}, sector={sector}, asset_type={holding.asset.asset_type}")
+            logger.info(f"[SECTOR_ANALYSIS] {asset_symbol}: qty={holding.quantity}, price={current_price}, market_value={market_value}, sector={sector}")
 
             if sector not in sector_data:
                 sector_data[sector] = {
@@ -658,13 +756,12 @@ class AdvancedPortfolioAnalytics:
             sector_data[sector]["value"] += market_value
             sector_data[sector]["positions"] += 1
             total_value += market_value
-        
+
         if total_value > 0:
             for sector in sector_data:
                 sector_data[sector]["percentage"] = (
                     sector_data[sector]["value"] / total_value * 100
                 )
 
-        print(f"[SECTOR_ANALYSIS] Final result: {sector_data}, total_value={total_value}")
-        logger.info(f"[SECTOR_ANALYSIS] Final result: {sector_data}, total_value={total_value}")
+        logger.info(f"[SECTOR_ANALYSIS] Final result in {display_currency}: total_value={total_value:.2f}")
         return sector_data

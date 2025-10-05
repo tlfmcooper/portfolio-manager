@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app.models import Portfolio, Holding, Asset
 from app.schemas import PortfolioUpdate
+from app.services.exchange_rate_service import get_exchange_rate_service
 
 
 async def update_portfolio(db: AsyncSession, portfolio_id: int, portfolio_update: PortfolioUpdate) -> Optional[Portfolio]:
@@ -28,8 +29,23 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, portfolio_update
     return db_portfolio
 
 
-async def calculate_portfolio_metrics(db: AsyncSession, portfolio_id: int) -> Dict:
-    """Calculate portfolio performance metrics."""
+async def calculate_portfolio_metrics(
+    db: AsyncSession,
+    portfolio_id: int,
+    display_currency: Optional[str] = None
+) -> Dict:
+    """
+    Calculate portfolio performance metrics.
+
+    Args:
+        db: Database session
+        portfolio_id: Portfolio ID
+        display_currency: Currency to display values in (USD or CAD).
+                         If None, uses portfolio's base currency.
+
+    Returns:
+        Dictionary with portfolio metrics in the requested currency
+    """
     portfolio = await get_portfolio(db, portfolio_id)
     if not portfolio or not portfolio.holdings:
         return {
@@ -39,36 +55,78 @@ async def calculate_portfolio_metrics(db: AsyncSession, portfolio_id: int) -> Di
             "total_return_percentage": 0.0,
             "asset_allocation": {},
             "holdings_count": 0,
+            "display_currency": display_currency or "USD",
         }
-    
+
+    # Use portfolio currency if not specified
+    if not display_currency:
+        display_currency = portfolio.currency
+
+    display_currency = display_currency.upper()
+    exchange_service = get_exchange_rate_service()
+
+    print(f"[CURRENCY] Calculating portfolio metrics in {display_currency}")
+
+    # Pre-fetch exchange rates for all currencies to avoid repeated API calls
+    # We only need USD<->CAD conversions
+    exchange_rates = {}
+    currencies_needed = set()
+    for holding in portfolio.holdings:
+        if holding.is_active and holding.asset:
+            currencies_needed.add(holding.asset.currency)
+
+    print(f"[CURRENCY] Currencies in portfolio: {currencies_needed}")
+
+    # Fetch all needed exchange rates upfront
+    for currency in currencies_needed:
+        if currency != display_currency:
+            rate = await exchange_service.get_exchange_rate(currency, display_currency)
+            exchange_rates[currency] = rate
+            print(f"[CURRENCY] Exchange rate {currency} -> {display_currency}: {rate}")
+
     total_cost = 0.0
     total_value = 0.0
     asset_allocation = {}
-    
+
     for holding in portfolio.holdings:
         if not holding.is_active:
             continue
-            
+
+        # Get asset currency
+        asset_currency = holding.asset.currency if holding.asset else "USD"
+
+        # Calculate cost and value in original currency
         cost = holding.quantity * holding.average_cost
         current_value = holding.quantity * (holding.current_price or holding.average_cost)
-        
+
+        # Convert to display currency if different using pre-fetched rate
+        if asset_currency != display_currency and asset_currency in exchange_rates:
+            rate = exchange_rates[asset_currency]
+            original_cost = cost
+            original_value = current_value
+            cost = cost * rate
+            current_value = current_value * rate
+            print(f"[CURRENCY] {holding.asset.ticker}: {original_value:.2f} {asset_currency} -> {current_value:.2f} {display_currency} (rate: {rate})")
+
         total_cost += cost
         total_value += current_value
-        
+
         # Calculate allocation percentage
         if holding.asset:
             asset_allocation[holding.asset.ticker] = current_value
-    
+
     # Convert allocations to percentages
     if total_value > 0:
         asset_allocation = {
-            ticker: (value / total_value) * 100 
+            ticker: (value / total_value) * 100
             for ticker, value in asset_allocation.items()
         }
-    
+
     total_return = total_value - total_cost
     total_return_percentage = (total_return / total_cost * 100) if total_cost > 0 else 0.0
-    
+
+    print(f"[CURRENCY] Final totals in {display_currency}: Value={total_value:.2f}, Cost={total_cost:.2f}, Return={total_return:.2f}")
+
     return {
         "total_invested": total_cost,
         "total_value": total_value,
@@ -76,6 +134,7 @@ async def calculate_portfolio_metrics(db: AsyncSession, portfolio_id: int) -> Di
         "total_return_percentage": total_return_percentage,
         "asset_allocation": asset_allocation,
         "holdings_count": len([h for h in portfolio.holdings if h.is_active]),
+        "display_currency": display_currency,
     }
 
 

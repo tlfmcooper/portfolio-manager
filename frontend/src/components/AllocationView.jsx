@@ -1,17 +1,11 @@
 import React from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const AllocationView = ({ data }) => {
-  if (!data || !Array.isArray(data)) return null
+  const { formatCurrency } = useCurrency()
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
+  if (!data || !Array.isArray(data)) return null
 
   const formatPercentage = (value) => {
     return `${value.toFixed(1)}%`

@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # Finnhub API
     FINNHUB_API_KEY: str
 
+    # Exchange Rates API
+    EXCHANGE_RATES_API_KEY: str = os.getenv("EXCHANGE_RATES_API_KEY", "")
+
     # Redis settings
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

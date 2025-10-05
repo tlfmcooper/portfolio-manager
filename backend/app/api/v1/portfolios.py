@@ -1,8 +1,8 @@
 """
 Portfolio management API routes.
 """
-from typing import Any, Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, Dict, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -66,10 +66,14 @@ async def update_user_portfolio(
 @router.get("/summary", response_model=PortfolioSummary)
 async def get_portfolio_summary(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")
 ) -> Any:
     """
     Get portfolio summary with key metrics.
+
+    Args:
+        currency: Optional currency to display values in (USD or CAD)
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -77,33 +81,34 @@ async def get_portfolio_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Portfolio not found"
         )
-    
-    # Update portfolio metrics before returning summary
-    await update_portfolio_metrics(db, portfolio.id)
-    
-    # Refresh portfolio data
-    updated_portfolio = await get_user_portfolio(db, current_user.id)
-    
+
+    # Calculate metrics with currency conversion
+    metrics = await calculate_portfolio_metrics(db, portfolio.id, currency)
+
     return {
-        "id": updated_portfolio.id,
-        "name": updated_portfolio.name,
-        "total_value": updated_portfolio.total_value,
-        "total_return": updated_portfolio.total_return,
-        "total_return_percentage": updated_portfolio.total_return_percentage,
-        "total_holdings_count": updated_portfolio.total_holdings_count,
-        "diversification_score": updated_portfolio.diversification_score,
-        "currency": updated_portfolio.currency,
-        "last_updated": updated_portfolio.updated_at,
+        "id": portfolio.id,
+        "name": portfolio.name,
+        "total_value": metrics["total_value"],
+        "total_return": metrics["total_return"],
+        "total_return_percentage": metrics["total_return_percentage"],
+        "total_holdings_count": metrics["holdings_count"],
+        "diversification_score": portfolio.diversification_score,
+        "currency": metrics["display_currency"],
+        "last_updated": portfolio.updated_at,
     }
 
 
 @router.get("/metrics", response_model=Dict)
 async def get_portfolio_metrics(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")
 ) -> Any:
     """
     Get detailed portfolio metrics and analysis.
+
+    Args:
+        currency: Optional currency to display values in (USD or CAD)
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -111,8 +116,8 @@ async def get_portfolio_metrics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Portfolio not found"
         )
-    
-    metrics = await calculate_portfolio_metrics(db, portfolio.id)
+
+    metrics = await calculate_portfolio_metrics(db, portfolio.id, currency)
     return metrics
 
 
@@ -144,10 +149,14 @@ async def refresh_portfolio_metrics(
 @router.get("/analysis", response_model=Dict)
 async def get_portfolio_analysis(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")
 ) -> Any:
     """
     Get comprehensive portfolio analysis with advanced metrics.
+
+    Args:
+        currency: Optional currency to display values in (USD or CAD)
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -155,7 +164,7 @@ async def get_portfolio_analysis(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Portfolio not found"
         )
-    
-    analysis = AdvancedPortfolioAnalytics(portfolio.id, db)
+
+    analysis = AdvancedPortfolioAnalytics(portfolio.id, db, display_currency=currency)
     metrics = await analysis.calculate_portfolio_metrics()
     return metrics

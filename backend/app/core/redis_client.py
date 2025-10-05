@@ -69,6 +69,10 @@ class RedisClient:
         except Exception as e:
             logger.error(f"Redis SET error for key {key}: {e}")
 
+    async def setex(self, key: str, ttl: int, value: Any):
+        """Set value in Redis with TTL (alias for set with ttl)."""
+        await self.set(key, value, ttl=ttl)
+
     async def lpush(self, key: str, value: Any, max_length: int = 1000):
         """Push value to list and trim to max length."""
         if not self.connected or not self.redis:

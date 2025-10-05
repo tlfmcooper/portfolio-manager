@@ -4,7 +4,7 @@ API v1 router initialization.
 
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, portfolios, holdings, assets, transactions, analysis, market
+from app.api.v1 import auth, users, portfolios, holdings, assets, transactions, analysis, market, exchange
 from app.api.v1.auth_extended import refresh_router
 
 api_router = APIRouter()
@@ -33,3 +33,6 @@ api_router.include_router(analysis.router, prefix="/analysis", tags=["analysis"]
 
 # Include market data routes
 api_router.include_router(market.router, prefix="/market", tags=["market"])
+
+# Include exchange rate routes
+api_router.include_router(exchange.router, prefix="/exchange", tags=["exchange"])

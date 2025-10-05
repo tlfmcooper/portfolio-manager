@@ -14,7 +14,15 @@
       "Bash(netsh advfirewall firewall add rule name=\"Portfolio Dashboard Frontend\" dir=in action=allow protocol=TCP localport=5173)",
       "Bash(uv pip install:*)",
       "Bash(ls:*), Bash(cat), Bash(cp), Bash(nano)",
-      "Bash(uv sync:*)"
+      "Bash(uv sync:*)",
+      "Bash(curl -s http://127.0.0.1:8000/health)",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/exchange/rate?from_currency=USD&to_currency=CAD\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/exchange/rate?from_currency=CAD&to_currency=USD\" -w \"\\nTime: %{time_total}s\\n\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/portfolios/summary?currency=CAD\" -H \"Authorization: Bearer YOUR_TOKEN\" -w \"\\nTime: %{time_total}s\\n\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/exchange/rate?from_currency=CAD&to_currency=USD\")",
+      "Bash(grep:*)",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/sector-allocation?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, Search } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const HoldingsView = () => {
   const [data, setData] = useState(null)
@@ -9,12 +10,14 @@ const HoldingsView = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const { api } = useAuth()
+  const { currency, formatCurrency } = useCurrency()
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // TODO: Replace with dynamic portfolio ID
-        const response = await api.get('/holdings/')
+        const response = await api.get('/holdings/', {
+          params: { currency }
+        })
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch holdings data')
@@ -25,20 +28,11 @@ const HoldingsView = () => {
     }
 
     fetchData()
-  }, [api])
+  }, [api, currency])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>
   if (!data || !Array.isArray(data)) return null
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
 
   const formatPercentage = (value) => {
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
