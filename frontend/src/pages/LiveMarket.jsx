@@ -23,9 +23,19 @@ const LiveMarket = () => {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const priceHistoryRef = useRef({});
+  const autoRefreshIntervalRef = useRef(null);
+
+  // Auto-refresh interval in milliseconds (60 seconds)
+  const AUTO_REFRESH_INTERVAL = 60000;
 
   useEffect(() => {
     fetchLiveMarketData();
+
+    // Set up auto-refresh interval
+    autoRefreshIntervalRef.current = setInterval(() => {
+      console.log('Auto-refreshing market data...');
+      fetchLiveMarketData(true); // Silent update
+    }, AUTO_REFRESH_INTERVAL);
 
     return () => {
       // Cleanup WebSocket connection
@@ -34,6 +44,10 @@ const LiveMarket = () => {
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+      }
+      // Cleanup auto-refresh interval
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current);
       }
     };
   }, [api, currency]);
