@@ -22,7 +22,10 @@
       "Bash(curl -s \"http://127.0.0.1:8000/api/v1/exchange/rate?from_currency=CAD&to_currency=USD\")",
       "Bash(grep:*)",
       "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/sector-allocation?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/efficient-frontier?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/monte-carlo?currency=CAD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/cppi?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")"
     ],
     "deny": [],
     "ask": []

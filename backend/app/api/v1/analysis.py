@@ -70,10 +70,11 @@ async def get_sector_allocation(
 @router.get("/portfolios/{portfolio_id}/efficient-frontier")
 async def get_efficient_frontier(
     portfolio_id: int,
+    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get efficient frontier data."""
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db)
+    """Get efficient frontier data with currency conversion."""
+    analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
     frontier_data = await analytics.generate_efficient_frontier()
     return frontier_data
 
@@ -81,12 +82,13 @@ async def get_efficient_frontier(
 @router.get("/portfolios/{portfolio_id}/monte-carlo")
 async def run_monte_carlo_simulation(
     portfolio_id: int,
+    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     db: AsyncSession = Depends(get_db),
     scenarios: int = 1000,
     time_horizon: int = 252,
 ):
-    """Run a Monte Carlo simulation."""
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db)
+    """Run a Monte Carlo simulation with currency conversion."""
+    analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
     simulation_data = await analytics.run_monte_carlo_simulation(
         scenarios=scenarios, time_horizon=time_horizon
     )
@@ -96,13 +98,14 @@ async def run_monte_carlo_simulation(
 @router.get("/portfolios/{portfolio_id}/cppi")
 async def run_cppi_simulation(
     portfolio_id: int,
+    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     db: AsyncSession = Depends(get_db),
     multiplier: int = 3,
     floor: float = 0.8,
     time_horizon: int = 252,
 ):
-    """Run a CPPI simulation."""
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db)
+    """Run a CPPI simulation with currency conversion."""
+    analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
     simulation_data = await analytics.run_cppi_simulation(
         multiplier=multiplier, floor=floor, time_horizon=time_horizon
     )

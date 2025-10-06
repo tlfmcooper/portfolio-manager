@@ -2,19 +2,23 @@ import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { TrendingDown, Shield, Target, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const CPPISection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
+  const { api, portfolioId } = useAuth()
+  const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency()
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
+      if (!portfolioId) return;
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`) // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`, {
+          params: { currency }
+        })
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch CPPI analysis data')
@@ -25,7 +29,7 @@ const CPPISection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>
@@ -44,12 +48,7 @@ const CPPISection = () => {
   } = cppiAnalysis
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
+    return formatCurrencyFromContext(value)
   }
 
   const formatPercentage = (value) => {

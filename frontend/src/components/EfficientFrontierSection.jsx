@@ -2,19 +2,23 @@ import React, { useState, useEffect } from 'react'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Target, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const EfficientFrontierSection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
+  const { api, portfolioId } = useAuth()
+  const { currency } = useCurrency()
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
+      if (!portfolioId) return;
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/efficient-frontier`) // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/efficient-frontier`, {
+          params: { currency }
+        })
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch efficient frontier data')
@@ -25,7 +29,7 @@ const EfficientFrontierSection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>

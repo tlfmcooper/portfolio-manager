@@ -2,19 +2,23 @@ import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const MonteCarloSection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
+  const { api, portfolioId } = useAuth()
+  const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency()
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
+      if (!portfolioId) return;
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/monte-carlo`) // CRITICAL FIX: Use dynamic portfolioId
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/monte-carlo`, {
+          params: { currency }
+        })
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch Monte Carlo simulation data')
@@ -25,7 +29,7 @@ const MonteCarloSection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>
@@ -46,12 +50,7 @@ const MonteCarloSection = () => {
   } = monteCarlo
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
+    return formatCurrencyFromContext(value)
   }
 
   const formatNumber = (value) => {
