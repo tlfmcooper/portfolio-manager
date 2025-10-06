@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, Activity, RefreshCw, Search } from 'lucide-react';
 import { Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import toast from 'react-hot-toast';
 
 // Tickers not supported by Finnhub
@@ -18,6 +19,7 @@ const LiveMarket = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const { api } = useAuth();
+  const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const priceHistoryRef = useRef({});
@@ -34,7 +36,7 @@ const LiveMarket = () => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [api]);
+  }, [api, currency]);
 
   // WebSocket connection setup
   const connectWebSocket = (symbols) => {
@@ -140,9 +142,10 @@ const LiveMarket = () => {
       }
       setError(null);
 
-      console.log('Fetching live market data...');
+      console.log('Fetching live market data with currency:', currency);
       const startTime = Date.now();
       const response = await api.get('/market/live', {
+        params: { currency },
         timeout: 60000 // 60 second timeout for initial fetch with many holdings
       });
       console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
@@ -230,12 +233,7 @@ const LiveMarket = () => {
   };
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+    return formatCurrencyFromContext(value);
   };
 
   const formatPercentage = (value) => {

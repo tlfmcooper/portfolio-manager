@@ -1,8 +1,8 @@
 """
 Market data API routes for live stock prices.
 """
-from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import logging
@@ -15,6 +15,7 @@ from app.services.finnhub_service import get_finnhub_service
 from app.services.market_websocket import get_ws_manager
 from app.services.finance_service import FinanceService
 from app.core.redis_client import get_redis_client
+from app.services.exchange_rate_service import get_exchange_rate_service
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,23 @@ router = APIRouter()
 UNSUPPORTED_TICKERS = ["MAU.TO"]
 
 
+def convert_price(price: float, from_currency: str, to_currency: str, exchange_rates: Dict[str, float]) -> float:
+    """Convert price from one currency to another using exchange rates."""
+    if from_currency == to_currency:
+        return price
+    if from_currency in exchange_rates:
+        return price * exchange_rates[from_currency]
+    return price
+
+
 @router.get("/live")
 async def get_live_market_data(
+    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
-    Get live market data for all holdings in current user's portfolio.
+    Get live market data for all holdings in current user's portfolio with currency conversion.
     Uses Redis cache when available for faster response times.
     """
     portfolio = await get_user_portfolio(db, current_user.id)
@@ -39,6 +50,13 @@ async def get_live_market_data(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Portfolio not found"
         )
+
+    # Determine display currency
+    display_currency = (currency or portfolio.currency or "USD").upper()
+    exchange_service = get_exchange_rate_service()
+
+    # Pre-fetch exchange rates
+    exchange_rates = {}
 
     # Get all holdings
     holdings = await get_portfolio_holdings(db, portfolio.id)
@@ -50,6 +68,19 @@ async def get_live_market_data(
             "updated_at": datetime.utcnow().isoformat(),
             "message": "No holdings found in portfolio"
         }
+
+    # Collect all currencies needed for conversion
+    currencies_needed = set()
+    for holding in holdings:
+        if holding.asset and holding.asset.currency:
+            currencies_needed.add(holding.asset.currency)
+
+    # Pre-fetch exchange rates
+    for curr in currencies_needed:
+        if curr != display_currency:
+            rate = await exchange_service.get_exchange_rate(curr, display_currency)
+            exchange_rates[curr] = rate
+            logger.info(f"[MARKET_LIVE] Exchange rate {curr} -> {display_currency}: {rate}")
 
     # Separate holdings by asset type
     stock_symbols = []
@@ -151,22 +182,30 @@ async def get_live_market_data(
         # Still return holdings even if no Finnhub-supported tickers
         enriched_holdings = []
         for holding in holdings:
+            # Get asset currency
+            asset_currency = holding.asset.currency if holding.asset else "USD"
+
             # CRITICAL FIX: Always calculate cost_basis and market_value from database fields
-            calculated_cost_basis = holding.quantity * holding.average_cost
             current_price_fallback = holding.current_price or holding.average_cost
-            calculated_market_value = holding.quantity * current_price_fallback
+
+            # Apply currency conversion
+            converted_avg_cost = convert_price(holding.average_cost, asset_currency, display_currency, exchange_rates)
+            converted_current_price = convert_price(current_price_fallback, asset_currency, display_currency, exchange_rates)
+
+            calculated_cost_basis = holding.quantity * converted_avg_cost
+            calculated_market_value = holding.quantity * converted_current_price
 
             holding_dict = {
                 "id": holding.id,
                 "ticker": holding.ticker,
                 "quantity": holding.quantity,
-                "average_cost": holding.average_cost,
+                "average_cost": converted_avg_cost,
                 "cost_basis": calculated_cost_basis,  # Always calculate fresh
                 "asset": {
                     "name": holding.asset.name if holding.asset else holding.ticker,
                     "ticker": holding.ticker
                 },
-                "current_price": current_price_fallback,
+                "current_price": converted_current_price,
                 "market_value": calculated_market_value,  # Always calculate fresh
             }
 
@@ -175,9 +214,11 @@ async def get_live_market_data(
                 holding_dict["change_percent"] = holding._temp_change_percent
                 # Use temp_change if available (from OHLC), otherwise calculate
                 if hasattr(holding, '_temp_change'):
-                    holding_dict["change"] = holding._temp_change
-                elif holding._temp_change_percent and current_price_fallback:
-                    holding_dict["change"] = (current_price_fallback * holding._temp_change_percent) / 100
+                    # Convert the change amount to display currency
+                    converted_change = convert_price(holding._temp_change, asset_currency, display_currency, exchange_rates)
+                    holding_dict["change"] = converted_change
+                elif holding._temp_change_percent and converted_current_price:
+                    holding_dict["change"] = (converted_current_price * holding._temp_change_percent) / 100
                 else:
                     holding_dict["change"] = 0
             else:
@@ -226,14 +267,18 @@ async def get_live_market_data(
     # Enrich holdings with live market data
     enriched_holdings = []
     for holding in holdings:
+        # Get asset currency
+        asset_currency = holding.asset.currency if holding.asset else "USD"
+
         # CRITICAL FIX: Always calculate cost_basis from database fields, never use cached value
-        calculated_cost_basis = holding.quantity * holding.average_cost
+        converted_avg_cost = convert_price(holding.average_cost, asset_currency, display_currency, exchange_rates)
+        calculated_cost_basis = holding.quantity * converted_avg_cost
 
         holding_dict = {
             "id": holding.id,
             "ticker": holding.ticker,
             "quantity": holding.quantity,
-            "average_cost": holding.average_cost,
+            "average_cost": converted_avg_cost,
             "cost_basis": calculated_cost_basis,  # Always calculate fresh
             "asset": {
                 "name": holding.asset.name if holding.asset else holding.ticker,
@@ -243,27 +288,33 @@ async def get_live_market_data(
 
         # Add live market data if available
         if holding.ticker in market_data:
-            # Stock data from Finnhub
+            # Stock data from Finnhub - convert to display currency
             quote = market_data[holding.ticker]
-            holding_dict["current_price"] = quote["current_price"]
-            holding_dict["market_value"] = quote["current_price"] * holding.quantity
-            holding_dict["change_percent"] = quote["change_percent"]
-            holding_dict["change"] = quote["change"]
+            converted_current_price = convert_price(quote["current_price"], asset_currency, display_currency, exchange_rates)
+            converted_change = convert_price(quote["change"], asset_currency, display_currency, exchange_rates)
+
+            holding_dict["current_price"] = converted_current_price
+            holding_dict["market_value"] = converted_current_price * holding.quantity
+            holding_dict["change_percent"] = quote["change_percent"]  # Percentage stays the same
+            holding_dict["change"] = converted_change
         else:
             # Use stored price if live data not available (e.g., MAU.TO, mutual funds, crypto)
             # CRITICAL FIX: Always calculate market_value from quantity and price
             current_price_fallback = holding.current_price or holding.average_cost
-            holding_dict["current_price"] = current_price_fallback
-            holding_dict["market_value"] = holding.quantity * current_price_fallback
+            converted_current_price = convert_price(current_price_fallback, asset_currency, display_currency, exchange_rates)
+
+            holding_dict["current_price"] = converted_current_price
+            holding_dict["market_value"] = holding.quantity * converted_current_price
 
             # Check if we have temp change_percent (for mutual funds, crypto, and unsupported stocks)
             if hasattr(holding, '_temp_change_percent'):
                 holding_dict["change_percent"] = holding._temp_change_percent
                 # Use temp_change if available (from OHLC), otherwise calculate
                 if hasattr(holding, '_temp_change'):
-                    holding_dict["change"] = holding._temp_change
-                elif holding._temp_change_percent and current_price_fallback:
-                    holding_dict["change"] = (current_price_fallback * holding._temp_change_percent) / 100
+                    converted_change = convert_price(holding._temp_change, asset_currency, display_currency, exchange_rates)
+                    holding_dict["change"] = converted_change
+                elif holding._temp_change_percent and converted_current_price:
+                    holding_dict["change"] = (converted_current_price * holding._temp_change_percent) / 100
                 else:
                     holding_dict["change"] = 0
             else:
