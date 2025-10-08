@@ -246,6 +246,19 @@ const LiveMarket = () => {
     return totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0;
   };
 
+  const getPortfolioDailyReturn = () => {
+    // Calculate weighted average daily return based on market value
+    const totalMarketValue = holdings.reduce((sum, h) => sum + h.market_value, 0);
+
+    if (totalMarketValue === 0) return 0;
+
+    return holdings.reduce((sum, holding) => {
+      const weight = holding.market_value / totalMarketValue;
+      const dayChange = holding.change_percent || 0;
+      return sum + (weight * dayChange);
+    }, 0);
+  };
+
   const formatCurrency = (value) => {
     return formatCurrencyFromContext(value);
   };
@@ -355,6 +368,7 @@ const LiveMarket = () => {
 
   const totalGainLoss = getTotalUnrealizedGainLoss();
   const totalGainLossPercentage = getTotalUnrealizedGainLossPercentage();
+  const portfolioDailyReturn = getPortfolioDailyReturn();
   const supportedHoldings = holdings.filter(h => !UNSUPPORTED_TICKERS.includes(h.ticker));
 
   return (
@@ -698,7 +712,9 @@ const LiveMarket = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text)' }}>
                   {formatCurrency(holdings.reduce((sum, h) => sum + h.market_value, 0))}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm"></td>
+                <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${getColorClass(portfolioDailyReturn)}`}>
+                  {formatPercentage(portfolioDailyReturn)}
+                </td>
                 <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${getColorClass(totalGainLoss)}`}>
                   {formatCurrency(totalGainLoss)}
                 </td>
