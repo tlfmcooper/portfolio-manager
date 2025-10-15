@@ -14,8 +14,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Exchange rate API configuration
-# Primary API (requires API key)
-EXCHANGE_RATE_API_URL = "https://api.exchangerate.host/latest"
+# Primary API (requires API key) - Updated to /live endpoint
+EXCHANGE_RATE_API_URL = "https://api.exchangerate.host/live"
 # Backup API (frankfurter.app is free and doesn't require API key)
 BACKUP_API_URL = "https://api.frankfurter.app/latest"
 CACHE_TTL = 3600  # 1 hour in seconds
@@ -89,8 +89,8 @@ class ExchangeRateService:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     params = {
-                        "base": from_currency,
-                        "symbols": to_currency,
+                        "source": from_currency,
+                        "currencies": to_currency,
                         "access_key": settings.EXCHANGE_RATES_API_KEY
                     }
                     response = await client.get(EXCHANGE_RATE_API_URL, params=params)
@@ -98,8 +98,10 @@ class ExchangeRateService:
 
                     data = response.json()
 
-                    if data.get("success") and "rates" in data:
-                        rate = data["rates"].get(to_currency)
+                    if data.get("success") and "quotes" in data:
+                        # The API returns quotes in format like "USDCAD": 1.36
+                        quote_key = f"{from_currency}{to_currency}"
+                        rate = data["quotes"].get(quote_key)
                         if rate:
                             logger.info(
                                 f"Fetched exchange rate from primary API: {from_currency}/{to_currency} = {rate}"
