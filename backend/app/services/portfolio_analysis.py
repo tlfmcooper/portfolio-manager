@@ -91,6 +91,7 @@ class AdvancedPortfolioAnalytics:
         result = await self.db.execute(
             select(Holding)
             .where(Holding.portfolio_id == self.portfolio_id)
+            .where(Holding.quantity > 0)
             .options(selectinload(Holding.asset))
         )
         holdings = result.scalars().all()
@@ -664,6 +665,7 @@ class AdvancedPortfolioAnalytics:
         result = await self.db.execute(
             select(Holding)
             .where(Holding.portfolio_id == self.portfolio_id)
+            .where(Holding.quantity > 0)
             .options(selectinload(Holding.asset))
         )
         holdings = result.scalars().all()

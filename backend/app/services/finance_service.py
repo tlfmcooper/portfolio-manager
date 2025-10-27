@@ -6,11 +6,22 @@ import logging
 import requests
 import ast
 import re
+import time
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Session with connection pooling for better performance
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(
+    pool_connections=10,
+    pool_maxsize=20,
+    max_retries=0  # We'll handle retries manually
+)
+session.mount('https://', adapter)
+session.mount('http://', adapter)
 
 
 class FinanceService:
@@ -90,72 +101,104 @@ class FinanceService:
 
     @staticmethod
     async def _get_mutual_fund_info(ticker: str) -> Optional[Dict[str, Any]]:
-        """Fetch mutual fund information from Barchart."""
-        try:
-            headers = {
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36",
-            }
-            regex = r"{.*}"
+        """Fetch mutual fund information from Barchart with retry logic."""
+        max_retries = 3
+        base_timeout = 20  # Increased from 10 to 20 seconds
 
-            URL = f"https://www.barchart.com/etfs-funds/quotes/{ticker}"
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1"
+                }
+                regex = r"{.*}"
 
-            response = requests.get(URL, headers=headers, timeout=10)
-            response.raise_for_status()
+                URL = f"https://www.barchart.com/etfs-funds/quotes/{ticker}"
 
-            soup = BeautifulSoup(response.text, "html.parser")
-            mf_data_bs_element = soup.find_all("div", class_="bc-quote-overview row")
+                # Calculate timeout with exponential backoff for retries
+                timeout = base_timeout * (1.5 ** attempt)
 
-            if not mf_data_bs_element:
-                logger.warning(f"No mutual fund data found for ticker: {ticker}")
+                if attempt > 0:
+                    wait_time = 2 ** attempt  # Exponential backoff: 2, 4, 8 seconds
+                    logger.info(f"Retry attempt {attempt + 1}/{max_retries} for {ticker} after {wait_time}s delay")
+                    time.sleep(wait_time)
+
+                response = session.get(URL, headers=headers, timeout=timeout)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, "html.parser")
+                mf_data_bs_element = soup.find_all("div", class_="bc-quote-overview row")
+
+                if not mf_data_bs_element:
+                    logger.warning(f"No mutual fund data found for ticker: {ticker}")
+                    return None
+
+                mf_data_bs_str = str(mf_data_bs_element[0])
+                mf_data_list = re.findall(regex, mf_data_bs_str)
+
+                if not mf_data_list:
+                    logger.warning(f"Could not parse mutual fund data for ticker: {ticker}")
+                    return None
+
+                mf_data_json = mf_data_list[0]
+                parsed_data = ast.literal_eval(mf_data_json)
+
+                # Extract price information
+                raw_data = parsed_data[2].get('raw', {})
+                last_price = raw_data.get('lastPrice')
+                previous_price = raw_data.get('previousPrice')
+
+                # Calculate day change percentage for display purposes
+                change_percent = 0.0
+                change = 0.0
+                if last_price and previous_price:
+                    try:
+                        last_price_float = float(last_price)
+                        previous_price_float = float(previous_price)
+                        change = last_price_float - previous_price_float
+                        change_percent = (change / previous_price_float) * 100
+                    except (ValueError, ZeroDivisionError):
+                        pass
+
+                # Asset data contains fields that map to Asset model + display fields
+                asset_data = {
+                    'ticker': ticker.upper(),
+                    'name': ticker,  # Could be enhanced with more scraping
+                    'asset_type': 'mutual_fund',
+                    'currency': 'USD',
+                    'current_price': float(last_price) if last_price else None,
+                    'last_price_update': datetime.utcnow(),
+                    # Additional fields for display (not stored in Asset model, filtered out before saving)
+                    'change_percent': change_percent,
+                    'change': change,
+                    'previous_close': float(previous_price) if previous_price else None
+                }
+
+                logger.info(f"Successfully fetched mutual fund data for {ticker}: price={last_price}, prev={previous_price}, change={change_percent:.2f}%")
+                return asset_data
+
+            except requests.exceptions.Timeout as e:
+                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries} for {ticker}: {str(e)}")
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to fetch mutual fund data for {ticker} after {max_retries} attempts")
+                    return None
+                # Continue to next retry attempt
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request error fetching mutual fund data for {ticker}: {str(e)}")
+                if attempt == max_retries - 1:
+                    return None
+                # Continue to next retry attempt
+
+            except Exception as e:
+                logger.error(f"Error fetching mutual fund data for {ticker}: {str(e)}")
                 return None
 
-            mf_data_bs_str = str(mf_data_bs_element[0])
-            mf_data_list = re.findall(regex, mf_data_bs_str)
-
-            if not mf_data_list:
-                logger.warning(f"Could not parse mutual fund data for ticker: {ticker}")
-                return None
-
-            mf_data_json = mf_data_list[0]
-            parsed_data = ast.literal_eval(mf_data_json)
-
-            # Extract price information
-            raw_data = parsed_data[2].get('raw', {})
-            last_price = raw_data.get('lastPrice')
-            previous_price = raw_data.get('previousPrice')
-
-            # Calculate day change percentage for display purposes
-            change_percent = 0.0
-            change = 0.0
-            if last_price and previous_price:
-                try:
-                    last_price_float = float(last_price)
-                    previous_price_float = float(previous_price)
-                    change = last_price_float - previous_price_float
-                    change_percent = (change / previous_price_float) * 100
-                except (ValueError, ZeroDivisionError):
-                    pass
-
-            # Asset data contains fields that map to Asset model + display fields
-            asset_data = {
-                'ticker': ticker.upper(),
-                'name': ticker,  # Could be enhanced with more scraping
-                'asset_type': 'mutual_fund',
-                'currency': 'USD',
-                'current_price': float(last_price) if last_price else None,
-                'last_price_update': datetime.utcnow(),
-                # Additional fields for display (not stored in Asset model, filtered out before saving)
-                'change_percent': change_percent,
-                'change': change,
-                'previous_close': float(previous_price) if previous_price else None
-            }
-
-            logger.info(f"Successfully fetched mutual fund data for {ticker}: price={last_price}, prev={previous_price}, change={change_percent:.2f}%")
-            return asset_data
-
-        except Exception as e:
-            logger.error(f"Error fetching mutual fund data for {ticker}: {str(e)}")
-            return None
+        return None
 
     @staticmethod
     async def _get_crypto_info(ticker: str) -> Optional[Dict[str, Any]]:

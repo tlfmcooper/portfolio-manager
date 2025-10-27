@@ -1,6 +1,17 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "altair==5.5.0",
+#     "marimo",
+#     "numpy==2.3.4",
+#     "polars==1.34.0",
+#     "sqlalchemy==2.0.44",
+# ]
+# ///
+
 import marimo
 
-__generated_with = "0.16.5"
+__generated_with = "0.17.2"
 app = marimo.App(width="medium")
 
 
@@ -20,7 +31,7 @@ def _():
 
 
 @app.cell
-def _(engine, mo, transactions):
+def _(engine, mo):
     df = mo.sql(
         f"""
         SELECT * FROM transactions LIMIT 100
@@ -37,7 +48,7 @@ def _(df):
 
 
 @app.cell
-def _(assets, engine, mo):
+def _(engine, mo):
     asset_df = mo.sql(
         f"""
         SELECT * FROM assets
@@ -48,7 +59,7 @@ def _(assets, engine, mo):
 
 
 @app.cell
-def _(engine, holdings, mo):
+def _(engine, mo):
     _df = mo.sql(
         f"""
         UPDATE holdings 
@@ -62,7 +73,7 @@ def _(engine, holdings, mo):
 
 
 @app.cell
-def _(engine, mo, transactions):
+def _(engine, mo):
     _df = mo.sql(
         f"""
         SELECT * FROM transactions;
@@ -73,7 +84,7 @@ def _(engine, mo, transactions):
 
 
 @app.cell
-def _(engine, holdings, mo):
+def _(engine, mo):
     _df = mo.sql(
         f"""
         SELECT * FROM holdings;
@@ -84,7 +95,7 @@ def _(engine, holdings, mo):
 
 
 @app.cell
-def _(assets, engine, mo):
+def _(engine, mo):
     _df = mo.sql(
         f"""
         SELECT * FROM assets;
@@ -299,7 +310,7 @@ def _():
 
 
 @app.cell
-def _(engine, holdings, mo):
+def _(engine, mo):
     current_sol_holding = mo.sql(
         f"""
         SELECT ticker, quantity, average_cost, portfolio_id
@@ -317,13 +328,19 @@ def _():
 
 
 @app.cell
-def _(engine, mo, transactions):
+def _(engine, mo):
     _df = mo.sql(
         f"""
         SELECT * FROM transactions;
         """,
         engine=engine
     )
+    return
+
+
+@app.cell
+def _():
+    eval("sum([0.1, 0.61, 0.001, 0.2, 0.05, 0.0081, 0.0009, 0.03])")
     return
 
 

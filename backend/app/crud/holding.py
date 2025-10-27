@@ -29,6 +29,7 @@ async def get_portfolio_holdings(db: AsyncSession, portfolio_id: int) -> List[Ho
         .options(selectinload(Holding.asset))
         .where(Holding.portfolio_id == portfolio_id)
         .where(Holding.is_active == True)
+        .where(Holding.quantity > 0)
     )
     result = await db.execute(stmt)
     return result.scalars().all()

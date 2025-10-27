@@ -75,7 +75,7 @@ const SellAssetForm = ({ onAssetSold }) => {
         body: JSON.stringify({
           ticker: holding.ticker,
           quantity: sellQuantity,
-          unit_cost: parseFloat(formData.unit_cost)
+          average_cost: parseFloat(formData.unit_cost)
         })
       });
 

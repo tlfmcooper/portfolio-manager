@@ -306,16 +306,21 @@ async def sell_asset(data: AssetOnboardingRequest, db: AsyncSession = Depends(ge
         # Update holding
         holding.quantity -= data.quantity
         holding.market_value = holding.quantity * (
-            holding.current_price or data.unit_cost
+            holding.current_price or data.average_cost
         )
         holding.cost_basis = holding.quantity * holding.average_cost
+
+        # Mark holding as inactive if quantity reaches zero
+        if holding.quantity <= 0:
+            holding.is_active = False
+
         # Create transaction (sell)
         transaction = Transaction(
             portfolio_id=holding.portfolio_id,
             asset_id=holding.asset_id, # Use asset_id instead of ticker
             transaction_type="SELL",
             quantity=data.quantity,
-            price=data.unit_cost,
+            price=data.average_cost,
             transaction_date=datetime.utcnow(),
         )
         db.add(transaction)
