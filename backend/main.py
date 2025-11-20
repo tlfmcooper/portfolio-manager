@@ -47,7 +47,7 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
-    print(f"CORS origins configured: {settings.BACKEND_CORS_ORIGINS}") # Debug print
+    print(f"CORS origins configured: {settings.BACKEND_CORS_ORIGINS}")  # Debug print
 
     # Set up CORS middleware
     app.add_middleware(
@@ -82,44 +82,101 @@ async def root():
 # Admin endpoint for database upload (requires superuser authentication)
 @app.post("/admin/upload-db")
 async def upload_database(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_superuser)
+    file: UploadFile = File(...), current_user: User = Depends(get_current_superuser)
 ):
     """
     Upload portfolio.db file to replace current database.
     ⚠️ WARNING: This will overwrite the existing database!
     🔒 PROTECTED: Requires superuser authentication
-    
+
     Usage:
     1. Login to get JWT token: POST /api/v1/auth/login
     2. Upload database with Authorization header: Bearer <token>
     """
     if file.filename != "portfolio.db":
         raise HTTPException(400, "File must be named portfolio.db")
-    
+
     db_path = Path("portfolio.db")
-    
+
     # Backup existing database
     if db_path.exists():
         backup_path = Path("portfolio.db.backup")
         shutil.copy2(db_path, backup_path)
-    
+
     # Write uploaded file
     try:
         with open(db_path, "wb") as f:
             content = await file.read()
             f.write(content)
-        
+
         return {
             "message": "Database uploaded successfully",
             "size_bytes": len(content),
-            "backup_created": db_path.exists()
+            "backup_created": db_path.exists(),
         }
     except Exception as e:
         # Restore backup if upload failed
         if backup_path.exists():
             shutil.copy2(backup_path, db_path)
         raise HTTPException(500, f"Upload failed: {str(e)}")
+
+
+# Admin endpoint to warm Redis cache (requires superuser authentication)
+@app.post("/admin/warm-cache")
+async def warm_cache_endpoint(current_user: User = Depends(get_current_superuser)):
+    """
+    Warm up Redis cache with stock data from portfolio.
+    🔒 PROTECTED: Requires superuser authentication
+
+    This will fetch and cache:
+    - Stock quotes for all portfolio holdings
+    - Exchange rates
+    """
+    from app.services.finnhub_service import FinnhubService
+    from app.services.exchange_rate_service import ExchangeRateService
+    from app.core.redis_client import get_redis_client
+    from app.core.database import get_db
+    from sqlalchemy import select
+    from app.models import Holding
+
+    redis_client = await get_redis_client()
+    finnhub = FinnhubService(settings.FINNHUB_API_KEY)
+    exchange_service = ExchangeRateService(settings.EXCHANGE_RATES_API_KEY)
+
+    cached_count = 0
+    failed_count = 0
+
+    # Get unique symbols from database
+    async for session in get_db():
+        result = await session.execute(select(Holding.symbol).distinct())
+        symbols = [row[0] for row in result.all() if row[0]]
+        break
+
+    # Cache stock quotes
+    for symbol in symbols:
+        try:
+            quote = await finnhub.get_quote(symbol)
+            if quote:
+                cache_key = f"stock:quote:{symbol}"
+                await redis_client.set(
+                    cache_key, quote, ttl=settings.STOCK_DATA_CACHE_TTL
+                )
+                cached_count += 1
+        except Exception:
+            failed_count += 1
+
+    # Cache exchange rates
+    try:
+        await exchange_service.get_exchange_rates("USD")
+    except Exception:
+        pass
+
+    return {
+        "message": "Cache warming complete",
+        "symbols_cached": cached_count,
+        "symbols_failed": failed_count,
+        "total_symbols": len(symbols),
+    }
 
 
 if __name__ == "__main__":
