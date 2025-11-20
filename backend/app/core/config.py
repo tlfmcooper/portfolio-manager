@@ -3,7 +3,7 @@ Application configuration settings.
 """
 
 import os
-from typing import List
+from typing import List, Any
 from pydantic import validator
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
 
     # CORS settings
-    BACKEND_CORS_ORIGINS: str = "*"  # Will be parsed by validator
+    BACKEND_CORS_ORIGINS: Any = "*"  # Will be parsed by validator to List[str]
 
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
@@ -69,23 +69,43 @@ class Settings(BaseSettings):
     STOCK_DATA_CACHE_TTL: int = 3600  # 1 hour cache for stock data
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: str | List[str]) -> List[str]:
-        """Parse CORS origins from string or list."""
-        # Handle empty string or None - default to allow all
-        if not v or (isinstance(v, str) and v.strip() == ""):
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        """Parse CORS origins from string or list.
+        
+        Accepts:
+        - List[str]: Direct list like ['*'] or ['http://localhost:3000']
+        - str: Comma-separated like "http://localhost:3000,http://localhost:8080"
+        - str: JSON array like '["http://localhost:3000"]'
+        - str: Single value like "*" or "http://localhost:3000"
+        - None or empty string: defaults to ["*"]
+        """
+        # Handle None or empty string - default to allow all
+        if v is None or (isinstance(v, str) and v.strip() == ""):
             return ["*"]
 
-        # Handle comma-separated string
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",") if i.strip()]
-
-        # Handle list or JSON array string
+        # Handle list input (already parsed)
         if isinstance(v, list):
-            return v
+            return [str(item) for item in v]  # Convert all items to strings
 
-        # If it starts with '[', it's a JSON array - return as is (Pydantic will parse it)
-        if isinstance(v, str) and v.startswith("["):
-            return v
+        # Handle string input
+        if isinstance(v, str):
+            # Single value (most common)
+            if not v.startswith("[") and "," not in v:
+                return [v.strip()]
+            
+            # Comma-separated values
+            if "," in v and not v.startswith("["):
+                return [i.strip() for i in v.split(",") if i.strip()]
+            
+            # JSON array string - return as-is for Pydantic to parse
+            if v.startswith("["):
+                import json
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(item) for item in parsed]
+                except json.JSONDecodeError:
+                    pass
 
         raise ValueError(f"Invalid BACKEND_CORS_ORIGINS format: {v}")
 
