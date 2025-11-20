@@ -1,0 +1,11 @@
+# Railway configuration for Frontend service
+# Use this when creating the frontend service in Railway
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "frontend/Containerfile"
+watchPatterns = ["frontend/**"]
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

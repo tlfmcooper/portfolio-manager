@@ -54,4 +54,7 @@ invest_price.py
 portfolio - Copy.csv
 DEPLOYMENT_QUICKSTART.md
 IMPLEMENTATION_CHANGES.md
-RAILWAY_DEPLOYMENT.md
+
+# Environment files with secrets
+backend/.env.production
+.env.production
