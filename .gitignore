@@ -58,3 +58,4 @@ IMPLEMENTATION_CHANGES.md
 # Environment files with secrets
 backend/.env.production
 .env.production
+RAILWAY_DEPLOYMENT.md

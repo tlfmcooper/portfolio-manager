@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Any) -> List[str]:
         """Parse CORS origins from string or list.
-        
+
         Accepts:
         - List[str]: Direct list like ['*'] or ['http://localhost:3000']
         - str: Comma-separated like "http://localhost:3000,http://localhost:8080"
@@ -92,14 +92,15 @@ class Settings(BaseSettings):
             # Single value (most common)
             if not v.startswith("[") and "," not in v:
                 return [v.strip()]
-            
+
             # Comma-separated values
             if "," in v and not v.startswith("["):
                 return [i.strip() for i in v.split(",") if i.strip()]
-            
+
             # JSON array string - return as-is for Pydantic to parse
             if v.startswith("["):
                 import json
+
                 try:
                     parsed = json.loads(v)
                     if isinstance(parsed, list):

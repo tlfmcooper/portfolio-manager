@@ -12,9 +12,11 @@ New, completely rewritten authentication system with:
 """
 
 import uvicorn
+import shutil
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from app.core.config import settings
 from app.core.database import create_tables
 from app.api import api_router
@@ -73,6 +75,42 @@ async def root():
         "version": settings.VERSION,
         "docs_url": "/docs" if settings.DEBUG else None,
     }
+
+
+# Temporary admin endpoint for database upload (REMOVE AFTER USE)
+@app.post("/admin/upload-db")
+async def upload_database(file: UploadFile = File(...)):
+    """
+    Upload portfolio.db file to replace current database.
+    ⚠️ WARNING: This will overwrite the existing database!
+    🔒 TODO: Add authentication before using in production
+    """
+    if file.filename != "portfolio.db":
+        raise HTTPException(400, "File must be named portfolio.db")
+    
+    db_path = Path("portfolio.db")
+    
+    # Backup existing database
+    if db_path.exists():
+        backup_path = Path("portfolio.db.backup")
+        shutil.copy2(db_path, backup_path)
+    
+    # Write uploaded file
+    try:
+        with open(db_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+        
+        return {
+            "message": "Database uploaded successfully",
+            "size_bytes": len(content),
+            "backup_created": db_path.exists()
+        }
+    except Exception as e:
+        # Restore backup if upload failed
+        if backup_path.exists():
+            shutil.copy2(backup_path, db_path)
+        raise HTTPException(500, f"Upload failed: {str(e)}")
 
 
 if __name__ == "__main__":
