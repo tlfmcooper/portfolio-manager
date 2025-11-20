@@ -9,6 +9,27 @@ const AuthContext = createContext(null);
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
+// Retry configuration for handling deployment restarts
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+
+// Helper function to wait
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function to retry requests with exponential backoff
+const retryRequest = async (fn, retries = MAX_RETRIES, delay = RETRY_DELAY) => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0 && (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || !error.response)) {
+      console.log(`Request failed, retrying in ${delay}ms... (${retries} retries left)`);
+      await wait(delay);
+      return retryRequest(fn, retries - 1, delay * 1.5); // Exponential backoff
+    }
+    throw error;
+  }
+};
+
 // Create axios instance with interceptors
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -89,7 +110,8 @@ export const AuthProvider = ({ children }) => {
     try {
       // Use portfolio summary instead of analysis for onboarding check
       // This is simpler and doesn't require heavy computation
-      const portfolio = await portfolioService.getPortfolio();
+      // Wrap in retry logic to handle Railway cold starts
+      const portfolio = await retryRequest(() => portfolioService.getPortfolio());
       // Check if portfolio exists to determine onboarding status
       const hasPortfolio = portfolio && portfolio.id;
       setIsOnboarded(hasPortfolio);

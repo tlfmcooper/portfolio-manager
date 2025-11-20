@@ -52,3 +52,6 @@ backend/notebooks/portfolio_agent.py
 backend/notebooks/quran-simple.txt
 invest_price.py
 portfolio - Copy.csv
+DEPLOYMENT_QUICKSTART.md
+IMPLEMENTATION_CHANGES.md
+RAILWAY_DEPLOYMENT.md
