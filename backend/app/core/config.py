@@ -35,9 +35,7 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
 
     # CORS settings
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "*"
-    ]  # TEMPORARY: Allow all origins for debugging CORS
+    BACKEND_CORS_ORIGINS: str = "*"  # Will be parsed by validator
 
     # Environment
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
@@ -73,11 +71,23 @@ class Settings(BaseSettings):
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str]:
         """Parse CORS origins from string or list."""
+        # Handle empty string or None - default to allow all
+        if not v or (isinstance(v, str) and v.strip() == ""):
+            return ["*"]
+
+        # Handle comma-separated string
         if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
+            return [i.strip() for i in v.split(",") if i.strip()]
+
+        # Handle list or JSON array string
+        if isinstance(v, list):
             return v
-        raise ValueError(v)
+
+        # If it starts with '[', it's a JSON array - return as is (Pydantic will parse it)
+        if isinstance(v, str) and v.startswith("["):
+            return v
+
+        raise ValueError(f"Invalid BACKEND_CORS_ORIGINS format: {v}")
 
     class Config:
         case_sensitive = True
