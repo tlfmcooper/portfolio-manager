@@ -1,11 +1,10 @@
-# Railway configuration for Portfolio Dashboard
-# This file configures the BACKEND service only
-# You'll need to create a separate service for frontend in Railway dashboard
+# Railway configuration for Portfolio Dashboard Backend
 
 [build]
 builder = "dockerfile"
-dockerfilePath = "backend/Containerfile"
-watchPatterns = ["backend/**"]
+dockerfilePath = "Containerfile"
+dockerContext = "backend"
+watchPaths = ["backend/**"]
 
 [deploy]
 startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
