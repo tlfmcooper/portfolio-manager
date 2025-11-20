@@ -1,9 +1,16 @@
-[build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
-watchPaths = ["backend/**", "Dockerfile"]
+# Backend service configuration
+[environments.production.backend]
+build.builder = "dockerfile"
+build.dockerfilePath = "backend/Dockerfile"
+build.watchPaths = ["backend/**"]
+deploy.startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
+deploy.restartPolicyType = "on_failure"
+deploy.restartPolicyMaxRetries = 10
 
-[deploy]
-startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
+# Frontend service configuration
+[environments.production.frontend]
+build.builder = "dockerfile"
+build.dockerfilePath = "frontend/Dockerfile"
+build.watchPaths = ["frontend/**"]
+deploy.restartPolicyType = "on_failure"
+deploy.restartPolicyMaxRetries = 10
