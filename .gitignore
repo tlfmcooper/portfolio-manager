@@ -46,3 +46,9 @@ frontend/node_modules/
 backend/portfolio.db
 backend/instance/portfolio.db
 uv.lock
+backend/notebooks/assignment.jpg
+backend/notebooks/dspy_tut.py
+backend/notebooks/portfolio_agent.py
+backend/notebooks/quran-simple.txt
+invest_price.py
+portfolio - Copy.csv
