@@ -16,10 +16,12 @@ import shutil
 from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from app.core.config import settings
 from app.core.database import create_tables
 from app.api import api_router
+from app.utils.dependencies import get_current_superuser
+from app.models import User
 
 
 @asynccontextmanager
@@ -77,13 +79,20 @@ async def root():
     }
 
 
-# Temporary admin endpoint for database upload (REMOVE AFTER USE)
+# Admin endpoint for database upload (requires superuser authentication)
 @app.post("/admin/upload-db")
-async def upload_database(file: UploadFile = File(...)):
+async def upload_database(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_superuser)
+):
     """
     Upload portfolio.db file to replace current database.
     ⚠️ WARNING: This will overwrite the existing database!
-    🔒 TODO: Add authentication before using in production
+    🔒 PROTECTED: Requires superuser authentication
+    
+    Usage:
+    1. Login to get JWT token: POST /api/v1/auth/login
+    2. Upload database with Authorization header: Bearer <token>
     """
     if file.filename != "portfolio.db":
         raise HTTPException(400, "File must be named portfolio.db")
