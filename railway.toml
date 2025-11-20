@@ -11,6 +11,7 @@ deploy.restartPolicyMaxRetries = 10
 [environments.production.frontend]
 build.builder = "dockerfile"
 build.dockerfilePath = "frontend/Dockerfile"
+build.dockerContext = "frontend"
 build.watchPaths = ["frontend/**"]
 deploy.restartPolicyType = "on_failure"
 deploy.restartPolicyMaxRetries = 10
