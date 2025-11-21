@@ -1,8 +1,7 @@
 # Frontend service configuration
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
-dockerContext = "frontend"
+dockerfilePath = "frontend/Dockerfile"
 
 [deploy]
 restartPolicyType = "on_failure"
