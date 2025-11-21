@@ -2,6 +2,7 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "frontend/Dockerfile"
+dockerContext = "frontend"
 
 [deploy]
 restartPolicyType = "on_failure"
