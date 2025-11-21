@@ -215,6 +215,67 @@ async def warm_cache_endpoint(current_user: User = Depends(get_current_superuser
     }
 
 
+# Admin endpoint to create first superuser (protected by token)
+@app.post("/admin/create-first-superuser")
+async def create_first_superuser(
+    admin_token: str | None = Header(default=None, alias="x-admin-token"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create the first superuser account.
+    🔒 PROTECTED: Requires ADMIN_UPLOAD_TOKEN environment variable
+
+    This endpoint is for initial setup when no users exist yet.
+    After creating the first superuser, use normal authentication.
+    """
+    from sqlalchemy import select
+    from app.core.security import get_password_hash
+
+    # Verify admin token
+    if not settings.ADMIN_UPLOAD_TOKEN or not admin_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Admin token required. Set ADMIN_UPLOAD_TOKEN environment variable."
+        )
+
+    if not secrets.compare_digest(settings.ADMIN_UPLOAD_TOKEN, admin_token):
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+
+    # Check if user already exists
+    result = await db.execute(select(User).where(User.username == "alkhaf"))
+    user = result.scalar_one_or_none()
+
+    if user:
+        # Update existing user
+        user.hashed_password = get_password_hash("userpass")
+        user.is_active = True
+        user.is_superuser = True
+        user.email = "developer01.ali1@gmail.com"
+        await db.commit()
+        return {
+            "message": "Superuser updated successfully",
+            "username": "alkhaf",
+            "email": "developer01.ali1@gmail.com",
+        }
+    else:
+        # Create new user
+        new_user = User(
+            username="alkhaf",
+            email="developer01.ali1@gmail.com",
+            full_name="Ali Khaf",
+            hashed_password=get_password_hash("userpass"),
+            is_active=True,
+            is_superuser=True,
+        )
+        db.add(new_user)
+        await db.commit()
+        return {
+            "message": "Superuser created successfully",
+            "username": "alkhaf",
+            "email": "developer01.ali1@gmail.com",
+        }
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
