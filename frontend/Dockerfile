@@ -5,8 +5,8 @@ FROM node:20-alpine as builder
 WORKDIR /app
 
 # Install dependencies first to leverage Docker cache
-COPY package.json ./package.json
-COPY package-lock.json ./package-lock.json
+COPY frontend/package.json ./package.json
+COPY frontend/package-lock.json ./package-lock.json
 
 # Install dependencies
 RUN npm install -g npm@latest && \
@@ -14,7 +14,7 @@ RUN npm install -g npm@latest && \
     npm install
 
 # Copy source code
-COPY . .
+COPY frontend/. .
 
 # Accept build argument for API URL
 ARG VITE_API_URL
