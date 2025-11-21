@@ -247,7 +247,7 @@ async def create_first_superuser(
 
     if user:
         # Update existing user
-        user.hashed_password = get_password_hash("userpass")
+        user.hashed_password = get_password_hash("Password123")
         user.is_active = True
         user.is_superuser = True
         user.email = "developer01.ali1@gmail.com"
@@ -256,6 +256,7 @@ async def create_first_superuser(
             "message": "Superuser updated successfully",
             "username": "alkhaf",
             "email": "developer01.ali1@gmail.com",
+            "password": "Password123",
         }
     else:
         # Create new user
@@ -263,7 +264,7 @@ async def create_first_superuser(
             username="alkhaf",
             email="developer01.ali1@gmail.com",
             full_name="Ali Khaf",
-            hashed_password=get_password_hash("userpass"),
+            hashed_password=get_password_hash("Password123"),
             is_active=True,
             is_superuser=True,
         )
@@ -273,6 +274,7 @@ async def create_first_superuser(
             "message": "Superuser created successfully",
             "username": "alkhaf",
             "email": "developer01.ali1@gmail.com",
+            "password": "Password123",
         }
 
 
