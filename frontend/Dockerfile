@@ -5,7 +5,8 @@ FROM node:20-alpine as builder
 WORKDIR /app
 
 # Install dependencies first to leverage Docker cache
-COPY package*.json ./
+COPY package.json ./package.json
+COPY package-lock.json ./package-lock.json
 
 # Install dependencies
 RUN npm install -g npm@latest && \
