@@ -19,7 +19,7 @@ ADMIN_UPLOAD_TOKEN = os.getenv("ADMIN_UPLOAD_TOKEN")
 
 def login(username: str, password: str) -> str:
     """Login and get JWT token."""
-    print(f"🔐 Logging in as: {username}")
+    print(f"Logging in as: {username}")
 
     response = requests.post(
         f"{BACKEND_URL}/api/v1/auth/login",
@@ -29,10 +29,10 @@ def login(username: str, password: str) -> str:
 
     if response.status_code == 200:
         data = response.json()
-        print("✅ Login successful!")
+        print("Login successful!")
         return data["access_token"]
     else:
-        print(f"❌ Login failed: {response.status_code}")
+        print(f"Login failed: {response.status_code}")
         print(response.text)
         return None
 
@@ -42,11 +42,11 @@ def upload_database(token: str | None, admin_token: str | None = None):
     db_path = Path(__file__).parent / "portfolio.db"
 
     if not db_path.exists():
-        print(f"❌ Database not found at: {db_path}")
+        print(f"Database not found at: {db_path}")
         return
 
-    print(f"\n📤 Uploading database from: {db_path}")
-    print(f"📍 Target: {BACKEND_URL}/admin/upload-db")
+    print(f"\nUploading database from: {db_path}")
+    print(f"Target: {BACKEND_URL}/admin/upload-db")
 
     with open(db_path, "rb") as f:
         files = {"file": ("portfolio.db", f, "application/octet-stream")}
@@ -58,7 +58,7 @@ def upload_database(token: str | None, admin_token: str | None = None):
 
         if not headers:
             print(
-                "❌ Missing authentication headers - provide credentials or ADMIN_UPLOAD_TOKEN"
+                "Missing authentication headers - provide credentials or ADMIN_UPLOAD_TOKEN"
             )
             return
 
@@ -71,29 +71,29 @@ def upload_database(token: str | None, admin_token: str | None = None):
             )
 
             if response.status_code == 200:
-                print("✅ Database uploaded successfully!")
+                print("Database uploaded successfully!")
                 print(response.json())
             elif response.status_code == 401:
-                print("❌ Authentication failed - check your credentials")
+                print("Authentication failed - check your credentials")
                 print(response.text)
             elif response.status_code == 403:
-                print("❌ Permission denied - user must be a superuser")
+                print("Permission denied - user must be a superuser")
                 print(response.text)
             else:
-                print(f"❌ Upload failed: {response.status_code}")
+                print(f"Upload failed: {response.status_code}")
                 print(response.text)
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
 
 
 if __name__ == "__main__":
-    print("🚀 Portfolio Database Uploader")
+    print("Portfolio Database Uploader")
     print("=" * 50)
 
     token = None
 
     if ADMIN_UPLOAD_TOKEN:
-        print("🔑 Using ADMIN_UPLOAD_TOKEN for authentication")
+        print("Using ADMIN_UPLOAD_TOKEN for authentication")
     else:
         # Get credentials
         username = input("Username: ")
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         token = login(username, password)
 
         if not token:
-            print("\n❌ Upload cancelled - authentication required")
+            print("\nUpload cancelled - authentication required")
             raise SystemExit(1)
 
     # Upload database

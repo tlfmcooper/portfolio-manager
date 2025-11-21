@@ -25,7 +25,13 @@
       "Bash(find:*)",
       "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/efficient-frontier?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
       "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/monte-carlo?currency=CAD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
-      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/cppi?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")"
+      "Bash(curl -s \"http://127.0.0.1:8000/api/v1/analysis/portfolios/1/cppi?currency=USD\" -H \"Authorization: Bearer YOUR_TOKEN\")",
+      "Bash(set PYTHONIOENCODING=utf-8:*)",
+      "Bash(set:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(timeout 120 cmd /c \"echo Waiting for deployment... && timeout 120 >nul && curl -X POST \"\"https://protective-playfulness-production.up.railway.app/admin/create-first-superuser\"\" -H \"\"x-admin-token: buIcqSTMTb4VSaZiSN2BnxKvHNX9LGgwvtErXvSSu2z4GB-yfFrcBu4MlX5DTt6R\"\" -w \"\"\\nStatus: %%{http_code}\\n\"\"\")"
     ],
     "deny": [],
     "ask": []
