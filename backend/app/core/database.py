@@ -4,6 +4,7 @@ Database configuration and session management.
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from typing import AsyncGenerator
+from pathlib import Path
 
 from app.core.config import settings
 
@@ -11,6 +12,16 @@ from app.core.config import settings
 class Base(DeclarativeBase):
     """Base class for all database models."""
     pass
+
+
+# Ensure data directory exists for SQLite
+if settings.DATABASE_URL.startswith("sqlite"):
+    # Extract database path from URL
+    db_path = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+    db_file = Path(db_path)
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    print(f"📁 Database directory: {db_file.parent.absolute()}")
+    print(f"💾 Database file: {db_file.absolute()}")
 
 
 # Create async engine

@@ -131,12 +131,18 @@ async def upload_database(
         if not user.is_superuser:
             raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    db_path = Path("portfolio.db")
+    # Get database path from settings
+    db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+    db_path = Path(db_url)
+
+    # Ensure directory exists
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
     backup_path = None
 
     # Backup existing database
     if db_path.exists():
-        backup_path = Path("portfolio.db.backup")
+        backup_path = db_path.parent / f"{db_path.name}.backup"
         shutil.copy2(db_path, backup_path)
 
     # Write uploaded file
@@ -149,6 +155,7 @@ async def upload_database(
             "message": "Database uploaded successfully",
             "size_bytes": len(content),
             "backup_created": backup_path is not None,
+            "database_path": str(db_path),
         }
     except Exception as e:
         # Restore backup if upload failed
