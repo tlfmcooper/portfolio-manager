@@ -13,14 +13,19 @@ New, completely rewritten authentication system with:
 
 import uvicorn
 import shutil
+import secrets
 from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Header
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
-from app.core.database import create_tables
+from app.core.database import create_tables, get_db
 from app.api import api_router
 from app.utils.dependencies import get_current_superuser
+from app.core.security import verify_token
+from app.crud import get_user_by_username
 from app.models import User
 
 
@@ -82,7 +87,10 @@ async def root():
 # Admin endpoint for database upload (requires superuser authentication)
 @app.post("/admin/upload-db")
 async def upload_database(
-    file: UploadFile = File(...), current_user: User = Depends(get_current_superuser)
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    admin_token: str | None = Header(default=None, alias="x-admin-token"),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Upload portfolio.db file to replace current database.
@@ -96,7 +104,35 @@ async def upload_database(
     if file.filename != "portfolio.db":
         raise HTTPException(400, "File must be named portfolio.db")
 
+    authorized = False
+    if settings.ADMIN_UPLOAD_TOKEN and admin_token:
+        if secrets.compare_digest(settings.ADMIN_UPLOAD_TOKEN, admin_token):
+            authorized = True
+
+    if not authorized:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+        payload = verify_token(token, "access")
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        user = await get_user_by_username(db, username)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=401, detail="Could not validate credentials"
+            )
+
+        if not user.is_superuser:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+
     db_path = Path("portfolio.db")
+    backup_path = None
 
     # Backup existing database
     if db_path.exists():
@@ -112,11 +148,11 @@ async def upload_database(
         return {
             "message": "Database uploaded successfully",
             "size_bytes": len(content),
-            "backup_created": db_path.exists(),
+            "backup_created": backup_path is not None,
         }
     except Exception as e:
         # Restore backup if upload failed
-        if backup_path.exists():
+        if backup_path and backup_path.exists():
             shutil.copy2(backup_path, db_path)
         raise HTTPException(500, f"Upload failed: {str(e)}")
 

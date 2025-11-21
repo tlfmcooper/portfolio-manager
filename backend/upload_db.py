@@ -4,14 +4,17 @@ Run this script locally after adding persistent volume to Railway.
 Requires superuser authentication.
 """
 
+import os
 import requests
 import getpass
 from pathlib import Path
 
-# Your Railway backend URL
-BACKEND_URL = "https://pm.alikone.dev"  # Your custom domain
-# Alternative: Use Railway's generated domain if custom domain not set up yet
-# BACKEND_URL = "https://[your-service].up.railway.app"
+# Your Railway backend URL (use env var if set so we always hit the API service)
+BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://protective-playfulness-production.up.railway.app",
+)
+ADMIN_UPLOAD_TOKEN = os.getenv("ADMIN_UPLOAD_TOKEN")
 
 
 def login(username: str, password: str) -> str:
@@ -34,7 +37,7 @@ def login(username: str, password: str) -> str:
         return None
 
 
-def upload_database(token: str):
+def upload_database(token: str | None, admin_token: str | None = None):
     """Upload local database to production."""
     db_path = Path(__file__).parent / "portfolio.db"
 
@@ -47,7 +50,17 @@ def upload_database(token: str):
 
     with open(db_path, "rb") as f:
         files = {"file": ("portfolio.db", f, "application/octet-stream")}
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if admin_token:
+            headers["x-admin-token"] = admin_token
+
+        if not headers:
+            print(
+                "❌ Missing authentication headers - provide credentials or ADMIN_UPLOAD_TOKEN"
+            )
+            return
 
         try:
             response = requests.post(
@@ -77,15 +90,21 @@ if __name__ == "__main__":
     print("🚀 Portfolio Database Uploader")
     print("=" * 50)
 
-    # Get credentials
-    username = input("Username: ")
-    password = getpass.getpass("Password: ")
+    token = None
 
-    # Login
-    token = login(username, password)
-
-    if token:
-        # Upload database
-        upload_database(token)
+    if ADMIN_UPLOAD_TOKEN:
+        print("🔑 Using ADMIN_UPLOAD_TOKEN for authentication")
     else:
-        print("\n❌ Upload cancelled - authentication required")
+        # Get credentials
+        username = input("Username: ")
+        password = getpass.getpass("Password: ")
+
+        # Login
+        token = login(username, password)
+
+        if not token:
+            print("\n❌ Upload cancelled - authentication required")
+            raise SystemExit(1)
+
+    # Upload database
+    upload_database(token, ADMIN_UPLOAD_TOKEN)

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     WS_HEARTBEAT_INTERVAL: int = 30  # seconds
     STOCK_DATA_CACHE_TTL: int = 3600  # 1 hour cache for stock data
 
+    # Admin operations
+    ADMIN_UPLOAD_TOKEN: str = os.getenv("ADMIN_UPLOAD_TOKEN", "")
+
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Any) -> List[str]:
         """Parse CORS origins from string or list.
