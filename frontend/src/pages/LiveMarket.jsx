@@ -437,13 +437,13 @@ const LiveMarket = () => {
 
       {/* Stock Charts Grid */}
       {supportedHoldings.length > 0 && (
-        <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="rounded-lg p-4 sm:p-6" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
           <h3 className="text-xl font-semibold mb-4" style={{ color: 'var(--color-text)' }}>
             Live Stock Charts
           </h3>
           
           {/* Stock Selector Tabs */}
-          <div className="overflow-x-auto scrollbar-hide mb-6 -mx-6 px-6">
+          <div className="overflow-x-auto scrollbar-hide mb-6 -mx-4 px-4 sm:-mx-6 sm:px-6">
             <div className="flex gap-2 min-w-max">
               {supportedHoldings.map((holding) => {
                 const dayChangePercent = getDayChangePercent(holding.ticker);
@@ -473,7 +473,7 @@ const LiveMarket = () => {
           {/* Selected Stock Chart */}
           {selectedStock && chartData[selectedStock] && chartData[selectedStock].length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
                 <div>
                   <h4 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
                     {holdings.find(h => h.ticker === selectedStock)?.asset?.name || selectedStock}
@@ -482,7 +482,7 @@ const LiveMarket = () => {
                     {selectedStock}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right">
                   <p className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
                     {formatCurrency(chartData[selectedStock][chartData[selectedStock].length - 1].price)}
                   </p>
@@ -492,45 +492,50 @@ const LiveMarket = () => {
                 </div>
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={chartData[selectedStock]}>
-                  <defs>
-                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                  <XAxis 
-                    dataKey="time" 
-                    stroke="var(--color-text-secondary)"
-                    style={{ fontSize: '12px' }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis 
-                    stroke="var(--color-text-secondary)"
-                    style={{ fontSize: '12px' }}
-                    domain={['auto', 'auto']}
-                    tickFormatter={(value) => `$${value.toFixed(2)}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--color-surface)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: '8px',
-                      color: 'var(--color-text)'
-                    }}
-                    formatter={(value) => [formatCurrency(value), 'Price']}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="price" 
-                    stroke="var(--color-primary)" 
-                    strokeWidth={2}
-                    fill="url(#colorPrice)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-[250px] sm:h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData[selectedStock]}>
+                    <defs>
+                      <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                    <XAxis 
+                      dataKey="time" 
+                      stroke="var(--color-text-secondary)"
+                      style={{ fontSize: '10px' }}
+                      interval="preserveStartEnd"
+                      tick={{ fontSize: 10 }}
+                    />
+                    <YAxis 
+                      stroke="var(--color-text-secondary)"
+                      style={{ fontSize: '10px' }}
+                      domain={['auto', 'auto']}
+                      tickFormatter={(value) => `$${value.toFixed(2)}`}
+                      tick={{ fontSize: 10 }}
+                      width={50}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--color-surface)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                        color: 'var(--color-text)'
+                      }}
+                      formatter={(value) => [formatCurrency(value), 'Price']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="price" 
+                      stroke="var(--color-primary)" 
+                      strokeWidth={2}
+                      fill="url(#colorPrice)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
               
               <p className="text-xs text-center mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                 {wsConnected ? 'Chart shows historical + live WebSocket updates' : 'Chart shows real-time price updates'}
@@ -540,15 +545,15 @@ const LiveMarket = () => {
         </div>
       )}
 
-      {/* Holdings Table */}
+      {/* Holdings Section */}
       <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
         <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h3 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
               Detailed Holdings
             </h3>
             {/* Search bar */}
-            <div className="relative w-80">
+            <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-secondary)' }} />
               <input
                 type="text"
@@ -566,8 +571,10 @@ const LiveMarket = () => {
             </div>
           </div>
         </div>
-        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <table className="min-w-full divide-y" style={{ borderColor: 'var(--color-border)', minWidth: '640px' }}>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="min-w-full divide-y" style={{ borderColor: 'var(--color-border)' }}>
             <thead style={{ backgroundColor: 'var(--color-secondary)' }}>
               <tr>
                 <th
@@ -726,6 +733,90 @@ const LiveMarket = () => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden">
+          <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+            {sortedHoldings.map((holding) => {
+              const unrealizedGainLoss = calculateUnrealizedGainLoss(holding);
+              const unrealizedGainLossPercentage = calculateUnrealizedGainLossPercentage(holding);
+              const dayChange = holding.change_percent || 0;
+              
+              return (
+                <div key={holding.id} className="p-4 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-bold text-base" style={{ color: 'var(--color-text)' }}>
+                        {holding.ticker}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                        {holding.asset?.name || holding.ticker}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold" style={{ color: 'var(--color-text)' }}>
+                        {formatCurrency(holding.current_price)}
+                      </div>
+                      {UNSUPPORTED_TICKERS.includes(holding.ticker) && (
+                        <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                          No live data
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--color-text-secondary)' }}>Qty:</span>
+                      <span style={{ color: 'var(--color-text)' }}>{holding.quantity.toFixed(4)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--color-text-secondary)' }}>Value:</span>
+                      <span style={{ color: 'var(--color-text)' }}>{formatCurrency(holding.market_value)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--color-text-secondary)' }}>Day:</span>
+                      <span className={getColorClass(dayChange)}>{formatPercentage(dayChange)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--color-text-secondary)' }}>Gain/Loss:</span>
+                      <span className={getColorClass(unrealizedGainLoss)}>{formatCurrency(unrealizedGainLoss)}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t flex justify-between items-center" style={{ borderColor: 'var(--color-border)' }}>
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Total Return</span>
+                    <span className={`font-bold ${getColorClass(unrealizedGainLoss)}`}>
+                      {formatPercentage(unrealizedGainLossPercentage)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {/* Mobile Total Card */}
+            <div className="p-4" style={{ backgroundColor: 'var(--color-secondary)' }}>
+              <div className="font-bold mb-3" style={{ color: 'var(--color-text)' }}>Portfolio Total</div>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Value:</span>
+                  <span style={{ color: 'var(--color-text)' }}>{formatCurrency(holdings.reduce((sum, h) => sum + h.market_value, 0))}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Day:</span>
+                  <span className={getColorClass(portfolioDailyReturn)}>{formatPercentage(portfolioDailyReturn)}</span>
+                </div>
+                <div className="flex justify-between col-span-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Total Gain/Loss:</span>
+                  <div className="text-right">
+                    <div className={getColorClass(totalGainLoss)}>{formatCurrency(totalGainLoss)}</div>
+                    <div className={`text-xs ${getColorClass(totalGainLoss)}`}>{formatPercentage(totalGainLossPercentage)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
