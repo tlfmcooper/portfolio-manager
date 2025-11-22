@@ -195,7 +195,7 @@ const EfficientFrontierSection = () => {
           <div className="h-[500px] md:h-96">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart
-                margin={{ top: 60, right: 30, bottom: 60, left: 60 }}
+                margin={{ top: 80, right: 30, bottom: 60, left: 60 }}
                 data={allData}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -253,6 +253,7 @@ const EfficientFrontierSection = () => {
                 
                 <Legend 
                   verticalAlign="top"
+                  wrapperStyle={{ paddingTop: '10px', paddingLeft: '10px' }}
                   formatter={(value, entry) => (
                     <span style={{ color: entry.color }}>
                       {value}
