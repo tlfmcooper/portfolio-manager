@@ -452,12 +452,12 @@ const LiveMarket = () => {
                     key={holding.ticker}
                     onClick={() => setSelectedStock(holding.ticker)}
                     className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap"
-                  style={{
-                    backgroundColor: selectedStock === holding.ticker ? 'var(--color-primary)' : 'var(--color-secondary)',
-                    color: selectedStock === holding.ticker ? 'var(--color-btn-primary-text)' : 'var(--color-text)',
-                    border: '1px solid var(--color-border)'
-                  }}
-                >
+                    style={{
+                      backgroundColor: selectedStock === holding.ticker ? 'var(--color-primary)' : 'var(--color-secondary)',
+                      color: selectedStock === holding.ticker ? 'var(--color-btn-primary-text)' : 'var(--color-text)',
+                      border: '1px solid var(--color-border)'
+                    }}
+                  >
                   <div className="flex items-center space-x-2">
                     <span>{holding.ticker}</span>
                     <span className={getColorClass(dayChangePercent)}>
@@ -467,6 +467,7 @@ const LiveMarket = () => {
                 </button>
               );
             })}
+            </div>
           </div>
 
           {/* Selected Stock Chart */}
