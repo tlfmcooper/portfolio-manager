@@ -63,49 +63,6 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor to handle token refresh
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const original = error.config;
-    
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true;
-      
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken
-          });
-          
-          const { access_token, refresh_token: newRefreshToken } = response.data;
-          localStorage.setItem('access_token', access_token);
-          localStorage.setItem('refresh_token', newRefreshToken);
-          
-          original.headers.Authorization = `Bearer ${access_token}`;
-          return api(original);
-        } catch (refreshError) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
-        }
-      }
-    }
-    
-    return Promise.reject(error);
-  }
-);
-
-// Loading component for authentication
-const LoadingSpinner = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
     <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
   </div>
 );
@@ -140,27 +97,6 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error('AuthContext: Error checking onboarding status:', err);
-      console.error('AuthContext: Error details:', err.response?.data || err.message);
-      // If portfolio endpoint fails, user likely needs to onboard
-      setIsOnboarded(false);
-    }
-  };
-
-  // Check if user is logged in on initial load
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      validateToken();
-    } else {
-      setLoading(false);
-      setIsOnboarded(false); // No token, so not onboarded
-    }
-  }, []);
-
-  const validateToken = async () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setLoading(false);
       return;
     }
 

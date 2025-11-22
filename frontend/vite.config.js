@@ -24,26 +24,6 @@ export default defineConfig(({ mode }) => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,jpg,jpeg}'],
           runtimeCaching: [
             {
-              // Cache API responses with NetworkFirst strategy
-              urlPattern: ({ url }) => {
-                return url.pathname.startsWith('/api/') ||
-                       url.hostname.includes('railway.app') ||
-                       url.hostname.includes('alikone.dev');
-              },
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'api-cache',
-                expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24, // 24 hours
-                },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-                networkTimeoutSeconds: 10,
-              },
-            },
-            {
               // Cache images with CacheFirst strategy
               urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
               handler: 'CacheFirst',
