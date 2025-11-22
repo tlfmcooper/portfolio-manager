@@ -443,30 +443,28 @@ const LiveMarket = () => {
           </h3>
           
           {/* Stock Selector Tabs */}
-          <div className="overflow-x-auto scrollbar-hide mb-6 -mx-4 px-4 sm:-mx-6 sm:px-6">
-            <div className="flex gap-2 min-w-max">
+          <div className="mb-6">
+            <div className="grid grid-cols-3 gap-2">
               {supportedHoldings.map((holding) => {
                 const dayChangePercent = getDayChangePercent(holding.ticker);
                 return (
                   <button
                     key={holding.ticker}
                     onClick={() => setSelectedStock(holding.ticker)}
-                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap"
+                    className="px-2 py-2 rounded-lg text-xs font-medium transition-all flex flex-col items-center justify-center text-center"
                     style={{
                       backgroundColor: selectedStock === holding.ticker ? 'var(--color-primary)' : 'var(--color-secondary)',
                       color: selectedStock === holding.ticker ? 'var(--color-btn-primary-text)' : 'var(--color-text)',
                       border: '1px solid var(--color-border)'
                     }}
                   >
-                  <div className="flex items-center space-x-2">
-                    <span>{holding.ticker}</span>
+                    <span className="font-bold mb-1">{holding.ticker}</span>
                     <span className={getColorClass(dayChangePercent)}>
                       {formatPercentage(dayChangePercent)}
                     </span>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
