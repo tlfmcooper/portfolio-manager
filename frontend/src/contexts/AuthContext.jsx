@@ -63,6 +63,11 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
+  }
+);
+
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
     <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
   </div>
 );
@@ -76,6 +81,48 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   const portfolioService = new PortfolioService(api); // Initialize portfolio service
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // CRITICAL FIX: Fetch both user data and portfolio info in parallel
+        const [userResponse, portfolioResponse] = await Promise.allSettled([
+          api.get('/users/me'),
+          api.get('/portfolios')
+        ]);
+
+        if (userResponse.status === 'fulfilled') {
+          const userData = userResponse.value.data;
+          setUser(userData);
+        }
+
+        if (portfolioResponse.status === 'fulfilled') {
+          const portfolioData = portfolioResponse.value.data;
+          setPortfolioId(portfolioData.id); // Store portfolio ID
+        }
+
+        setError(null);
+        await checkOnboardingStatus(userResponse.value?.data); // Check onboarding status after setting user
+      } catch (err) {
+        console.error('Token validation failed:', err);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        setUser(null);
+        setPortfolioId(null);
+        setIsOnboarded(false); // Not onboarded if token validation fails
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+  }, []);
 
   // Function to check onboarding status
   const checkOnboardingStatus = async (currentUser) => {
@@ -97,37 +144,6 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error('AuthContext: Error checking onboarding status:', err);
-      return;
-    }
-
-    try {
-      // CRITICAL FIX: Fetch both user data and portfolio info in parallel
-      const [userResponse, portfolioResponse] = await Promise.allSettled([
-        api.get('/users/me'),
-        api.get('/portfolios')
-      ]);
-
-      if (userResponse.status === 'fulfilled') {
-        const userData = userResponse.value.data;
-        setUser(userData);
-      }
-
-      if (portfolioResponse.status === 'fulfilled') {
-        const portfolioData = portfolioResponse.value.data;
-        setPortfolioId(portfolioData.id); // Store portfolio ID
-      }
-
-      setError(null);
-      await checkOnboardingStatus(userResponse.value?.data); // Check onboarding status after setting user
-    } catch (err) {
-      console.error('Token validation failed:', err);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setUser(null);
-      setPortfolioId(null);
-      setIsOnboarded(false); // Not onboarded if token validation fails
-    } finally {
-      setLoading(false);
     }
   };
 
