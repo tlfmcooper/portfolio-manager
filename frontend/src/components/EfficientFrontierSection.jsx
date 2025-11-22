@@ -192,10 +192,10 @@ const EfficientFrontierSection = () => {
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
             Risk-Return Optimization
           </h3>
-          <div className="h-96">
+          <div className="h-[500px] md:h-96">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart
-                margin={{ top: 20, right: 30, bottom: 60, left: 60 }}
+                margin={{ top: 60, right: 30, bottom: 60, left: 60 }}
                 data={allData}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
@@ -252,8 +252,7 @@ const EfficientFrontierSection = () => {
                 ))}
                 
                 <Legend 
-                  verticalAlign="top" 
-                  height={36}
+                  verticalAlign="top"
                   formatter={(value, entry) => (
                     <span style={{ color: entry.color }}>
                       {value}
