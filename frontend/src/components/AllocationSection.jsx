@@ -239,8 +239,8 @@ const AllocationSection = () => {
               cx="50%"
               cy="50%"
               labelLine={false}
-              outerRadius={120}
-              innerRadius={60}
+              outerRadius={window.innerWidth < 640 ? 80 : 120}
+              innerRadius={window.innerWidth < 640 ? 40 : 60}
               fill="#8884d8"
               dataKey="value"
               animationDuration={800}

@@ -443,14 +443,15 @@ const LiveMarket = () => {
           </h3>
           
           {/* Stock Selector Tabs */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            {supportedHoldings.map((holding) => {
-              const dayChangePercent = getDayChangePercent(holding.ticker);
-              return (
-                <button
-                  key={holding.ticker}
-                  onClick={() => setSelectedStock(holding.ticker)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
+          <div className="overflow-x-auto scrollbar-hide mb-6 -mx-6 px-6">
+            <div className="flex gap-2 min-w-max">
+              {supportedHoldings.map((holding) => {
+                const dayChangePercent = getDayChangePercent(holding.ticker);
+                return (
+                  <button
+                    key={holding.ticker}
+                    onClick={() => setSelectedStock(holding.ticker)}
+                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap"
                   style={{
                     backgroundColor: selectedStock === holding.ticker ? 'var(--color-primary)' : 'var(--color-secondary)',
                     color: selectedStock === holding.ticker ? 'var(--color-btn-primary-text)' : 'var(--color-text)',
@@ -564,8 +565,8 @@ const LiveMarket = () => {
             </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <table className="min-w-full divide-y" style={{ borderColor: 'var(--color-border)', minWidth: '640px' }}>
             <thead style={{ backgroundColor: 'var(--color-secondary)' }}>
               <tr>
                 <th

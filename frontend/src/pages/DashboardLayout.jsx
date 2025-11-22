@@ -181,26 +181,28 @@ const DashboardLayout = () => {
                 </button>
               )}
 
-              <div className="flex flex-col justify-center"> 
-                <h1 className="font-bold leading-tight" style={{ color: 'var(--color-text)', fontSize: 'var(--font-size-xl)', margin: 0 }}>Strategic Multi-Asset Portfolio</h1>
+              <div className="flex flex-col justify-center flex-1 min-w-0"> 
+                <h1 className="font-bold leading-tight truncate" style={{ color: 'var(--color-text)', fontSize: 'clamp(1.125rem, 2vw, 1.5rem)', margin: 0 }}>Strategic Multi-Asset Portfolio</h1>
                 {user && (
-                  <p className="text-sm leading-tight mt-1" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
-                    Welcome back, {user.display_name || user.username} • Last Updated: {new Date().toLocaleDateString()}
+                  <p className="text-xs sm:text-sm leading-tight mt-1 truncate" style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
+                    Welcome back, {user.display_name || user.username} • {new Date().toLocaleDateString()}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3">
               {/* Currency Switcher */}
-              <CurrencySwitcher />
+              <div className="hidden sm:block">
+                <CurrencySwitcher />
+              </div>
 
               {/* Theme Toggle - New dark mode system */}
               <ThemeToggle />
 
               <button
                 onClick={logout}
-                className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors"
                 style={{
                   backgroundColor: 'var(--color-error)',
                   color: 'var(--color-white)'
@@ -216,18 +218,18 @@ const DashboardLayout = () => {
         {!location.pathname.includes('update-portfolio') && !location.pathname.includes('live-market') && (
           <nav className="sticky top-16 z-20 dashboard-nav" style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="nav-tabs">
+              <div className="nav-tabs overflow-x-auto scrollbar-hide">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => handleTabClick(tab.id)}
-                      className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+                      className={`nav-tab ${activeTab === tab.id ? 'active' : ''} whitespace-nowrap`}
                     >
                       <div className="flex items-center">
-                        <Icon className="h-5 w-5 mr-2" />
-                        {tab.label}
+                        <Icon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
+                        <span className="text-sm sm:text-base">{tab.label}</span>
                       </div>
                     </button>
                   );

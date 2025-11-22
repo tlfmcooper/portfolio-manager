@@ -934,3 +934,26 @@ html {
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Scrollbar utilities for mobile */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-tabs::-webkit-scrollbar {
+  height: 2px;
+}
+
+.nav-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-tabs::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
