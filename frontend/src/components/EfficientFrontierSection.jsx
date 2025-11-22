@@ -53,13 +53,29 @@ const EfficientFrontierSection = () => {
   }))
 
   // Special portfolios data
-  const specialData = Object.entries(specialPortfolios).map(([key, portfolio]) => ({
-    risk: (portfolio.risk * 100) || 0,
-    return: (portfolio.return * 100) || 0,
-    name: portfolio.name,
-    type: key,
-    size: 200
-  }))
+  // Special portfolios data
+  const SPECIAL_PORTFOLIO_ORDER = ['current', 'msr', 'gmv']
+  
+  const specialData = Object.entries(specialPortfolios)
+    .sort(([keyA], [keyB]) => {
+      const indexA = SPECIAL_PORTFOLIO_ORDER.indexOf(keyA)
+      const indexB = SPECIAL_PORTFOLIO_ORDER.indexOf(keyB)
+      // If both are in the list, sort by index
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB
+      // If only A is in the list, it comes first
+      if (indexA !== -1) return -1
+      // If only B is in the list, it comes first
+      if (indexB !== -1) return 1
+      // If neither, keep original order (or sort alphabetically if preferred)
+      return 0
+    })
+    .map(([key, portfolio]) => ({
+      risk: (portfolio.risk * 100) || 0,
+      return: (portfolio.return * 100) || 0,
+      name: portfolio.name,
+      type: key,
+      size: 200
+    }))
 
   // Combine all data for the chart
   const allData = [
@@ -231,6 +247,7 @@ const EfficientFrontierSection = () => {
                     fill={getPortfolioColor(portfolio.type)}
                     name={portfolio.name}
                     shape={getPortfolioShape(portfolio.type)}
+                    legendType={getPortfolioShape(portfolio.type)}
                   />
                 ))}
                 
