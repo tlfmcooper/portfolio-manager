@@ -1,9 +1,9 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, PieChart, BarChart3, Activity, RefreshCw, LogOut, User, Sun, Moon, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, PieChart, BarChart3, Activity, RefreshCw, LogOut, User, X, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, darkMode, toggleDarkMode }) => {
+const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, darkMode }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -73,14 +73,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
               </div>
               <div className="ml-auto flex items-center space-x-2">
                 <button
-                  onClick={toggleDarkMode}
-                  className="p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  title="Toggle Dark Mode"
-                >
-                  {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                </button>
-                <button
                   onClick={handleLogout}
                   className="p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200"
                   style={{ color: 'var(--color-text-secondary)' }}
@@ -142,14 +134,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
                 <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text-secondary)' }}>{user?.email || ''}</p>
               </div>
               <div className="ml-auto flex items-center space-x-2">
-                <button
-                  onClick={toggleDarkMode}
-                  className="p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  title="Toggle Dark Mode"
-                >
-                  {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                </button>
                 <button
                   onClick={handleLogout}
                   className="p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200"

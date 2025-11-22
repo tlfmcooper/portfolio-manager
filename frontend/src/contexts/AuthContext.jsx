@@ -7,7 +7,26 @@ import PortfolioService from '../services/portfolioService'; // Import Portfolio
 
 const AuthContext = createContext(null);
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+// Dynamically determine API URL based on current hostname
+const getApiBaseUrl = () => {
+  // Use environment variable if set
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // For local development, use current hostname instead of localhost
+  const hostname = window.location.hostname;
+  const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  if (isLocalDev) {
+    return 'http://127.0.0.1:8000/api/v1';
+  }
+  
+  // For mobile/network access, use current hostname with backend port
+  return `http://${hostname}:8000/api/v1`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Retry configuration for handling deployment restarts
 const MAX_RETRIES = 3;

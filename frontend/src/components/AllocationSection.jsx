@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { TrendingUp, DollarSign, Percent, PieChart as PieChartIcon } from 'lucide-react';
+import ResponsiveChartContainer from './ResponsiveChartContainer';
 
 const AllocationSection = () => {
   const [data, setData] = useState(null);
@@ -217,10 +218,10 @@ const AllocationSection = () => {
       </div>
 
       {/* Pie Chart - Improved Design */}
-      <div 
-        className="rounded-xl p-6 border" 
-        style={{ 
-          backgroundColor: 'var(--color-surface)', 
+      <div
+        className="rounded-xl p-6 border"
+        style={{
+          backgroundColor: 'var(--color-surface)',
           borderColor: 'var(--color-border)'
         }}
       >
@@ -230,30 +231,28 @@ const AllocationSection = () => {
             Sector Allocation
           </h3>
         </div>
-        
-        <div style={{ height: '400px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                outerRadius={120}
-                innerRadius={60}
-                fill="#8884d8"
-                dataKey="value"
-                animationDuration={800}
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend content={renderCustomLegend} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+
+        <ResponsiveChartContainer height={400} mobileHeight={320}>
+          <PieChart>
+            <Pie
+              data={pieData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              outerRadius={120}
+              innerRadius={60}
+              fill="#8884d8"
+              dataKey="value"
+              animationDuration={800}
+            >
+              {pieData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            <Legend content={renderCustomLegend} />
+          </PieChart>
+        </ResponsiveChartContainer>
       </div>
 
       {/* Sector Breakdown Table - Modern Design */}

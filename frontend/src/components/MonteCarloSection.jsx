@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
+import ResponsiveChartContainer from './ResponsiveChartContainer'
 
 const MonteCarloSection = () => {
   const [data, setData] = useState(null)
@@ -185,83 +186,81 @@ const MonteCarloSection = () => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Simulation Paths (Sample Scenarios)
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={pathData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="day" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                    label={{ value: 'Portfolio Value ($K)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  
-                  {/* Individual paths with transparency */}
-                  <Line 
-                    type="monotone" 
-                    dataKey="path_1" 
-                    stroke="#F59E0B" 
-                    strokeWidth={1}
-                    strokeOpacity={0.6}
-                    dot={false}
-                    name="Path 1"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="path_2" 
-                    stroke="#EF4444" 
-                    strokeWidth={1}
-                    strokeOpacity={0.6}
-                    dot={false}
-                    name="Path 2"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="path_3" 
-                    stroke="#10B981" 
-                    strokeWidth={1}
-                    strokeOpacity={0.6}
-                    dot={false}
-                    name="Path 3"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="path_4" 
-                    stroke="#8B5CF6" 
-                    strokeWidth={1}
-                    strokeOpacity={0.6}
-                    dot={false}
-                    name="Path 4"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="path_5" 
-                    stroke="#06B6D4" 
-                    strokeWidth={1}
-                    strokeOpacity={0.6}
-                    dot={false}
-                    name="Path 5"
-                  />
-                  
-                  {/* Mean path highlighted */}
-                  <Line 
-                    type="monotone" 
-                    dataKey="mean_path" 
-                    stroke="#3B82F6" 
-                    strokeWidth={3}
-                    dot={{ r: 2 }}
-                    name="Mean Path"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={320} mobileHeight={250}>
+              <LineChart data={pathData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                  label={{ value: 'Portfolio Value ($K)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+
+                {/* Individual paths with transparency */}
+                <Line
+                  type="monotone"
+                  dataKey="path_1"
+                  stroke="#F59E0B"
+                  strokeWidth={1}
+                  strokeOpacity={0.6}
+                  dot={false}
+                  name="Path 1"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="path_2"
+                  stroke="#EF4444"
+                  strokeWidth={1}
+                  strokeOpacity={0.6}
+                  dot={false}
+                  name="Path 2"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="path_3"
+                  stroke="#10B981"
+                  strokeWidth={1}
+                  strokeOpacity={0.6}
+                  dot={false}
+                  name="Path 3"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="path_4"
+                  stroke="#8B5CF6"
+                  strokeWidth={1}
+                  strokeOpacity={0.6}
+                  dot={false}
+                  name="Path 4"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="path_5"
+                  stroke="#06B6D4"
+                  strokeWidth={1}
+                  strokeOpacity={0.6}
+                  dot={false}
+                  name="Path 5"
+                />
+
+                {/* Mean path highlighted */}
+                <Line
+                  type="monotone"
+                  dataKey="mean_path"
+                  stroke="#3B82F6"
+                  strokeWidth={3}
+                  dot={{ r: 2 }}
+                  name="Mean Path"
+                />
+              </LineChart>
+            </ResponsiveChartContainer>
           </div>
 
           {/* Final Return Distribution */}
@@ -269,33 +268,31 @@ const MonteCarloSection = () => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Final Return Distribution
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={distributionData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="range" 
-                    tick={{ fontSize: 10, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    label={{ value: 'Final Portfolio Value Range', position: 'insideBottom', offset: -40 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Number of Scenarios', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip content={<DistributionTooltip />} />
-                  <Bar 
-                    dataKey="count" 
-                    fill="#3B82F6"
-                    radius={[2, 2, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={320} mobileHeight={250}>
+              <BarChart data={distributionData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="range"
+                  tick={{ fontSize: 10, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  label={{ value: 'Final Portfolio Value Range', position: 'insideBottom', offset: -40 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Number of Scenarios', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip content={<DistributionTooltip />} />
+                <Bar
+                  dataKey="count"
+                  fill="#3B82F6"
+                  radius={[2, 2, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveChartContainer>
           </div>
         </div>
 

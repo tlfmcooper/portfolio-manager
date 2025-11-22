@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
+import ResponsiveChartContainer from './ResponsiveChartContainer'
 
 const OverviewSection = () => {
   const [data, setData] = useState(null)
@@ -203,54 +204,52 @@ const OverviewSection = () => {
         {/* Performance Chart */}
         {chartData.length > 0 && (
           <div className="chart-container">
-            <h3 style={{ 
-              fontSize: 'var(--font-size-xl)', 
+            <h3 style={{
+              fontSize: 'var(--font-size-xl)',
               marginBottom: 'var(--space-20)',
               color: 'var(--color-text)'
             }}>
               Performance Distribution
             </h3>
-            <div className="h-96">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} barSize={20} barGap={3}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="symbol" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'var(--color-charcoal-800)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-base)',
-                      color: 'var(--color-white)'
-                    }}
-                    formatter={(value, name) => [
-                      `${value.toFixed(2)}%`, 
-                      name === 'return' ? 'Annual Return' : 'Volatility'
-                    ]}
-                  />
-                  <Bar 
-                    dataKey="return" 
-                    fill="var(--color-primary)" 
-                    name="return"
-                    radius={[2, 2, 0, 0]}
-                  />
-                  <Bar 
-                    dataKey="volatility" 
-                    fill="var(--color-warning)" 
-                    name="volatility"
-                    radius={[2, 2, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={300} mobileHeight={250}>
+              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }} barSize={20} barGap={3}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="symbol"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-charcoal-800)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-base)',
+                    color: 'var(--color-white)'
+                  }}
+                  formatter={(value, name) => [
+                    `${value.toFixed(2)}%`,
+                    name === 'return' ? 'Annual Return' : 'Volatility'
+                  ]}
+                />
+                <Bar
+                  dataKey="return"
+                  fill="var(--color-primary)"
+                  name="return"
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar
+                  dataKey="volatility"
+                  fill="var(--color-warning)"
+                  name="volatility"
+                  radius={[2, 2, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveChartContainer>
           </div>
         )}
       </div>

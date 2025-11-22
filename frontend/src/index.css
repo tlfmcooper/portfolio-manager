@@ -139,9 +139,10 @@
   --container-lg: 1024px;
   --container-xl: 1280px;
 }
-/* Dark mode colors */
+
+/* Dark mode colors - media query for system preference (lowest priority) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light):not([data-theme="light"]) {
     /* RGB versions for opacity control (Dark Mode) */
     --color-gray-400-rgb: 119, 124, 124;
     --color-teal-300-rgb: 50, 184, 198;
@@ -186,7 +187,10 @@
     --color-info-rgb: var(--color-gray-300-rgb);
   }
 }
-/* Data attribute for manual theme switching */
+
+/* Class-based dark mode (for manual theme switching) - highest priority */
+.dark,
+[data-theme="dark"],
 [data-color-scheme="dark"] {
   /* RGB versions for opacity control (dark mode) */
   --color-gray-400-rgb: 119, 124, 124;
@@ -221,6 +225,38 @@
   --color-error-rgb: var(--color-red-400-rgb);
   --color-warning-rgb: var(--color-orange-400-rgb);
   --color-info-rgb: var(--color-gray-300-rgb);
+}
+
+/* Explicit light mode (highest priority) - must come after dark mode to override */
+.light,
+[data-theme="light"] {
+  /* Ensure light mode colors are explicitly set */
+  --color-background: var(--color-cream-50) !important;
+  --color-surface: var(--color-cream-100) !important;
+  --color-text: var(--color-slate-900) !important;
+  --color-text-secondary: var(--color-slate-500) !important;
+  --color-primary: var(--color-teal-500) !important;
+  --color-primary-hover: var(--color-teal-600) !important;
+  --color-primary-active: var(--color-teal-700) !important;
+  --color-border: rgba(var(--color-brown-600-rgb), 0.2) !important;
+  --color-secondary: rgba(var(--color-brown-600-rgb), 0.12) !important;
+  --color-secondary-hover: rgba(var(--color-brown-600-rgb), 0.2) !important;
+  --color-secondary-active: rgba(var(--color-brown-600-rgb), 0.25) !important;
+  --color-btn-primary-text: var(--color-cream-50) !important;
+  --color-card-border: rgba(var(--color-brown-600-rgb), 0.12) !important;
+  --color-card-border-inner: rgba(var(--color-brown-600-rgb), 0.12) !important;
+  --color-error: var(--color-red-500) !important;
+  --color-success: var(--color-teal-500) !important;
+  --color-warning: var(--color-orange-500) !important;
+  --color-info: var(--color-slate-500) !important;
+  --color-focus-ring: rgba(var(--color-teal-500-rgb), 0.4) !important;
+  --color-select-caret: rgba(var(--color-slate-900-rgb), 0.8) !important;
+  
+  /* RGB versions for light mode */
+  --color-success-rgb: 33, 128, 141 !important;
+  --color-error-rgb: 192, 21, 47 !important;
+  --color-warning-rgb: 168, 75, 47 !important;
+  --color-info-rgb: 98, 108, 113 !important;
 }
 
 /* Base styles */
@@ -883,4 +919,18 @@ html {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Skeleton Loading Animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

@@ -31,7 +31,17 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(timeout 120 cmd /c \"echo Waiting for deployment... && timeout 120 >nul && curl -X POST \"\"https://protective-playfulness-production.up.railway.app/admin/create-first-superuser\"\" -H \"\"x-admin-token: buIcqSTMTb4VSaZiSN2BnxKvHNX9LGgwvtErXvSSu2z4GB-yfFrcBu4MlX5DTt6R\"\" -w \"\"\\nStatus: %%{http_code}\\n\"\"\")"
+      "Bash(timeout 120 cmd /c \"echo Waiting for deployment... && timeout 120 >nul && curl -X POST \"\"https://protective-playfulness-production.up.railway.app/admin/create-first-superuser\"\" -H \"\"x-admin-token: buIcqSTMTb4VSaZiSN2BnxKvHNX9LGgwvtErXvSSu2z4GB-yfFrcBu4MlX5DTt6R\"\" -w \"\"\\nStatus: %%{http_code}\\n\"\"\")",
+      "Bash(xargs:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(cat:*)",
+      "Bash(npm --version:*)",
+      "Bash(node --version:*)",
+      "Bash(npx @vite-pwa/assets-generator:*)",
+      "Bash(node generate-icons.js:*)",
+      "Bash(nul)",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []

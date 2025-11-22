@@ -2,10 +2,13 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import OfflineIndicator from './components/OfflineIndicator';
 import Tooltip from './components/Tooltip';
 import LandingPage from './pages/LandingPage'; // Import LandingPage
+import { DashboardSkeleton } from './components/ui/Skeleton'; // Import skeleton component
 
 // Lazy load components for better performance
 const Login = lazy(() => import('./pages/Login'));
@@ -26,6 +29,13 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Dashboard loading skeleton for Suspense fallback
+const DashboardLoadingFallback = () => (
+  <div style={{ backgroundColor: 'var(--color-background)' }}>
+    <DashboardSkeleton />
+  </div>
+);
+
 // Protected layout component
 const ProtectedLayout = () => {
   const { user, loading, isOnboarded } = useAuth(); // Get isOnboarded status
@@ -39,7 +49,7 @@ const ProtectedLayout = () => {
   }
 
   return (
-    <Suspense fallback={<LoadingSpinner />}>
+    <Suspense fallback={<DashboardLoadingFallback />}>
       <Routes>
         {/* If user is not onboarded, only allow onboarding route */}
         {!isOnboarded ? (
@@ -71,41 +81,44 @@ const ProtectedLayout = () => {
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <CurrencyProvider>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-              },
-              success: {
-                duration: 3000,
-                theme: {
-                  primary: 'green',
-                  secondary: 'black',
+      <ThemeProvider>
+        <AuthProvider>
+          <CurrencyProvider>
+            <OfflineIndicator />
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: '#363636',
+                  color: '#fff',
                 },
-              },
-            }}
-          />
-          <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
-            <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
+                success: {
+                  duration: 3000,
+                  theme: {
+                    primary: 'green',
+                    secondary: 'black',
+                  },
+                },
+              }}
+            />
+            <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
+              <Suspense fallback={<DashboardLoadingFallback />}>
+                <Routes>
+                  {/* Public routes */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
 
-                {/* Protected routes */}
-                <Route path="/*" element={<ProtectedLayout />} />
-              </Routes>
-            </Suspense>
-            <Tooltip />
-          </div>
-        </CurrencyProvider>
-      </AuthProvider>
+                  {/* Protected routes */}
+                  <Route path="/*" element={<ProtectedLayout />} />
+                </Routes>
+              </Suspense>
+              <Tooltip />
+            </div>
+          </CurrencyProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </Router>
   );
 }

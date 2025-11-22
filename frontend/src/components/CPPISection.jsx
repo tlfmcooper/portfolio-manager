@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingDown, Shield, Target, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
+import ResponsiveChartContainer from './ResponsiveChartContainer'
 
 const CPPISection = () => {
   const [data, setData] = useState(null)
@@ -183,52 +184,50 @@ const CPPISection = () => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Performance Comparison
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={performance_data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="day" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                    label={{ value: 'Portfolio Value ($K)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  
-                  <Line 
-                    type="monotone" 
-                    dataKey="cppi_wealth" 
-                    stroke="#3B82F6" 
-                    strokeWidth={3}
-                    dot={{ r: 2 }}
-                    name="CPPI Strategy"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="buyhold_wealth" 
-                    stroke="#F59E0B" 
-                    strokeWidth={2}
-                    dot={false}
-                    name="Buy & Hold"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="floor_value" 
-                    stroke="#EF4444" 
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Floor Protection"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={320} mobileHeight={250}>
+              <LineChart data={performance_data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
+                  label={{ value: 'Portfolio Value ($K)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+
+                <Line
+                  type="monotone"
+                  dataKey="cppi_wealth"
+                  stroke="#3B82F6"
+                  strokeWidth={3}
+                  dot={{ r: 2 }}
+                  name="CPPI Strategy"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="buyhold_wealth"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Buy & Hold"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="floor_value"
+                  stroke="#EF4444"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name="Floor Protection"
+                />
+              </LineChart>
+            </ResponsiveChartContainer>
           </div>
 
           {/* Dynamic Allocation */}
@@ -236,45 +235,43 @@ const CPPISection = () => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Dynamic Allocation
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={allocationData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="day" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    domain={[0, 100]}
-                    label={{ value: 'Allocation (%)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  
-                  <Area
-                    type="monotone"
-                    dataKey="risky_allocation"
-                    stackId="1"
-                    stroke="#3B82F6"
-                    fill="#3B82F6"
-                    fillOpacity={0.6}
-                    name="Risky Assets"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="safe_allocation"
-                    stackId="1"
-                    stroke="#10B981"
-                    fill="#10B981"
-                    fillOpacity={0.6}
-                    name="Safe Assets"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={320} mobileHeight={250}>
+              <AreaChart data={allocationData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  domain={[0, 100]}
+                  label={{ value: 'Allocation (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+
+                <Area
+                  type="monotone"
+                  dataKey="risky_allocation"
+                  stackId="1"
+                  stroke="#3B82F6"
+                  fill="#3B82F6"
+                  fillOpacity={0.6}
+                  name="Risky Assets"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="safe_allocation"
+                  stackId="1"
+                  stroke="#10B981"
+                  fill="#10B981"
+                  fillOpacity={0.6}
+                  name="Safe Assets"
+                />
+              </AreaChart>
+            </ResponsiveChartContainer>
           </div>
 
           {/* Risk Budget Evolution */}
@@ -282,35 +279,33 @@ const CPPISection = () => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Risk Budget Evolution
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={performance_data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="day" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    tickFormatter={(value) => `${value.toFixed(0)}%`}
-                    label={{ value: 'Risk Budget (%)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  
-                  <Area
-                    type="monotone"
-                    dataKey="risk_budget"
-                    stroke="#8B5CF6"
-                    fill="#8B5CF6"
-                    fillOpacity={0.4}
-                    name="Risk Budget (Cushion)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={320} mobileHeight={250}>
+              <AreaChart data={performance_data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  tickFormatter={(value) => `${value.toFixed(0)}%`}
+                  label={{ value: 'Risk Budget (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+
+                <Area
+                  type="monotone"
+                  dataKey="risk_budget"
+                  stroke="#8B5CF6"
+                  fill="#8B5CF6"
+                  fillOpacity={0.4}
+                  name="Risk Budget (Cushion)"
+                />
+              </AreaChart>
+            </ResponsiveChartContainer>
           </div>
 
           {/* Drawdown Comparison */}
@@ -318,44 +313,42 @@ const CPPISection = () => {
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
               Drawdown Comparison
             </h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={drawdown_data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis 
-                    dataKey="day" 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    stroke="#6B7280"
-                    tickFormatter={(value) => `${value.toFixed(0)}%`}
-                    domain={[-8, 1]}
-                    label={{ value: 'Drawdown (%)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  
-                  <Area
-                    type="monotone"
-                    dataKey="cppi_drawdown"
-                    stroke="#3B82F6"
-                    fill="#3B82F6"
-                    fillOpacity={0.4}
-                    name="CPPI Drawdown"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="buyhold_drawdown"
-                    stroke="#F59E0B"
-                    fill="#F59E0B"
-                    fillOpacity={0.4}
-                    name="Buy & Hold Drawdown"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <ResponsiveChartContainer height={320} mobileHeight={250}>
+              <AreaChart data={drawdown_data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  label={{ value: 'Trading Days', position: 'insideBottom', offset: -5 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6B7280' }}
+                  stroke="#6B7280"
+                  tickFormatter={(value) => `${value.toFixed(0)}%`}
+                  domain={[-8, 1]}
+                  label={{ value: 'Drawdown (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip content={<CustomTooltip />} />
+
+                <Area
+                  type="monotone"
+                  dataKey="cppi_drawdown"
+                  stroke="#3B82F6"
+                  fill="#3B82F6"
+                  fillOpacity={0.4}
+                  name="CPPI Drawdown"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="buyhold_drawdown"
+                  stroke="#F59E0B"
+                  fill="#F59E0B"
+                  fillOpacity={0.4}
+                  name="Buy & Hold Drawdown"
+                />
+              </AreaChart>
+            </ResponsiveChartContainer>
           </div>
         </div>
 

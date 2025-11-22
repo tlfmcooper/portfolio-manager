@@ -1,8 +1,9 @@
-"""
-Main FastAPI application.
-"""
+"""Main FastAPI application."""
 
+import os
 from contextlib import asynccontextmanager
+from typing import List, Tuple
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize Redis connection
     from app.core.redis_client import get_redis_client
+
     redis_client = await get_redis_client()
 
     yield
@@ -26,6 +28,34 @@ async def lifespan(app: FastAPI):
     # Shutdown
     if redis_client:
         await redis_client.disconnect()
+
+
+def _build_cors_config() -> Tuple[List[str], bool]:
+    """Return origins list and allow_credentials flag for FastAPI CORS middleware."""
+
+    origins: List[str] = list(settings.BACKEND_CORS_ORIGINS or ["*"])
+    allow_all = any(origin == "*" for origin in origins)
+
+    if allow_all:
+        # Wildcard origins cannot be combined with allow_credentials=True
+        return ["*"], False
+
+    dev_origins = {
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    }
+
+    local_dev_ip = os.getenv("DEV_LOCAL_IP") or os.getenv("LOCAL_DEV_IP")
+    if local_dev_ip:
+        dev_origins.add(f"http://{local_dev_ip}:5173")
+        dev_origins.add(f"http://{local_dev_ip}:4173")
+
+    if settings.DEBUG:
+        origins = list({*origins, *dev_origins})
+
+    return origins, True
 
 
 def create_application() -> FastAPI:
@@ -41,19 +71,13 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Set up CORS middleware
+    cors_origins, allow_credentials = _build_cors_config()
+
+    # Set up CORS middleware - Allow local development origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-            "http://192.168.4.27:5173",  # Your computer's local IP
-            "http://172.26.208.1:5173",
-            "*",  # Allow all for development (remove in production)
-        ],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )

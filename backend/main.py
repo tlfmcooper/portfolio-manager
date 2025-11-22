@@ -11,22 +11,25 @@ New, completely rewritten authentication system with:
 - Comprehensive error handling
 """
 
-import uvicorn
-import shutil
+import os
 import secrets
-from pathlib import Path
-from fastapi.middleware.cors import CORSMiddleware
+import shutil
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Header
+from pathlib import Path
+from typing import List, Tuple
+
+import uvicorn
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api import api_router
 from app.core.config import settings
 from app.core.database import create_tables, get_db
-from app.api import api_router
-from app.utils.dependencies import get_current_superuser
 from app.core.security import verify_token
 from app.crud import get_user_by_username
 from app.models import User
+from app.utils.dependencies import get_current_superuser
 
 
 @asynccontextmanager
@@ -37,6 +40,31 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown (if needed)
     pass
+
+
+def _build_cors_config() -> Tuple[List[str], bool]:
+    origins: List[str] = list(settings.BACKEND_CORS_ORIGINS or ["*"])
+    allow_all = any(origin == "*" for origin in origins)
+
+    if allow_all:
+        return ["*"], False
+
+    dev_origins = {
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    }
+
+    local_dev_ip = os.getenv("DEV_LOCAL_IP") or os.getenv("LOCAL_DEV_IP")
+    if local_dev_ip:
+        dev_origins.add(f"http://{local_dev_ip}:5173")
+        dev_origins.add(f"http://{local_dev_ip}:4173")
+
+    if settings.DEBUG:
+        origins = list({*origins, *dev_origins})
+
+    return origins, True
 
 
 def create_application() -> FastAPI:
@@ -52,13 +80,13 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
     )
 
-    print(f"CORS origins configured: {settings.BACKEND_CORS_ORIGINS}")  # Debug print
+    cors_origins, allow_credentials = _build_cors_config()
 
-    # Set up CORS middleware
+    # Set up CORS middleware - Allow local development origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -132,7 +160,9 @@ async def upload_database(
             raise HTTPException(status_code=403, detail="Not enough permissions")
 
     # Get database path from settings
-    db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+    db_url = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace(
+        "sqlite:///", ""
+    )
     db_path = Path(db_url)
 
     # Ensure directory exists
@@ -242,7 +272,7 @@ async def create_first_superuser(
     if not settings.ADMIN_UPLOAD_TOKEN or not admin_token:
         raise HTTPException(
             status_code=401,
-            detail="Admin token required. Set ADMIN_UPLOAD_TOKEN environment variable."
+            detail="Admin token required. Set ADMIN_UPLOAD_TOKEN environment variable.",
         )
 
     if not secrets.compare_digest(settings.ADMIN_UPLOAD_TOKEN, admin_token):
