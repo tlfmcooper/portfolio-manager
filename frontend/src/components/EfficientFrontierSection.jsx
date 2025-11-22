@@ -253,7 +253,7 @@ const EfficientFrontierSection = () => {
                 
                 <Legend 
                   verticalAlign="top"
-                  wrapperStyle={{ paddingTop: '10px', paddingLeft: '10px' }}
+                  wrapperStyle={{ marginTop: '-20px', paddingLeft: '10px' }}
                   formatter={(value, entry) => (
                     <span style={{ color: entry.color }}>
                       {value}
