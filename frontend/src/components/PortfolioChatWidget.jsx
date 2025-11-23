@@ -105,9 +105,9 @@ const PortfolioChatWidget = () => {
 
       const genAI = new GoogleGenerativeAI(apiKey);
       
-      // Select model based on whether image context is available
-      // Use gemini-3-pro-image-preview for vision tasks, gemini-3-pro-preview for text/tools
-      const modelName = imagePart ? "gemini-3-pro-image-preview" : "gemini-3-pro-preview";
+      // Select model based on user preference (gemini-2.5-pro supports both text and image)
+      // Using gemini-2.5-pro as requested for high reliability and multimodal support
+      const modelName = "gemini-2.5-pro";
       
       const model = genAI.getGenerativeModel({ 
         model: modelName,
@@ -134,7 +134,18 @@ const PortfolioChatWidget = () => {
         parts.push(imagePart);
       }
 
-      const result = await chat.sendMessage(parts);
+      let result;
+      try {
+        result = await chat.sendMessage(parts);
+      } catch (initialError) {
+        console.warn('Initial API call failed, retrying without history:', initialError);
+        // Retry without history (self-healing)
+        const retryChat = model.startChat({
+          history: [], // Clear history
+        });
+        result = await retryChat.sendMessage(parts);
+      }
+
       const response = await result.response;
       const functionCalls = response.functionCalls();
 
@@ -164,7 +175,8 @@ const PortfolioChatWidget = () => {
 
     } catch (error) {
       console.error('Gemini Error:', error);
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
+      // Fallback message if even retry fails
+      setMessages(prev => [...prev, { role: 'assistant', content: `I encountered an error connecting to the AI service. Please try again. (Error: ${error.message})` }]);
     } finally {
       setIsLoading(false);
     }
