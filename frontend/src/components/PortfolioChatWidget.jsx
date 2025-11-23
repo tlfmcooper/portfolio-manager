@@ -60,17 +60,12 @@ const PortfolioChatWidget = () => {
       // Capture dashboard screenshot for context
       let imagePart = null;
       try {
-        const widget = document.getElementById('portfolio-chat-widget');
-        if (widget) widget.style.display = 'none';
-        
         const canvas = await html2canvas(document.body, {
           ignoreElements: (element) => element.id === 'portfolio-chat-widget',
           logging: false,
           useCORS: true
         });
         
-        if (widget) widget.style.display = 'flex';
-
         const base64Data = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
         imagePart = {
           inlineData: {
