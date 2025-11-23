@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Target, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 
 const EfficientFrontierSection = () => {
@@ -9,13 +10,18 @@ const EfficientFrontierSection = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const { api, portfolioId } = useAuth()
-  const { currency } = useCurrency()
+  const { frontierParams, globalParams } = useAgentContext()
+  const { currency: contextCurrency } = useCurrency()
+
+  // Determine effective currency: Frontier-specific > Global Agent > App Context
+  const currency = frontierParams.currency || globalParams.currency || contextCurrency
 
   useEffect(() => {
     const fetchData = async () => {
       if (!portfolioId) return;
 
       try {
+        setLoading(true)
         const response = await api.get(`/analysis/portfolios/${portfolioId}/efficient-frontier`, {
           params: { currency }
         })

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -8,6 +8,7 @@ import PortfolioService from '../services/portfolioService';
 import Sidebar from '../components/Sidebar';
 import CurrencySwitcher from '../components/CurrencySwitcher';
 import ThemeToggle from '../components/ThemeToggle';
+import PortfolioChatWidget from '../components/PortfolioChatWidget';
 
 // Import tab components
 import TabOverview from '../components/tabs/TabOverview';
@@ -35,6 +36,7 @@ const DashboardLayout = () => {
   const { isDark } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: TrendingUp },
@@ -55,7 +57,11 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('overview')) {
+    const viewParam = searchParams.get('view');
+
+    if (viewParam && tabs.find(t => t.id === viewParam)) {
+      setActiveTab(viewParam);
+    } else if (path.includes('overview')) {
       setActiveTab('overview');
     } else if (path.includes('portfolio')) {
       setActiveTab('allocation');
@@ -66,10 +72,27 @@ const DashboardLayout = () => {
     } else if (path === '/dashboard' || path === '/dashboard/') {
       setActiveTab('overview');
     }
-  }, [location]);
+  }, [location, searchParams]);
 
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
+    // Update URL to reflect tab change for deep linking
+    const currentPath = location.pathname;
+    if (currentPath.includes('analytics')) {
+      setSearchParams({ view: tabId });
+    } else {
+      // If on another page, navigate to analytics with view param if it's an analytics tab
+      // Or just update state if it's a general tab?
+      // DashboardLayout logic is a bit mixed. Let's keep it simple:
+      // If it's an analytics tab, go to analytics.
+      if (['risk', 'efficient', 'simulation', 'strategy'].includes(tabId)) {
+        navigate(`/dashboard/analytics?view=${tabId}`);
+      } else if (tabId === 'allocation') {
+        navigate('/dashboard/portfolio');
+      } else {
+        navigate('/dashboard/overview');
+      }
+    }
   };
 
   const getTabTitle = () => {
@@ -257,6 +280,7 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
+      <PortfolioChatWidget />
     </div>
   );
 };

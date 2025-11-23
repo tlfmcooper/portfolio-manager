@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { TrendingDown, Shield, Target, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
 
@@ -10,15 +11,23 @@ const CPPISection = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const { api, portfolioId } = useAuth()
-  const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency()
+  const { cppiParams, globalParams } = useAgentContext()
+  const { currency: contextCurrency, formatCurrency: formatCurrencyFromContext } = useCurrency()
+
+  // Determine effective currency and params
+  const currency = cppiParams.currency || globalParams.currency || contextCurrency
 
   useEffect(() => {
     const fetchData = async () => {
       if (!portfolioId) return;
 
       try {
+        setLoading(true)
         const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`, {
-          params: { currency }
+          params: { 
+            currency,
+            ...cppiParams // Inject agent params (multiplier, floor)
+          }
         })
         setData(response.data)
       } catch (err) {
@@ -30,7 +39,7 @@ const CPPISection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId, currency])
+  }, [api, portfolioId, currency, cppiParams])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>

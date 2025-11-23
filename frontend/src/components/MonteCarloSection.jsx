@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
 
@@ -10,15 +11,23 @@ const MonteCarloSection = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const { api, portfolioId } = useAuth()
-  const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency()
+  const { monteCarloParams, globalParams } = useAgentContext()
+  const { currency: contextCurrency, formatCurrency: formatCurrencyFromContext } = useCurrency()
+
+  // Determine effective currency and params
+  const currency = monteCarloParams.currency || globalParams.currency || contextCurrency
 
   useEffect(() => {
     const fetchData = async () => {
       if (!portfolioId) return;
 
       try {
+        setLoading(true)
         const response = await api.get(`/analysis/portfolios/${portfolioId}/monte-carlo`, {
-          params: { currency }
+          params: { 
+            currency,
+            ...monteCarloParams // Inject agent params (scenarios, time_horizon)
+          }
         })
         setData(response.data)
       } catch (err) {
@@ -30,7 +39,7 @@ const MonteCarloSection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId, currency])
+  }, [api, portfolioId, currency, monteCarloParams])
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>

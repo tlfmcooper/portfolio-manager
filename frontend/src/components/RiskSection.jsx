@@ -2,19 +2,30 @@ import React, { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import { AlertTriangle, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useAgentContext } from '../contexts/AgentContext'
+import { useCurrency } from '../contexts/CurrencyContext'
 
 const RiskSection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
+  const { api, portfolioId } = useAuth()
+  const { riskParams, globalParams } = useAgentContext()
+  const { currency: contextCurrency } = useCurrency()
+
+  // Determine effective currency: Risk-specific > Global Agent > App Context
+  const currency = riskParams.currency || globalParams.currency || contextCurrency
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
+      if (!portfolioId) return;
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`) // CRITICAL FIX: Use dynamic portfolioId
+        setLoading(true)
+        // Pass currency param to the API
+        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
+          params: { currency }
+        })
         setData(response.data)
       } catch (err) {
         setError('Failed to fetch risk data')
@@ -25,7 +36,7 @@ const RiskSection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency]) // Re-fetch when currency changes
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>
