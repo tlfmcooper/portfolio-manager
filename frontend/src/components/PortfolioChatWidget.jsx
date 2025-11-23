@@ -51,7 +51,8 @@ const PortfolioChatWidget = () => {
     }
 
     const userMessage = input;
-    setInput('');
+    setInput(''); // Clear input immediately
+    // Optimistically add user message
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
@@ -59,14 +60,13 @@ const PortfolioChatWidget = () => {
       // Capture dashboard screenshot for context
       let imagePart = null;
       try {
-        // Hide widget temporarily for clean screenshot
         const widget = document.getElementById('portfolio-chat-widget');
         if (widget) widget.style.display = 'none';
         
         const canvas = await html2canvas(document.body, {
           ignoreElements: (element) => element.id === 'portfolio-chat-widget',
           logging: false,
-          useCORS: true // Important for external images if any
+          useCORS: true
         });
         
         if (widget) widget.style.display = 'flex';
@@ -82,31 +82,26 @@ const PortfolioChatWidget = () => {
         console.warn("Failed to capture screenshot:", err);
       }
 
-      // Construct system prompt with context
       const systemPrompt = `
         You are Portfolio Pilot, an expert AI financial assistant integrated into a Portfolio Management Dashboard.
         
         CURRENT CONTEXT:
         - User is currently on page: ${location.pathname}
         - Simulation Mode: ${isAgentActive ? 'ACTIVE' : 'INACTIVE'}
-        - VISUAL CONTEXT: You have access to a screenshot of the current dashboard state. Use this to understand what the user is looking at (charts, data, etc.).
+        - VISUAL CONTEXT: You have access to a screenshot of the current dashboard state.
         
         YOUR CAPABILITIES:
-        1. You can control the dashboard using the provided tools (navigate, update charts, run simulations).
-        2. You can answer general financial questions (e.g., "What is Alpha?", "How to hedge?") directly without tools.
-        3. You can SEE the dashboard. If the user asks "Is this efficient?", look at the chart in the image.
+        1. You can control the dashboard using the provided tools.
+        2. You can answer general financial questions directly.
+        3. You can SEE the dashboard.
         
         GUIDELINES:
         - If the user asks to change a view or parameter, USE A TOOL.
         - If the user asks a general question, ANSWER DIRECTLY.
         - Be concise, professional, and helpful.
-        - If you run a simulation, explain briefly what you did.
       `;
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      
-      // Select model based on user preference (gemini-2.5-pro supports both text and image)
-      // Using gemini-2.5-pro as requested for high reliability and multimodal support
       const modelName = "gemini-2.5-pro";
       
       const model = genAI.getGenerativeModel({ 
@@ -115,70 +110,92 @@ const PortfolioChatWidget = () => {
         tools: [{ functionDeclarations: tools }]
       });
 
-      // Filter out the initial greeting and ensure history starts with user
-      // Also ensure we don't send the current user message in history (it's sent in sendMessage)
       const history = messages
-        .filter((_, index) => index > 0) // Skip the first message (Greeting)
+        .filter((_, index) => index > 0)
         .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }]
         }));
 
-      const chat = model.startChat({
-        history: history,
-      });
+      const chat = model.startChat({ history: history });
 
-      // Send message with image if available
       const parts = [{ text: userMessage }];
-      if (imagePart) {
-        parts.push(imagePart);
-      }
+      if (imagePart) parts.push(imagePart);
+
+      // Add placeholder for streaming response
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
       let result;
       try {
-        result = await chat.sendMessage(parts);
+        result = await chat.sendMessageStream(parts);
       } catch (initialError) {
         console.warn('Initial API call failed, retrying without history:', initialError);
-        // Retry without history (self-healing)
-        const retryChat = model.startChat({
-          history: [], // Clear history
-        });
-        result = await retryChat.sendMessage(parts);
+        const retryChat = model.startChat({ history: [] });
+        result = await retryChat.sendMessageStream(parts);
       }
 
+      let fullText = '';
+      
+      // Stream the text
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullText += chunkText;
+        
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage.role === 'assistant') {
+            lastMessage.content = fullText;
+          }
+          return newMessages;
+        });
+      }
+
+      // Check for function calls after stream
       const response = await result.response;
       const functionCalls = response.functionCalls();
 
       if (functionCalls && functionCalls.length > 0) {
-        // Handle function calls
         for (const call of functionCalls) {
           const functionName = call.name;
           const functionArgs = call.args;
           
-          // Execute the tool
           const toolResult = await executeTool(functionName, functionArgs, {
             navigate,
             api,
             ...agentContext
           });
 
+          // Append tool result to the chat
           setMessages(prev => [...prev, { 
             role: 'assistant', 
             content: `Action: ${toolResult}` 
           }]);
         }
-      } else {
-        // Normal text response
-        const text = response.text();
-        setMessages(prev => [...prev, { role: 'assistant', content: text }]);
       }
 
     } catch (error) {
       console.error('Gemini Error:', error);
-      // Fallback message if even retry fails
-      setMessages(prev => [...prev, { role: 'assistant', content: `I encountered an error connecting to the AI service. Please try again. (Error: ${error.message})` }]);
+      setMessages(prev => {
+        // If we have a partial message, append error. If not, add new error message.
+        const newMessages = [...prev];
+        const lastMessage = newMessages[newMessages.length - 1];
+        if (lastMessage.role === 'assistant' && !lastMessage.content.startsWith('Error')) {
+           // If the last message was the streaming one, maybe just leave it and add error?
+           // Or replace it? Let's add a new error message to be safe.
+           return [...prev, { role: 'assistant', content: `I encountered an error. (Error: ${error.message})` }];
+        }
+        return [...prev, { role: 'assistant', content: `Error: ${error.message}` }];
+      });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
     }
   };
 
@@ -281,7 +298,7 @@ const PortfolioChatWidget = () => {
             </div>
           </div>
         ))}
-        {isLoading && (
+        {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex justify-start">
             <div className="bg-white dark:bg-gray-800 p-3 rounded-lg rounded-bl-none border border-gray-200 dark:border-gray-700 shadow-sm">
               <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
@@ -293,18 +310,19 @@ const PortfolioChatWidget = () => {
 
       {/* Input Area */}
       <form onSubmit={handleSubmit} className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-        <div className="flex gap-2">
-          <input
-            type="text"
+        <div className="flex gap-2 items-end">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Ask anything..."
-            className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            rows={3}
+            className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="p-2 mb-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="h-5 w-5" />
           </button>
