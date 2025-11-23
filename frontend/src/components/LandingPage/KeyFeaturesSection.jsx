@@ -59,7 +59,7 @@ const KeyFeaturesSection = () => {
   ];
 
   return (
-    <section className="py-20 lg:py-32 bg-gray-900/50 relative overflow-hidden">
+    <section id="features" className="py-20 lg:py-32 bg-gray-900/50 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
       
@@ -79,7 +79,7 @@ const KeyFeaturesSection = () => {
           {features.map((feature, index) => (
             <div 
               key={index}
-              className="group relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm p-8 rounded-2xl border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-2"
+              className="group relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm p-8 rounded-2xl transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-2"
             >
               {/* Icon container with gradient background */}
               <div className="mb-6 inline-flex p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 text-blue-400 group-hover:from-blue-500/20 group-hover:to-purple-500/20 transition-all duration-300">

@@ -46,7 +46,7 @@ const HowItWorksSection = () => {
   ];
 
   return (
-    <section className="py-20 lg:py-32 bg-gradient-to-b from-gray-900/50 to-gray-900 relative overflow-hidden">
+    <section id="how-it-works" className="py-20 lg:py-32 bg-gradient-to-b from-gray-900/50 to-gray-900 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0">
         <div className="absolute top-1/3 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl"></div>
@@ -73,7 +73,7 @@ const HowItWorksSection = () => {
                 <div className="hidden lg:block absolute top-16 left-1/2 w-full h-0.5 bg-gradient-to-r from-blue-500/30 to-purple-500/30"></div>
               )}
               
-              <div className="relative bg-gray-800/30 backdrop-blur-sm p-8 rounded-2xl border border-gray-700/30 hover:border-blue-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 group">
+              <div className="relative bg-gray-800/30 backdrop-blur-sm p-8 rounded-2xl transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 group">
                 {/* Step number */}
                 <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-110 transition-transform duration-300">
                   {step.number}
@@ -103,7 +103,7 @@ const HowItWorksSection = () => {
             to="/register"
             className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-base hover:shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105 group"
           >
-            <span>Start Your Free Trial</span>
+            <span>Get Started</span>
             <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>

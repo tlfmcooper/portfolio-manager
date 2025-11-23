@@ -4,7 +4,6 @@ import NavigationMenu from '../components/LandingPage/NavigationMenu';
 import ActionButtons from '../components/LandingPage/ActionButtons';
 import HeroSection from '../components/LandingPage/HeroSection';
 import KeyFeaturesSection from '../components/LandingPage/KeyFeaturesSection';
-import StatsSection from '../components/LandingPage/StatsSection';
 import HowItWorksSection from '../components/LandingPage/HowItWorksSection';
 
 const LandingPage = () => {
@@ -18,8 +17,37 @@ const LandingPage = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Force removal of custom scrollbar (fix for cached PWA styles)
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      ::-webkit-scrollbar {
+        width: auto !important;
+        background: transparent !important;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent !important;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.5) !important;
+        border-radius: 9999px !important;
+        border: 3px solid transparent !important;
+        background-clip: content-box !important;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(156, 163, 175, 0.8) !important;
+        border: 3px solid transparent !important;
+        background-clip: content-box !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
+    <div className="min-h-screen" style={{ backgroundColor: '#1f2937' }}>
       {/* Sticky Header */}
       <header 
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -27,6 +55,10 @@ const LandingPage = () => {
             ? 'bg-gray-900/95 backdrop-blur-lg shadow-2xl py-3' 
             : 'bg-transparent py-4'
         }`}
+        style={{ 
+          backgroundColor: scrolled ? 'var(--color-surface)' : 'transparent',
+          boxShadow: scrolled ? 'var(--shadow-md)' : 'none'
+        }}
       >
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
@@ -42,43 +74,25 @@ const LandingPage = () => {
       {/* Main Content */}
       <main className="pt-16">
         <HeroSection />
-        <StatsSection />
         <KeyFeaturesSection />
         <HowItWorksSection />
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900/50 backdrop-blur-sm border-t border-gray-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            <div className="col-span-1 md:col-span-2">
+      <footer style={{ 
+        backgroundColor: 'var(--color-surface)'
+      }}>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="mb-4 md:mb-0">
               <Logo />
-              <p className="text-gray-400 mt-4 max-w-md">
-                Professional portfolio management and optimization tools for modern investors.
+              <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+                Professional portfolio management for modern investors.
               </p>
             </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Product</h4>
-              <ul className="space-y-2">
-                <li><a href="#features" className="text-gray-400 hover:text-blue-400 transition-colors">Features</a></li>
-                <li><a href="#pricing" className="text-gray-400 hover:text-blue-400 transition-colors">Pricing</a></li>
-                <li><a href="#security" className="text-gray-400 hover:text-blue-400 transition-colors">Security</a></li>
-              </ul>
+            <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              &copy; {new Date().getFullYear()} InvestSmart. All rights reserved.
             </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Company</h4>
-              <ul className="space-y-2">
-                <li><a href="#about" className="text-gray-400 hover:text-blue-400 transition-colors">About</a></li>
-                <li><a href="#contact" className="text-gray-400 hover:text-blue-400 transition-colors">Contact</a></li>
-                <li><a href="#careers" className="text-gray-400 hover:text-blue-400 transition-colors">Careers</a></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-800 pt-8 text-center">
-            <p className="text-gray-400">&copy; 2025 InvestSmart. All rights reserved.</p>
           </div>
         </div>
       </footer>

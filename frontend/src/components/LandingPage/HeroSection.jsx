@@ -23,10 +23,7 @@ const HeroSection = () => {
       <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className="max-w-5xl mx-auto">
           {/* Badge */}
-          <div className="inline-flex items-center space-x-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-3 py-1.5 mb-8 backdrop-blur-sm animate-fade-in">
-            <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-            <span className="text-blue-400 text-xs font-medium">Trusted by 10,000+ investors</span>
-          </div>
+          {/* Badge Removed */}
 
           {/* Main heading with gradient */}
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
@@ -54,35 +51,19 @@ const HeroSection = () => {
               <span className="relative z-10">Get Started Free</span>
               <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
             </Link>
-            <Link 
-              to="#learn-more" 
-              className="px-6 py-3 bg-white/5 backdrop-blur-sm text-white border-2 border-white/10 rounded-xl font-semibold text-base hover:bg-white/10 hover:border-white/20 transition-all duration-300 hover:scale-105"
+            <a 
+              href="#features"
+              onClick={(e) => {
+                e.preventDefault();
+                document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="px-6 py-3 bg-white/5 backdrop-blur-sm text-white rounded-xl font-semibold text-base hover:bg-white/10 transition-all duration-300 hover:scale-105 cursor-pointer"
             >
               Learn More
-            </Link>
+            </a>
           </div>
 
-          {/* Feature highlights */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto animate-fade-in delay-600">
-            <div className="flex items-center justify-center space-x-2 text-gray-400">
-              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="text-xs font-medium">No credit card required</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 text-gray-400">
-              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="text-xs font-medium">Setup in minutes</span>
-            </div>
-            <div className="flex items-center justify-center space-x-2 text-gray-400">
-              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="text-xs font-medium">Cancel anytime</span>
-            </div>
-          </div>
+          {/* Feature highlights removed */}
         </div>
       </div>
 
