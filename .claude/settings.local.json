@@ -41,7 +41,10 @@
       "Bash(npx @vite-pwa/assets-generator:*)",
       "Bash(node generate-icons.js:*)",
       "Bash(nul)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 50316 -Force\")"
     ],
     "deny": [],
     "ask": []

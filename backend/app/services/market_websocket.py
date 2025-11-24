@@ -6,7 +6,8 @@ import asyncio
 import json
 import logging
 from typing import Set, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 from fastapi import WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,87 @@ logger = logging.getLogger(__name__)
 
 # Tickers not supported by Finnhub free tier
 UNSUPPORTED_TICKERS = ["MAU.TO"]
+
+# US market hours (Eastern Time)
+MARKET_OPEN_TIME = time(9, 30)  # 9:30 AM ET
+MARKET_CLOSE_TIME = time(16, 0)  # 4:00 PM ET
+
+
+def get_market_open_today() -> datetime:
+    """Get today's market open time in UTC."""
+    et_tz = ZoneInfo("America/New_York")
+    now_et = datetime.now(et_tz)
+    market_open_et = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    return market_open_et.astimezone(ZoneInfo("UTC"))
+
+
+def is_market_hours() -> bool:
+    """Check if current time is during market hours (9:30 AM - 4:00 PM ET)."""
+    et_tz = ZoneInfo("America/New_York")
+    now_et = datetime.now(et_tz)
+    current_time = now_et.time()
+
+    # Check if it's a weekday (Monday=0, Sunday=6)
+    if now_et.weekday() >= 5:  # Saturday or Sunday
+        return False
+
+    return MARKET_OPEN_TIME <= current_time <= MARKET_CLOSE_TIME
+
+
+def filter_historical_data_for_today(historical_data: list) -> list:
+    """
+    Filter historical data to only include points from today's market session.
+    This prevents showing flat data from after-hours/overnight periods.
+    """
+    if not historical_data:
+        return historical_data
+
+    is_market_open = is_market_hours()
+    logger.info(f"Filter: Market is {'OPEN' if is_market_open else 'CLOSED'}")
+
+    # Only filter during market hours or shortly after
+    if not is_market_open:
+        # If markets are closed, check if we should still filter
+        et_tz = ZoneInfo("America/New_York")
+        now_et = datetime.now(et_tz)
+
+        logger.info(f"Filter: Markets closed. Current ET time: {now_et.time()}")
+
+        # If it's before market open today, show all historical data
+        if now_et.time() < MARKET_OPEN_TIME:
+            logger.info("Filter: Before market open - showing all data")
+            return historical_data
+
+        # If it's after market close but same day, filter to today's session
+        if now_et.time() > MARKET_CLOSE_TIME and now_et.weekday() < 5:
+            logger.info("Filter: After close same day - filtering to today")
+            # Continue to filter for today's session
+            pass
+        else:
+            # Weekend or way after hours, show all data
+            logger.info("Filter: Weekend/late - showing all data")
+            return historical_data
+
+    # Get today's market open time
+    market_open_utc = get_market_open_today()
+    market_open_timestamp = int(market_open_utc.timestamp())
+
+    logger.info(f"Filter: Market open timestamp: {market_open_timestamp} ({market_open_utc})")
+
+    # Filter data points to only those from market open onwards
+    filtered_data = [
+        point for point in historical_data
+        if isinstance(point, dict) and point.get("timestamp", 0) >= market_open_timestamp
+    ]
+
+    logger.info(f"Filter: Original: {len(historical_data)} points, Filtered: {len(filtered_data)} points")
+
+    # If filtering removed all data, return at least the last few points
+    if not filtered_data and len(historical_data) > 0:
+        logger.info("Filter: No data after filtering - returning last 10 points")
+        return historical_data[-10:]  # Last 10 points as fallback
+
+    return filtered_data
 
 
 class MarketDataWebSocketManager:
@@ -72,19 +154,46 @@ class MarketDataWebSocketManager:
 
     async def send_historical_data(self, websocket: WebSocket, symbols: list[str]):
         """Send cached historical data to newly connected client."""
+        print(f"\n{'='*80}")
+        print(f">>> send_historical_data called for symbols: {symbols}")
+        print(f"{'='*80}\n")
+        logger.info(f"=== send_historical_data called for symbols: {symbols} ===")
         redis_client = await get_redis_client()
 
         historical_data = {}
+        print(f">>> Processing {len(symbols)} symbols...")
         for symbol in symbols:
+            print(f">>> Checking symbol: {symbol}")
             if symbol in UNSUPPORTED_TICKERS:
+                print(f">>> {symbol} is UNSUPPORTED, skipping")
                 continue
 
             cache_key = f"stock:history:{symbol}"
             cached_history = await redis_client.lrange(cache_key, 0, -1)
+            print(f">>> {symbol}: Found {len(cached_history) if cached_history else 0} cached points")
 
             if cached_history:
                 # Redis returns newest first (LPUSH), so reverse for chronological order
-                historical_data[symbol] = list(reversed(cached_history))
+                chronological_data = list(reversed(cached_history))
+
+                logger.info(f"[{symbol}] Cached history: {len(chronological_data)} points")
+                if chronological_data:
+                    first_ts = chronological_data[0].get("timestamp", 0) if isinstance(chronological_data[0], dict) else 0
+                    last_ts = chronological_data[-1].get("timestamp", 0) if isinstance(chronological_data[-1], dict) else 0
+                    logger.info(f"[{symbol}] Time range: {datetime.fromtimestamp(first_ts)} to {datetime.fromtimestamp(last_ts)}")
+
+                # Filter to only show data from today's market session
+                # This prevents showing flat overnight/after-hours data
+                filtered_data = filter_historical_data_for_today(chronological_data)
+
+                logger.info(f"[{symbol}] After filtering: {len(filtered_data)} points")
+                if filtered_data:
+                    first_ts = filtered_data[0].get("timestamp", 0) if isinstance(filtered_data[0], dict) else 0
+                    last_ts = filtered_data[-1].get("timestamp", 0) if isinstance(filtered_data[-1], dict) else 0
+                    logger.info(f"[{symbol}] Filtered range: {datetime.fromtimestamp(first_ts)} to {datetime.fromtimestamp(last_ts)}")
+
+                if filtered_data:
+                    historical_data[symbol] = filtered_data
 
         if historical_data:
             await self.send_personal_message({
@@ -92,7 +201,7 @@ class MarketDataWebSocketManager:
                 "data": historical_data,
                 "timestamp": datetime.utcnow().isoformat()
             }, websocket)
-            logger.info(f"Sent historical data for {len(historical_data)} symbols")
+            logger.info(f"Sent filtered historical data for {len(historical_data)} symbols")
 
     async def fetch_and_cache_market_data(self, symbols: list[str]) -> Dict[str, Any]:
         """Fetch market data and cache it in Redis."""
