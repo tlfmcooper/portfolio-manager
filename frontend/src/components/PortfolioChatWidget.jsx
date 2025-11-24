@@ -7,6 +7,13 @@ import { tools, executeTool } from '../tools/agentTools';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
 import html2canvas from 'html2canvas';
+import Logo from '../assets/portfolio_pilot_logo.png';
+
+const NeonSpinner = () => (
+  <div className="flex items-center justify-center p-3 bg-transparent border-2 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] rounded-2xl rounded-bl-none w-fit">
+    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+);
 
 const PortfolioChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -58,7 +65,10 @@ const PortfolioChatWidget = () => {
 
     try {
       // Capture dashboard screenshot for context
+      // Defer screenshot to allow UI to update (show spinner) first
       let imagePart = null;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       try {
         const canvas = await html2canvas(document.body, {
           ignoreElements: (element) => element.id === 'portfolio-chat-widget',
@@ -117,9 +127,6 @@ const PortfolioChatWidget = () => {
       const parts = [{ text: userMessage }];
       if (imagePart) parts.push(imagePart);
 
-      // Add placeholder for streaming response
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-
       let result;
       try {
         result = await chat.sendMessageStream(parts);
@@ -130,20 +137,26 @@ const PortfolioChatWidget = () => {
       }
 
       let fullText = '';
+      let isFirstChunk = true;
       
       // Stream the text
       for await (const chunk of result.stream) {
         const chunkText = chunk.text();
         fullText += chunkText;
         
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage.role === 'assistant') {
-            lastMessage.content = fullText;
-          }
-          return newMessages;
-        });
+        if (isFirstChunk) {
+          isFirstChunk = false;
+          setMessages(prev => [...prev, { role: 'assistant', content: fullText }]);
+        } else {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage.role === 'assistant') {
+              lastMessage.content = fullText;
+            }
+            return newMessages;
+          });
+        }
       }
 
       // Check for function calls after stream
@@ -198,9 +211,10 @@ const PortfolioChatWidget = () => {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 h-14 w-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 z-50"
+        className="fixed bottom-6 right-6 h-14 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center gap-3 transition-all duration-200 hover:scale-105 z-50"
       >
-        <MessageSquare className="h-6 w-6" />
+        <img src={Logo} alt="Portfolio Pilot" className="h-9 w-9 object-contain" />
+        <span className="font-semibold text-sm whitespace-nowrap">Portfolio Pilot</span>
       </button>
     );
   }
@@ -209,9 +223,9 @@ const PortfolioChatWidget = () => {
     <div id="portfolio-chat-widget" className="fixed bottom-6 right-6 w-96 h-[600px] max-h-[calc(100vh-6rem)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
       {/* Header */}
       <div className="p-4 bg-indigo-600 text-white flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5" />
-          <h3 className="font-semibold">Portfolio Pilot</h3>
+        <div className="flex items-center gap-3">
+          <img src={Logo} alt="Portfolio Pilot" className="h-10 w-10 object-contain bg-white/10 rounded-full" />
+          <h3 className="font-semibold text-lg">Portfolio Pilot</h3>
         </div>
         <div className="flex items-center gap-2">
             <button 
@@ -295,9 +309,7 @@ const PortfolioChatWidget = () => {
         ))}
         {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex justify-start">
-            <div className="bg-white dark:bg-gray-800 p-3 rounded-lg rounded-bl-none border border-gray-200 dark:border-gray-700 shadow-sm">
-              <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-            </div>
+             <NeonSpinner />
           </div>
         )}
         <div ref={messagesEndRef} />
