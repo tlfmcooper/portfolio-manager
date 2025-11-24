@@ -1,7 +1,7 @@
-# Frontend service configuration
+# Backend service configuration
 [build]
 builder = "dockerfile"
-dockerfilePath = "frontend/Dockerfile"
+dockerfilePath = "backend/Dockerfile"
 dockerContext = "."
 
 [deploy]
