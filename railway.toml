@@ -1,29 +1,27 @@
 # -----------------------------------------------------------
-# SERVICE 1: BACKEND (portfolio-manager)
-# Matches the service name in your screenshot exactly
+# BACKEND SERVICE (protective-playfulness)
 # -----------------------------------------------------------
-
-[portfolio-manager.build]
+[protective-playfulness.build]
 builder = "dockerfile"
 dockerfilePath = "backend/Dockerfile"
 dockerContext = "."
+# Rebuild only when backend files or config change
 watchPatterns = ["backend/**", "railway.toml"]
 
-[portfolio-manager.deploy]
+[protective-playfulness.deploy]
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 
 # -----------------------------------------------------------
-# SERVICE 2: FRONTEND (protective-playfulness)
-# Matches the service name in your screenshot exactly
+# FRONTEND SERVICE (portfolio-manager)
 # -----------------------------------------------------------
-
-[protective-playfulness.build]
+[portfolio-manager.build]
 builder = "dockerfile"
 dockerfilePath = "frontend/Dockerfile"
 dockerContext = "."
+# Rebuild only when frontend files or config change
 watchPatterns = ["frontend/**", "railway.toml"]
 
-[protective-playfulness.deploy]
+[portfolio-manager.deploy]
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
