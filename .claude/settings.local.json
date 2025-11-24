@@ -44,7 +44,9 @@
       "Bash(del:*)",
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
-      "Bash(powershell -Command \"Stop-Process -Id 50316 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 50316 -Force\")",
+      "Bash(git log:*)",
+      "Bash(timeout 180 cmd /c \"echo Waiting for Railway deployment... && timeout 180 >nul && curl -s https://protective-playfulness-production.up.railway.app/health\")"
     ],
     "deny": [],
     "ask": []

@@ -1,9 +1,0 @@
-# Frontend service configuration
-[build]
-builder = "dockerfile"
-dockerfilePath = "frontend/Dockerfile"
-dockerContext = "."
-
-[deploy]
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
