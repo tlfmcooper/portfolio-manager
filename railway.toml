@@ -13,15 +13,15 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 
 # -----------------------------------------------------------
-# FRONTEND SERVICE (portfolio-manager)
+# FRONTEND SERVICE (intelligent-playfulness)
 # -----------------------------------------------------------
-[portfolio-manager.build]
+[intelligent-playfulness.build]
 builder = "dockerfile"
 dockerfilePath = "frontend/Dockerfile"
 dockerContext = "."
 # Rebuild only when frontend files or config change
 watchPatterns = ["frontend/**", "railway.toml"]
 
-[portfolio-manager.deploy]
+[intelligent-playfulness.deploy]
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
