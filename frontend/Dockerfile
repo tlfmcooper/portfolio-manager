@@ -22,10 +22,14 @@ ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
 
 # Debug: Show the API URL during build
-RUN echo "Building with VITE_API_URL=${VITE_API_URL}"
+RUN echo "Building with VITE_API_URL=${VITE_API_URL}" && \
+    echo "Environment check:" && \
+    printenv | grep VITE
 
-# Build the application
-RUN npm run build
+# Build the application with explicit env var
+RUN VITE_API_URL="${VITE_API_URL}" npm run build && \
+    echo "Build complete. Checking dist for API URL..." && \
+    grep -r "pure-balance-producti" dist/ || echo "API URL not found in build - this is the problem!"
 
 # Production stage
 FROM nginx:alpine
