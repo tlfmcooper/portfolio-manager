@@ -1,7 +1,23 @@
+const normalizeEnvUrl = (value) => {
+  let url = value.trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    // Allow protocol-relative strings like //api.example.com
+    if (url.startsWith('//')) {
+      url = `https:${url}`;
+    } else {
+      url = `https://${url}`;
+    }
+  }
+
+  // Remove trailing slash once to keep predictable concatenation
+  return url.replace(/\/$/, '');
+};
+
 export const getApiBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL?.trim();
   if (envUrl) {
-    return envUrl.replace(/\/$/, '');
+    return normalizeEnvUrl(envUrl);
   }
 
   const hostname = window.location.hostname;
