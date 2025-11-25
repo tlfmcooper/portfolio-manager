@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, User } from 'lucide-react';
+import { buildApiUrl } from '../../utils/apiConfig';
 
 const RegisterForm = ({ onRegister }) => {
   const [formData, setFormData] = useState({
@@ -44,7 +45,7 @@ const RegisterForm = ({ onRegister }) => {
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/auth/register', {
+      const response = await fetch(buildApiUrl('/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

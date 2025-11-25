@@ -6,7 +6,7 @@ import { Upload } from 'lucide-react';
 const PortfolioOnboarding = () => {
   console.log('PortfolioOnboarding component rendered.'); // Debug log
   const navigate = useNavigate();
-  const { checkOnboardingStatus, user } = useAuth();
+  const { checkOnboardingStatus, user, api } = useAuth();
   const [assets, setAssets] = useState([
     { ticker: '', quantity: '', average_cost: '', asset_type: 'Stock', currency: 'USD' }
   ]);
@@ -47,21 +47,15 @@ const PortfolioOnboarding = () => {
     setError('');
 
     try {
-      const token = localStorage.getItem('access_token');
-      let response;
+      let data;
 
       if (uploadMethod === 'csv' && csvFile) {
         // Upload CSV file
         const formData = new FormData();
         formData.append('file', csvFile);
 
-        response = await fetch('http://127.0.0.1:8000/api/v1/assets/onboard', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formData
-        });
+        const response = await api.post('/assets/onboard', formData);
+        data = response.data;
       } else {
         // Manual entry - filter out empty assets
         const validAssets = assets.filter(asset =>
@@ -74,23 +68,8 @@ const PortfolioOnboarding = () => {
           return;
         }
 
-        response = await fetch('http://127.0.0.1:8000/api/v1/assets/onboard', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(validAssets)
-        });
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMsg = data.detail?.errors
-          ? data.detail.errors.join(', ')
-          : data.detail || 'Failed to save assets';
-        throw new Error(errorMsg);
+        const response = await api.post('/assets/onboard', validAssets);
+        data = response.data;
       }
 
       if (data.errors && data.errors.length > 0) {

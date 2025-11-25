@@ -26,27 +26,15 @@ const BuyAssetForm = ({ onAssetAdded }) => {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch('http://127.0.0.1:8000/api/v1/assets/onboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify([{
-          ticker: formData.ticker.toUpperCase().trim(),
-          quantity: parseFloat(formData.quantity),
-          average_cost: parseFloat(formData.average_cost),
-          asset_type: formData.asset_type,
-          currency: formData.currency
-        }])
-      });
+      const payload = [{
+        ticker: formData.ticker.toUpperCase().trim(),
+        quantity: parseFloat(formData.quantity),
+        average_cost: parseFloat(formData.average_cost),
+        asset_type: formData.asset_type,
+        currency: formData.currency
+      }];
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to buy asset');
-      }
+      const { data } = await api.post('/assets/onboard', payload);
 
       if (data.assets && data.assets.length > 0) {
         toast.success(`Successfully bought ${formData.quantity} shares of ${formData.ticker.toUpperCase()}`);

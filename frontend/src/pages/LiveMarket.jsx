@@ -4,6 +4,7 @@ import { Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import toast from 'react-hot-toast';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 // Tickers not supported by Finnhub
 const UNSUPPORTED_TICKERS = ['MAU.TO'];
@@ -56,7 +57,7 @@ const LiveMarket = () => {
   const connectWebSocket = (symbols) => {
     if (!symbols || symbols.length === 0) return;
 
-    const wsUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1')
+    const wsUrl = getApiBaseUrl()
       .replace('http://', 'ws://')
       .replace('https://', 'wss://');
 

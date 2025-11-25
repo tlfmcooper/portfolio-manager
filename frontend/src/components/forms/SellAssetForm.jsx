@@ -65,25 +65,11 @@ const SellAssetForm = ({ onAssetSold }) => {
     }
 
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch('http://127.0.0.1:8000/api/v1/assets/sell', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          ticker: holding.ticker,
-          quantity: sellQuantity,
-          average_cost: parseFloat(formData.unit_cost)
-        })
+      const { data } = await api.post('/assets/sell', {
+        ticker: holding.ticker,
+        quantity: sellQuantity,
+        average_cost: parseFloat(formData.unit_cost)
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to sell asset');
-      }
 
       toast.success(`Successfully sold ${sellQuantity} shares of ${holding.ticker}`);
       setFormData({ quantity: '', unit_cost: '' });

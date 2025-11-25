@@ -46,7 +46,10 @@
       "Bash(taskkill:*)",
       "Bash(powershell -Command \"Stop-Process -Id 50316 -Force\")",
       "Bash(git log:*)",
-      "Bash(timeout 180 cmd /c \"echo Waiting for Railway deployment... && timeout 180 >nul && curl -s https://protective-playfulness-production.up.railway.app/health\")"
+      "Bash(timeout 180 cmd /c \"echo Waiting for Railway deployment... && timeout 180 >nul && curl -s https://protective-playfulness-production.up.railway.app/health\")",
+      "Bash(backend/.railway-trigger)",
+      "Bash(timeout 60 cmd /c \"timeout 60 >nul && curl -s https://pure-balance-production.up.railway.app/health\")",
+      "Bash(frontend/.railway-trigger)"
     ],
     "deny": [],
     "ask": []
