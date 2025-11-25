@@ -1,0 +1,11 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "frontend/Dockerfile"
+dockerContext = "."
+
+[build.buildArgs]
+VITE_API_URL = "${{VITE_API_URL}}"
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

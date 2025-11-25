@@ -17,8 +17,12 @@ RUN npm install -g npm@latest && \
 COPY frontend/. .
 
 # Accept build argument for API URL
+# Railway automatically passes environment variables as build args
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
+
+# Debug: Show the API URL during build
+RUN echo "Building with VITE_API_URL=${VITE_API_URL}"
 
 # Build the application
 RUN npm run build
