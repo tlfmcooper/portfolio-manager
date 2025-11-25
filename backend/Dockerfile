@@ -32,14 +32,6 @@ COPY backend/ .
 # Expose port (Railway will set PORT env var)
 EXPOSE 8000
 
-# Copy healthcheck script
-COPY backend/healthcheck.sh /healthcheck.sh
-RUN chmod +x /healthcheck.sh
-
-# Health check using script that reads $PORT at runtime
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD /healthcheck.sh
-
 # Run the application (production mode without --reload)
 # Use Railway's $PORT environment variable if set, otherwise default to 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
