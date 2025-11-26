@@ -18,7 +18,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Tickers not supported by Finnhub free tier
-UNSUPPORTED_TICKERS = ["MAU.TO"]
+UNSUPPORTED_TICKERS = ["MAU.TO", "BTCC.TO"]
 
 # US market hours (Eastern Time)
 MARKET_OPEN_TIME = time(9, 30)  # 9:30 AM ET
@@ -209,8 +209,11 @@ class MarketDataWebSocketManager:
         redis_client = await get_redis_client()
 
         market_data = {}
-        current_time = datetime.utcnow()
-        timestamp = current_time.isoformat()
+        # Use Eastern Time for display consistency with US stock market
+        et_tz = ZoneInfo("America/New_York")
+        current_time_et = datetime.now(et_tz)
+        current_time_utc = datetime.utcnow()
+        timestamp = current_time_utc.isoformat()
 
         # Filter out unsupported symbols
         supported_symbols = [s for s in symbols if s not in UNSUPPORTED_TICKERS]
@@ -232,9 +235,9 @@ class MarketDataWebSocketManager:
                     # Add to history list (keep last 200 points = ~50 minutes at 15s intervals)
                     history_key = f"stock:history:{symbol}"
                     data_point = {
-                        "time": current_time.strftime("%H:%M:%S"),
+                        "time": current_time_et.strftime("%H:%M:%S"),  # Display in ET
                         "price": quote["current_price"],
-                        "timestamp": int(current_time.timestamp())
+                        "timestamp": int(current_time_utc.timestamp())  # Keep UTC timestamp for calculations
                     }
                     await redis_client.lpush(history_key, data_point, max_length=200)
 
@@ -249,9 +252,11 @@ class MarketDataWebSocketManager:
 
     async def background_update_loop(self):
         """Background task to continuously fetch and broadcast market data."""
+        print("\n>>> BACKGROUND LOOP STARTED!")
         logger.info("Starting background market data update loop")
 
         while self.is_running:
+            print(f">>> Background loop iteration, connections={len(self.active_connections)}")
             try:
                 # Get active symbols from cache or default set
                 redis_client = await get_redis_client()
@@ -273,7 +278,10 @@ class MarketDataWebSocketManager:
                         "data": market_data,
                         "timestamp": datetime.utcnow().isoformat()
                     })
+                    print(f">>> BROADCASTED {len(market_data)} symbols to {len(self.active_connections)} clients")
                     logger.info(f"Broadcasted market data for {len(market_data)} symbols to {len(self.active_connections)} clients")
+                else:
+                    print(f">>> No broadcast: market_data={len(market_data) if market_data else 0}, connections={len(self.active_connections)}")
 
                 # Wait before next update
                 await asyncio.sleep(self.update_interval)
@@ -287,10 +295,14 @@ class MarketDataWebSocketManager:
 
     def start_background_updates(self):
         """Start background update task."""
+        print(f"\n>>> start_background_updates called, is_running={self.is_running}")
         if not self.is_running:
             self.is_running = True
             self.background_task = asyncio.create_task(self.background_update_loop())
+            print(">>> Background task created!")
             logger.info("Background market data updates started")
+        else:
+            print(">>> Background task already running")
 
     def stop_background_updates(self):
         """Stop background update task."""

@@ -33,10 +33,10 @@ const Dashboard = () => {
       <div className={`md:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 flex z-40">
           <div className="fixed inset-0">
-            <div className="absolute inset-0 bg-gray-600 opacity-75"></div>
+            <div className="absolute inset-0 bg-gray-600 opacity-75" onClick={() => setSidebarOpen(false)}></div>
           </div>
           <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-gray-800">
-            <div className="absolute top-0 right-0 -mr-14 p-1">
+            <div className="absolute top-0 right-0 -mr-14 p-1 z-50">
               <button
                 onClick={() => setSidebarOpen(false)}
                 className="flex items-center justify-center h-12 w-12 rounded-full focus:outline-none focus:bg-gray-600"
@@ -96,7 +96,7 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-          <div className="flex-shrink-0 w-14"></div>
+          <div className="flex-shrink-0 w-14 pointer-events-none"></div>
         </div>
       </div>
 

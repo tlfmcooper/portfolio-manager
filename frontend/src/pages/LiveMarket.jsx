@@ -99,10 +99,12 @@ const LiveMarket = () => {
           console.log('Received live update', message.data);
 
           const now = Date.now();
+          // Display time in Eastern Time (ET) to match US market hours
           const currentTime = new Date().toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
-            second: '2-digit'
+            second: '2-digit',
+            timeZone: 'America/New_York'
           });
 
           Object.entries(message.data).forEach(([symbol, quote]) => {

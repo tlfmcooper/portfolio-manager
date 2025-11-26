@@ -28,7 +28,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
           <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }} onClick={() => setSidebarOpen(false)}></div>
         </div>
         <div className="relative flex-1 flex flex-col max-w-xs w-full" style={{ backgroundColor: 'var(--color-surface)' }}>
-          <div className="absolute top-0 right-0 -mr-14 p-1">
+          <div className="absolute top-0 right-0 -mr-14 p-1 z-50">
             <button
               onClick={() => setSidebarOpen(false)}
               className="flex items-center justify-center h-12 w-12 rounded-full focus:outline-none"
@@ -84,7 +84,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarColl
             </div>
           </div>
         </div>
-        <div className="flex-shrink-0 w-14"></div>
+        <div className="flex-shrink-0 w-14 pointer-events-none"></div>
       </div>
 
       {/* Static sidebar for desktop */}
