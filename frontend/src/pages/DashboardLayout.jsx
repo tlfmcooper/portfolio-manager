@@ -1,22 +1,22 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Loader2, Menu, TrendingUp, Shield, PieChart, Target, BarChart3, TrendingDown } from 'lucide-react';
-import PortfolioService from '../services/portfolioService';
 import Sidebar from '../components/Sidebar';
 import CurrencySwitcher from '../components/CurrencySwitcher';
 import ThemeToggle from '../components/ThemeToggle';
 import PortfolioChatWidget from '../components/PortfolioChatWidget';
+import { DashboardSkeleton } from '../components/ui/Skeleton';
 
-// Import tab components
-import TabOverview from '../components/tabs/TabOverview';
-import TabRisk from '../components/tabs/TabRisk';
-import TabAllocation from '../components/tabs/TabAllocation';
-import TabEfficientFrontier from '../components/tabs/TabEfficientFrontier';
-import TabMonteCarlo from '../components/tabs/TabMonteCarlo';
-import TabCPPI from '../components/tabs/TabCPPI';
+// Lazy load tab components
+const TabOverview = lazy(() => import('../components/tabs/TabOverview'));
+const TabRisk = lazy(() => import('../components/tabs/TabRisk'));
+const TabAllocation = lazy(() => import('../components/tabs/TabAllocation'));
+const TabEfficientFrontier = lazy(() => import('../components/tabs/TabEfficientFrontier'));
+const TabMonteCarlo = lazy(() => import('../components/tabs/TabMonteCarlo'));
+const TabCPPI = lazy(() => import('../components/tabs/TabCPPI'));
 
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-background)' }}>
@@ -25,14 +25,10 @@ const LoadingSpinner = () => (
 );
 
 const DashboardLayout = () => {
-  const [portfolioData, setPortfolioData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const { api, user, logout } = useAuth();
-  const { currency } = useCurrency();
+  const { user, logout } = useAuth();
   const { isDark } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -46,14 +42,6 @@ const DashboardLayout = () => {
     { id: 'simulation', label: 'Monte Carlo', icon: BarChart3 },
     { id: 'strategy', label: 'CPPI Strategy', icon: TrendingDown },
   ];
-
-  const portfolioService = new PortfolioService(api);
-
-  useEffect(() => {
-    if (user) {
-      fetchPortfolioData();
-    }
-  }, [user, currency]); // Re-fetch when currency changes
 
   useEffect(() => {
     const path = location.pathname;
@@ -134,34 +122,6 @@ const DashboardLayout = () => {
         return <TabCPPI />;
       default:
         return <TabOverview />;
-    }
-  };
-
-  const fetchPortfolioData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Use lightweight summary endpoint instead of heavy analysis
-      // Analysis is called separately by individual tabs as needed
-      const summary = await portfolioService.getPortfolioSummary(currency);
-
-      if (summary) {
-        setPortfolioData(summary);
-      } else {
-        setPortfolioData(portfolioService.getMockPortfolioData());
-      }
-    } catch (err) {
-      console.error('Error fetching portfolio data:', err);
-
-      try {
-        setPortfolioData(portfolioService.getMockPortfolioData());
-        setError('Using sample data. Connect your portfolio to see real metrics.');
-      } catch (mockError) {
-        setError('Failed to load portfolio data. Please try again.');
-      }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -274,7 +234,7 @@ const DashboardLayout = () => {
                 {getTabTitle()}
               </h2>
             )}
-            <Suspense fallback={<LoadingSpinner />}>
+            <Suspense fallback={<DashboardSkeleton />}>
               {renderTabContent()}
             </Suspense>
           </div>

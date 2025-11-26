@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, Info } from 'lucid
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
+import { DashboardSkeleton } from './ui/Skeleton'
 
 const OverviewSection = () => {
   const [data, setData] = useState(null)
@@ -34,7 +35,7 @@ const OverviewSection = () => {
     fetchData()
   }, [api, portfolioId, currency]) // Add currency to dependencies
 
-  if (loading) return <div>Loading...</div>
+  if (loading) return <DashboardSkeleton />
   if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
