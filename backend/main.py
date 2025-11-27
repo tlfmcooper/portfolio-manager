@@ -89,7 +89,30 @@ def create_application() -> FastAPI:
         allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
+
+    # Global exception handler to ensure CORS headers on error responses
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):
+        from fastapi.responses import JSONResponse
+        import traceback
+
+        # Log the exception
+        print(f"Unhandled exception: {type(exc).__name__}: {str(exc)}")
+        if settings.DEBUG:
+            traceback.print_exc()
+
+        # Return error response with CORS headers
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
 
     # Include API router
     app.include_router(api_router)
