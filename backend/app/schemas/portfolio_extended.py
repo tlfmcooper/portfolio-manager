@@ -30,11 +30,12 @@ class PortfolioInDB(PortfolioBase):
     total_value: float
     total_return: float
     total_return_percentage: float
+    cash_balance: float
     is_active: bool
     created_at: datetime
     updated_at: datetime
     last_rebalance: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -46,10 +47,11 @@ class PortfolioSummary(BaseModel):
     total_value: float
     total_return: float
     total_return_percentage: float
+    cash_balance: float
     total_holdings_count: int
     diversification_score: float
     currency: str
     last_updated: datetime
-    
+
     class Config:
         from_attributes = True

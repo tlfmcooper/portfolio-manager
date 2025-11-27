@@ -253,6 +253,15 @@ async def onboard_asset(
 
             await db.flush()  # Ensure holding_to_use has an ID if new, or is updated
 
+            # Calculate purchase cost
+            purchase_cost = item.quantity * item.average_cost
+
+            # Check if portfolio has sufficient cash (optional validation)
+            # Uncomment if you want to enforce cash balance checks on buy
+            # if portfolio.cash_balance < purchase_cost:
+            #     errors.append(f"Insufficient cash to buy {item.quantity} shares of {ticker}. Required: {purchase_cost}, Available: {portfolio.cash_balance}")
+            #     continue
+
             # Create transaction (buy)
             transaction = Transaction(
                 portfolio_id=holding_to_use.portfolio_id,
@@ -264,12 +273,24 @@ async def onboard_asset(
             )
             db.add(transaction)
             await db.flush()
+
+            # Debit cash balance for purchase (if cash management is enabled)
+            # This assumes users deposit cash before buying, or cash balance can go negative
+            from app.crud.portfolio_extended import update_portfolio_cash_balance
+            await update_portfolio_cash_balance(
+                db=db,
+                portfolio_id=portfolio.id,
+                amount=purchase_cost,
+                operation="subtract"
+            )
+
             created_assets.append(
                 {
                     "ticker": ticker,
                     "name": asset_obj.name or ticker,
                     "quantity": item.quantity, # This quantity is for the current transaction
                     "average_cost": item.average_cost,
+                    "purchase_cost": purchase_cost,
                     "current_price": asset_obj.current_price,
                     "market_value": holding_to_use.market_value,
                     "asset_id": asset_obj.id,
