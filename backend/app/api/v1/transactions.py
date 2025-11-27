@@ -105,10 +105,19 @@ async def deposit_cash(
 
     This creates a DEPOSIT transaction and increases the portfolio's cash balance.
     """
-    # Verify portfolio belongs to user
-    portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
-    if not portfolio or portfolio.id != portfolio_id:
-        raise HTTPException(status_code=404, detail="Portfolio not found")
+    print(f"[DEPOSIT] Starting deposit for portfolio {portfolio_id}, amount: {cash_in.amount}")
+
+    try:
+        # Verify portfolio belongs to user
+        print(f"[DEPOSIT] Fetching portfolio for user {current_user.id}")
+        portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
+        print(f"[DEPOSIT] Portfolio fetched: {portfolio.id if portfolio else 'None'}")
+
+        if not portfolio or portfolio.id != portfolio_id:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+    except Exception as e:
+        print(f"[DEPOSIT ERROR] Failed to fetch portfolio: {type(e).__name__}: {str(e)}")
+        raise
 
     if cash_in.amount <= 0:
         raise HTTPException(status_code=400, detail="Deposit amount must be positive")
@@ -116,32 +125,43 @@ async def deposit_cash(
     if cash_in.transaction_type != TransactionType.DEPOSIT:
         raise HTTPException(status_code=400, detail="Transaction type must be DEPOSIT")
 
-    # Create transaction
-    transaction = await create_cash_transaction(
-        db=db,
-        portfolio_id=portfolio_id,
-        transaction_type=TransactionType.DEPOSIT,
-        amount=cash_in.amount,
-        notes=cash_in.notes
-    )
+    try:
+        # Create transaction
+        print(f"[DEPOSIT] Creating transaction...")
+        transaction = await create_cash_transaction(
+            db=db,
+            portfolio_id=portfolio_id,
+            transaction_type=TransactionType.DEPOSIT,
+            amount=cash_in.amount,
+            notes=cash_in.notes
+        )
+        print(f"[DEPOSIT] Transaction created: {transaction.id}")
 
-    # Update portfolio cash balance
-    updated_portfolio = await update_portfolio_cash_balance(
-        db=db,
-        portfolio_id=portfolio_id,
-        amount=cash_in.amount,
-        operation="add"
-    )
+        # Update portfolio cash balance
+        print(f"[DEPOSIT] Updating portfolio balance...")
+        updated_portfolio = await update_portfolio_cash_balance(
+            db=db,
+            portfolio_id=portfolio_id,
+            amount=cash_in.amount,
+            operation="add"
+        )
+        print(f"[DEPOSIT] Balance updated. New balance: {updated_portfolio.cash_balance if updated_portfolio else 'None'}")
 
-    if not updated_portfolio:
-        raise HTTPException(status_code=404, detail="Portfolio not found during update")
+        if not updated_portfolio:
+            raise HTTPException(status_code=404, detail="Portfolio not found during update")
 
-    return {
-        "message": "Cash deposited successfully",
-        "transaction_id": transaction.id,
-        "amount": cash_in.amount,
-        "new_balance": updated_portfolio.cash_balance
-    }
+        print(f"[DEPOSIT] SUCCESS - Deposit completed")
+        return {
+            "message": "Cash deposited successfully",
+            "transaction_id": transaction.id,
+            "amount": cash_in.amount,
+            "new_balance": updated_portfolio.cash_balance
+        }
+    except Exception as e:
+        print(f"[DEPOSIT ERROR] Transaction/update failed: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 @router.post("/{portfolio_id}/cash/withdrawal")
