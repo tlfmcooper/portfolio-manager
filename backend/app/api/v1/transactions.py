@@ -18,7 +18,7 @@ from app.models.user import User
 from app.models.transaction import TransactionType
 from app.utils.dependencies import get_current_active_user
 from app.crud.portfolio_extended import update_portfolio_cash_balance, get_portfolio_cash_balance
-from app.crud.transaction import create_cash_transaction, get_total_realized_gains
+from app.crud.transaction import create_cash_transaction, get_total_realized_gains, get_realized_gains_by_asset
 
 router = APIRouter()
 
@@ -271,4 +271,38 @@ async def get_realized_gains(
         "portfolio_id": portfolio_id,
         "total_realized_gains": total_realized,
         "currency": portfolio.currency
+    }
+
+
+@router.get("/portfolios/{portfolio_id}/realized-gains/detailed")
+async def get_realized_gains_detailed(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get detailed realized gains/losses by asset.
+
+    Returns breakdown showing:
+    - Ticker symbol
+    - Asset name
+    - Quantity sold
+    - Cost basis
+    - Sale proceeds
+    - Realized gain/loss
+
+    Calculated using FIFO cost basis method.
+    """
+    # Verify portfolio belongs to user
+    portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
+    if not portfolio or portfolio.id != portfolio_id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    realized_gains = await get_realized_gains_by_asset(db, portfolio_id)
+
+    return {
+        "portfolio_id": portfolio_id,
+        "currency": portfolio.currency,
+        "realized_gains": realized_gains,
+        "total": sum(item["realized_gain_loss"] for item in realized_gains)
     }

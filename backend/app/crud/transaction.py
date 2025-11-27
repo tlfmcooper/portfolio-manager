@@ -219,3 +219,68 @@ async def get_total_realized_gains(
 
     total_realized = sum(txn.realized_gain_loss for txn in sell_transactions if txn.realized_gain_loss)
     return total_realized
+
+
+async def get_realized_gains_by_asset(
+    db: AsyncSession,
+    portfolio_id: int
+) -> List[Dict]:
+    """
+    Get detailed realized gains/losses grouped by asset.
+
+    Returns a list of dictionaries with:
+    - ticker: Asset ticker symbol
+    - name: Asset name
+    - total_quantity_sold: Total quantity sold
+    - total_cost_basis: Total cost basis of sold shares
+    - total_proceeds: Total sale proceeds
+    - realized_gain_loss: Total realized gain/loss
+
+    Args:
+        db: Database session
+        portfolio_id: Portfolio ID
+
+    Returns:
+        List of dictionaries with realized gains by asset
+    """
+    from sqlalchemy import func
+    from app.models import Asset
+
+    # Get all SELL transactions with asset details
+    result = await db.execute(
+        select(
+            Asset.ticker,
+            Asset.name,
+            func.sum(Transaction.quantity).label('total_quantity'),
+            func.sum(Transaction.quantity * Transaction.price).label('total_proceeds'),
+            func.sum(Transaction.realized_gain_loss).label('realized_gain_loss')
+        )
+        .join(Transaction.asset)
+        .where(
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.transaction_type == TransactionType.SELL,
+            Transaction.realized_gain_loss.isnot(None)
+        )
+        .group_by(Asset.ticker, Asset.name)
+        .order_by(func.sum(Transaction.realized_gain_loss).desc())
+    )
+
+    rows = result.all()
+
+    realized_gains_list = []
+    for row in rows:
+        # Calculate cost basis from proceeds and realized gain
+        total_proceeds = float(row.total_proceeds) if row.total_proceeds else 0.0
+        realized_gl = float(row.realized_gain_loss) if row.realized_gain_loss else 0.0
+        cost_basis = total_proceeds - realized_gl
+
+        realized_gains_list.append({
+            "ticker": row.ticker,
+            "name": row.name,
+            "quantity_sold": float(row.total_quantity) if row.total_quantity else 0.0,
+            "cost_basis": cost_basis,
+            "proceeds": total_proceeds,
+            "realized_gain_loss": realized_gl
+        })
+
+    return realized_gains_list
