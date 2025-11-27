@@ -30,33 +30,29 @@ const HoldingsView = () => {
     fetchData()
   }, [api, currency])
 
-  if (loading) return <div>Loading...</div>
-  if (error) return <div className="text-red-500">{error}</div>
-  if (!data || !Array.isArray(data)) return null
-
   const formatPercentage = (value) => {
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
   }
 
   const getReturnColor = (value) => {
-    return value >= 0 ? 'text-green-600' : 'text-red-600'
+    return value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
   }
 
   const getReturnIcon = (value) => {
     return value >= 0 ? (
-      <TrendingUp className="h-4 w-4 text-green-600" />
+      <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
     ) : (
-      <TrendingDown className="h-4 w-4 text-red-600" />
+      <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
     )
   }
 
-  const totalValue = data.reduce((sum, holding) => sum + holding.market_value, 0)
+  const totalValue = data ? data.reduce((sum, holding) => sum + holding.market_value, 0) : 0
 
   // Filter and sort data
-  const filteredData = data.filter(holding =>
+  const filteredData = data ? data.filter(holding =>
     holding.ticker.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    holding.asset.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+    (holding.asset?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  ) : []
 
   const sortedData = React.useMemo(() => {
     let sortableData = [...filteredData]
@@ -70,16 +66,16 @@ const HoldingsView = () => {
             bVal = b.ticker
             break
           case 'name':
-            aVal = a.asset.name
-            bVal = b.asset.name
+            aVal = a.asset?.name || ''
+            bVal = b.asset?.name || ''
             break
           case 'value':
             aVal = a.market_value
             bVal = b.market_value
             break
           case 'weight':
-            aVal = a.market_value / totalValue
-            bVal = b.market_value / totalValue
+            aVal = a.market_value / (totalValue || 1)
+            bVal = b.market_value / (totalValue || 1)
             break
           case 'return':
             aVal = a.unrealized_gain_loss_percentage
@@ -141,34 +137,11 @@ const HoldingsView = () => {
     }
   }
 
+  if (loading) return <div>Loading...</div>
+  if (!data || !Array.isArray(data)) return null
+
   return (
-    <div className="space-y-6">
-      {/* Holdings Summary */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Holdings Overview
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm font-medium text-gray-500">Total Holdings</p>
-            <p className="text-2xl font-semibold text-gray-900">
-              {data.length}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Total Value</p>
-            <p className="text-2xl font-semibold text-gray-900">
-              {formatCurrency(totalValue)}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500">Avg. Weight</p>
-            <p className="text-2xl font-semibold text-gray-900">
-              {(100 / data.length).toFixed(1)}%
-            </p>
-          </div>
-        </div>
-      </div>
+    <div>
       {/* Holdings Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -186,7 +159,7 @@ const HoldingsView = () => {
                 placeholder="Search by symbol or name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
               />
             </div>
           </div>
@@ -207,7 +180,8 @@ const HoldingsView = () => {
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-opacity-80"
+                  style={{ color: 'var(--color-text-secondary)' }}
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center">
@@ -218,7 +192,8 @@ const HoldingsView = () => {
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-opacity-80"
+                  style={{ color: 'var(--color-text-secondary)' }}
                   onClick={() => handleSort('value')}
                 >
                   <div className="flex items-center justify-end">
@@ -229,7 +204,8 @@ const HoldingsView = () => {
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-opacity-80"
+                  style={{ color: 'var(--color-text-secondary)' }}
                   onClick={() => handleSort('weight')}
                 >
                   <div className="flex items-center justify-end">
@@ -239,7 +215,7 @@ const HoldingsView = () => {
                     )}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
                   1D Return
                 </th>
                 <th
@@ -267,7 +243,7 @@ const HoldingsView = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{holding.asset.name}</div>
+                    <div className="text-sm text-gray-900">{holding.asset?.name || 'Unknown Asset'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm font-medium text-gray-900">
@@ -276,7 +252,7 @@ const HoldingsView = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="text-sm text-gray-900">
-                      {(holding.market_value / totalValue * 100).toFixed(1)}%
+                      {(holding.market_value / (totalValue || 1) * 100).toFixed(1)}%
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -318,9 +294,9 @@ const HoldingsView = () => {
         </div>
         {/* Sell Modal */}
         {showSellModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
             <div className="bg-white rounded-lg p-6 shadow-lg w-96">
-              <h3 className="text-lg font-semibold mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Sell Asset: {selectedHolding?.ticker}
               </h3>
               {sellError && (
@@ -328,7 +304,7 @@ const HoldingsView = () => {
               )}
               <form onSubmit={handleSellSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium">Quantity</label>
+                  <label className="block text-sm font-medium text-gray-700">Quantity</label>
                   <input
                     type="number"
                     value={sellQuantity}
@@ -336,11 +312,11 @@ const HoldingsView = () => {
                     required
                     min="0"
                     step="any"
-                    className="mt-1 block w-full border rounded-md"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium">Unit Cost</label>
+                  <label className="block text-sm font-medium text-gray-700">Unit Cost</label>
                   <input
                     type="number"
                     value={sellUnitCost}
@@ -349,20 +325,25 @@ const HoldingsView = () => {
                     min="0"
                     step="any"
                     className="mt-1 block w-full border rounded-md"
+                    style={{ 
+                      backgroundColor: 'var(--color-background)', 
+                      borderColor: 'var(--color-border)',
+                      color: 'var(--color-text)'
+                    }}
                   />
                 </div>
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setShowSellModal(false)}
-                    className="px-4 py-2 bg-gray-200 rounded"
+                    className="px-4 py-2 bg-gray-200 text-gray-900 rounded hover:bg-gray-300"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSelling}
-                    className="px-4 py-2 bg-green-600 text-white rounded"
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
                   >
                     {isSelling ? 'Selling...' : 'Sell'}
                   </button>

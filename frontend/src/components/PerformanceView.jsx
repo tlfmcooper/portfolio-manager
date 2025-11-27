@@ -57,41 +57,41 @@ const PerformanceView = () => {
       {/* Performance Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {/* Sharpe Ratio */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="rounded-lg shadow p-6" style={{ backgroundColor: 'var(--color-surface)' }}>
           <div className="text-center">
-            <p className="text-sm font-medium text-gray-500 mb-2">Sharpe Ratio</p>
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Sharpe Ratio</p>
             <p className={`text-3xl font-bold ${getColorForValue(data.sharpe_ratio)}`}>
               {formatRatio(data.sharpe_ratio)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Risk-adjusted return</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>Risk-adjusted return</p>
           </div>
         </div>
 
         {/* Max Drawdown */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="rounded-lg shadow p-6" style={{ backgroundColor: 'var(--color-surface)' }}>
           <div className="text-center">
-            <p className="text-sm font-medium text-gray-500 mb-2">Max Drawdown</p>
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Max Drawdown</p>
             <p className={`text-3xl font-bold ${getColorForValue(data.max_drawdown, false)}`}>
               {formatPercentage(data.max_drawdown)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Worst peak-to-trough</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>Worst peak-to-trough</p>
           </div>
         </div>
         {/* Volatility */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="rounded-lg shadow p-6" style={{ backgroundColor: 'var(--color-surface)' }}>
           <div className="text-center">
-            <p className="text-sm font-medium text-gray-500 mb-2">Volatility</p>
+            <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>Volatility</p>
             <p className={`text-3xl font-bold ${getColorForValue(data.portfolio_volatility_annualized, false)}`}>
               {formatPercentage(data.portfolio_volatility_annualized)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Price fluctuation</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>Price fluctuation</p>
           </div>
         </div>
       </div>
 
       {/* Performance Chart */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Metrics Visualization</h3>
+      <div className="rounded-lg shadow p-6" style={{ backgroundColor: 'var(--color-surface)' }}>
+        <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Performance Metrics Visualization</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
@@ -123,12 +123,12 @@ const PerformanceView = () => {
         </div>
       </div>
       {/* Metrics Explanation */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Understanding Your Metrics</h3>
+      <div className="rounded-lg shadow p-6" style={{ backgroundColor: 'var(--color-surface)' }}>
+        <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Understanding Your Metrics</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Sharpe Ratio ({formatRatio(data.sharpe_ratio)})</h4>
-            <p className="text-gray-600">
+            <h4 className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>Sharpe Ratio ({formatRatio(data.sharpe_ratio)})</h4>
+            <p style={{ color: 'var(--color-text-secondary)' }}>
               Measures risk-adjusted return. Higher values indicate better performance per unit of risk.
               {data.sharpe_ratio > 1 ? ' Excellent risk-adjusted performance.' :
                data.sharpe_ratio > 0.5 ? ' Good risk-adjusted performance.' :
@@ -137,8 +137,8 @@ const PerformanceView = () => {
           </div>
           
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Volatility ({formatPercentage(data.portfolio_volatility_annualized)})</h4>
-            <p className="text-gray-600">
+            <h4 className="font-medium mb-2" style={{ color: 'var(--color-text)' }}>Volatility ({formatPercentage(data.portfolio_volatility_annualized)})</h4>
+            <p style={{ color: 'var(--color-text-secondary)' }}>
               Price fluctuation measure.
               {data.portfolio_volatility_annualized < 10 ? ' Low volatility portfolio.' :
                data.portfolio_volatility_annualized < 20 ? ' Moderate volatility portfolio.' :

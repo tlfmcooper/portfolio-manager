@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, DollarSign, Minus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import toast from 'react-hot-toast';
 
 const AddCashForm = ({ onClose, onSuccess }) => {
@@ -9,6 +10,7 @@ const AddCashForm = ({ onClose, onSuccess }) => {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const { api, portfolioId } = useAuth();
+  const { getCurrencySymbol } = useCurrency();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -141,17 +143,17 @@ const AddCashForm = ({ onClose, onSuccess }) => {
             </label>
             <div className="relative">
               <span
-                className="absolute left-3 top-1/2 transform -translate-y-1/2"
-                style={{ color: 'var(--color-text-tertiary)' }}
+                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-sm font-medium"
+                style={{ color: 'var(--color-text-secondary)' }}
               >
-                $
+                {getCurrencySymbol()}
               </span>
               <input
                 type="number"
                 id="amount"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-8 pr-4 py-3 rounded-lg border focus:ring-2 focus:ring-opacity-50 transition-colors"
+                className="w-full pl-16 pr-4 py-3 rounded-lg border focus:ring-2 focus:ring-opacity-50 transition-colors"
                 style={{
                   backgroundColor: 'var(--color-background)',
                   borderColor: 'var(--color-border)',

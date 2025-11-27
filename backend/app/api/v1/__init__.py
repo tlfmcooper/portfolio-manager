@@ -16,17 +16,12 @@ api_router.include_router(refresh_router, prefix="/auth", tags=["authentication"
 # Include user management routes
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 
+# Include transactions management routes
+# Both portfolios and transactions share the /portfolios prefix
+api_router.include_router(transactions.router, prefix="/portfolios", tags=["transactions"])
+
 # Include portfolio management routes
 api_router.include_router(portfolios.router, prefix="/portfolios", tags=["portfolios"])
-
-# Include holdings management routes
-api_router.include_router(holdings.router, prefix="/holdings", tags=["holdings"])
-
-# Include assets management routes
-api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
-
-# Include transactions management routes (no prefix - routes define their own paths)
-api_router.include_router(transactions.router, tags=["transactions"])
 
 # Include analysis routes
 api_router.include_router(analysis.router, prefix="/analysis", tags=["analysis"])

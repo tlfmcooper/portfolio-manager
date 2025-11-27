@@ -23,7 +23,7 @@ from app.crud.transaction import create_cash_transaction, get_total_realized_gai
 router = APIRouter()
 
 
-@router.post("/portfolios/{portfolio_id}/transactions/", response_model=Transaction)
+@router.post("/{portfolio_id}/transactions/", response_model=Transaction)
 async def create_transaction(
     portfolio_id: int,
     *, 
@@ -37,7 +37,7 @@ async def create_transaction(
     return transaction
 
 
-@router.get("/portfolios/{portfolio_id}/transactions/", response_model=List[Transaction])
+@router.get("/{portfolio_id}/transactions/", response_model=List[Transaction])
 async def read_transactions(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -93,7 +93,7 @@ async def delete_transaction(
     return transaction
 
 
-@router.post("/portfolios/{portfolio_id}/cash/deposit")
+@router.post("/{portfolio_id}/cash/deposit")
 async def deposit_cash(
     portfolio_id: int,
     cash_in: CashTransactionCreate,
@@ -141,7 +141,7 @@ async def deposit_cash(
     }
 
 
-@router.post("/portfolios/{portfolio_id}/cash/withdrawal")
+@router.post("/{portfolio_id}/cash/withdrawal")
 async def withdraw_cash(
     portfolio_id: int,
     cash_in: CashTransactionCreate,
@@ -197,7 +197,7 @@ async def withdraw_cash(
     }
 
 
-@router.get("/portfolios/{portfolio_id}/cash/balance")
+@router.get("/{portfolio_id}/cash/balance")
 async def get_cash_balance(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
@@ -223,7 +223,7 @@ async def get_cash_balance(
     return balance_info
 
 
-@router.get("/portfolios/{portfolio_id}/realized-gains")
+@router.get("/{portfolio_id}/realized-gains")
 async def get_realized_gains(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),

@@ -103,7 +103,7 @@ const DashboardLayout = () => {
   };
 
   const renderTabContent = () => {
-    if (location.pathname.includes('update-portfolio') || location.pathname.includes('live-market')) {
+    if (location.pathname.includes('update-portfolio') || location.pathname.includes('live-market') || location.pathname.includes('portfolio')) {
       return <Outlet />;
     }
     

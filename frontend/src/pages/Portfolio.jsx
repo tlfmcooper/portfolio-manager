@@ -3,6 +3,7 @@ import { Loader2, PieChart, TrendingUp, Wallet, DollarSign, Receipt } from 'luci
 import CashBalance from '../components/CashBalance';
 import TransactionHistory from '../components/TransactionHistory';
 import AddCashForm from '../components/forms/AddCashForm';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Lazy load portfolio-related sections
 const AllocationSection = React.lazy(() => import('../components/AllocationSection'));
@@ -86,21 +87,6 @@ const Portfolio = () => {
             </h3>
           </div>
           <AllocationSection />
-        </div>
-
-        {/* Holdings Overview Section */}
-        <div style={{ marginBottom: 'var(--space-32)' }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Wallet className="h-5 w-5" style={{ color: 'var(--color-primary)' }} />
-            <h3 style={{ 
-              fontSize: 'var(--font-size-xl)', 
-              color: 'var(--color-text)',
-              fontWeight: 'var(--font-weight-medium)'
-            }}>
-              Holdings Overview
-            </h3>
-          </div>
-          <HoldingsView />
         </div>
 
         {/* Performance Metrics Section */}
