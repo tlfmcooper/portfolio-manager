@@ -123,14 +123,36 @@ async def calculate_portfolio_metrics(
             for ticker, value in asset_allocation.items()
         }
 
+    # Include cash balance in total value
+    cash_balance = portfolio.cash_balance or 0.0
+
+    # Convert cash balance to display currency if needed
+    if portfolio.currency != display_currency and portfolio.currency in exchange_rates:
+        cash_balance_converted = cash_balance * exchange_rates[portfolio.currency]
+        print(f"[CURRENCY] Cash balance: {cash_balance:.2f} {portfolio.currency} -> {cash_balance_converted:.2f} {display_currency}")
+        cash_balance = cash_balance_converted
+    elif portfolio.currency != display_currency:
+        # Need to fetch exchange rate for portfolio currency
+        rate = await exchange_service.get_exchange_rate(portfolio.currency, display_currency)
+        cash_balance_converted = cash_balance * rate
+        print(f"[CURRENCY] Cash balance: {cash_balance:.2f} {portfolio.currency} -> {cash_balance_converted:.2f} {display_currency} (rate: {rate})")
+        cash_balance = cash_balance_converted
+    else:
+        print(f"[CURRENCY] Cash balance: {cash_balance:.2f} {display_currency}")
+
+    # Add cash to total value
+    total_value_with_cash = total_value + cash_balance
+
     total_return = total_value - total_cost
     total_return_percentage = (total_return / total_cost * 100) if total_cost > 0 else 0.0
 
-    print(f"[CURRENCY] Final totals in {display_currency}: Value={total_value:.2f}, Cost={total_cost:.2f}, Return={total_return:.2f}")
+    print(f"[CURRENCY] Final totals in {display_currency}: Holdings={total_value:.2f}, Cash={cash_balance:.2f}, Total Value={total_value_with_cash:.2f}, Cost={total_cost:.2f}, Return={total_return:.2f}")
 
     return {
         "total_invested": total_cost,
-        "total_value": total_value,
+        "total_value": total_value_with_cash,  # Include cash in total value
+        "holdings_value": total_value,  # Separate holdings value
+        "cash_balance": cash_balance,  # Include cash balance
         "total_return": total_return,
         "total_return_percentage": total_return_percentage,
         "asset_allocation": asset_allocation,
