@@ -9,6 +9,7 @@ from datetime import datetime
 from app.models import Portfolio, Holding, Asset
 from app.schemas import PortfolioUpdate
 from app.services.exchange_rate_service import get_exchange_rate_service
+from app.crud.portfolio import get_portfolio
 
 
 async def update_portfolio(db: AsyncSession, portfolio_id: int, portfolio_update: PortfolioUpdate) -> Optional[Portfolio]:
