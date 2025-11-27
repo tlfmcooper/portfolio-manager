@@ -160,5 +160,96 @@ async def update_portfolio_metrics(db: AsyncSession, portfolio_id: int) -> bool:
     return result.rowcount > 0
 
 
+async def update_portfolio_cash_balance(
+    db: AsyncSession,
+    portfolio_id: int,
+    amount: float,
+    operation: str = "add"
+) -> Optional[Portfolio]:
+    """
+    Update portfolio cash balance.
+
+    Args:
+        db: Database session
+        portfolio_id: Portfolio ID
+        amount: Amount to add or subtract (positive value)
+        operation: "add" or "subtract"
+
+    Returns:
+        Updated portfolio or None if not found
+    """
+    portfolio = await get_portfolio(db, portfolio_id)
+    if not portfolio:
+        return None
+
+    if operation == "add":
+        portfolio.cash_balance += amount
+    elif operation == "subtract":
+        portfolio.cash_balance -= amount
+    else:
+        raise ValueError("Operation must be 'add' or 'subtract'")
+
+    portfolio.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(portfolio)
+
+    return portfolio
+
+
+async def get_portfolio_cash_balance(
+    db: AsyncSession,
+    portfolio_id: int,
+    display_currency: Optional[str] = None
+) -> Dict:
+    """
+    Get portfolio cash balance with optional currency conversion.
+
+    Args:
+        db: Database session
+        portfolio_id: Portfolio ID
+        display_currency: Currency to convert to (optional)
+
+    Returns:
+        Dictionary with cash balance info
+    """
+    portfolio = await get_portfolio(db, portfolio_id)
+    if not portfolio:
+        return {
+            "cash_balance": 0.0,
+            "portfolio_currency": "USD",
+            "display_currency": display_currency or "USD",
+            "exchange_rate": 1.0
+        }
+
+    cash_balance = portfolio.cash_balance
+    portfolio_currency = portfolio.currency
+
+    # If no display currency specified, use portfolio currency
+    if not display_currency:
+        return {
+            "cash_balance": cash_balance,
+            "portfolio_currency": portfolio_currency,
+            "display_currency": portfolio_currency,
+            "exchange_rate": 1.0
+        }
+
+    display_currency = display_currency.upper()
+
+    # Convert if needed
+    if portfolio_currency != display_currency:
+        exchange_service = get_exchange_rate_service()
+        rate = await exchange_service.get_exchange_rate(portfolio_currency, display_currency)
+        cash_balance = cash_balance * rate
+    else:
+        rate = 1.0
+
+    return {
+        "cash_balance": cash_balance,
+        "portfolio_currency": portfolio_currency,
+        "display_currency": display_currency,
+        "exchange_rate": rate
+    }
+
+
 # Import to avoid circular imports
 from app.crud.portfolio import get_portfolio

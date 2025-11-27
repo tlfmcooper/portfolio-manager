@@ -36,6 +36,9 @@ class Portfolio(Base):
     total_value = Column(Float, default=0.0, nullable=False)
     total_return = Column(Float, default=0.0, nullable=False)
     total_return_percentage = Column(Float, default=0.0, nullable=False)
+
+    # Cash management
+    cash_balance = Column(Float, default=0.0, nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

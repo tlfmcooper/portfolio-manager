@@ -27,6 +27,8 @@ class TransactionType(enum.Enum):
 
     BUY = "BUY"
     SELL = "SELL"
+    DEPOSIT = "DEPOSIT"  # Cash deposit into portfolio
+    WITHDRAWAL = "WITHDRAWAL"  # Cash withdrawal from portfolio
 
 
 class Transaction(Base):
@@ -36,14 +38,17 @@ class Transaction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
-    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
+    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)  # Nullable for DEPOSIT/WITHDRAWAL
     transaction_type = Column(Enum(TransactionType), nullable=False)
-    quantity = Column(Float, nullable=False)
-    price = Column(Float, nullable=False)
+    quantity = Column(Float, nullable=True)  # Nullable for cash transactions
+    price = Column(Float, nullable=False)  # For cash txns, this is the amount
     transaction_date = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     notes = Column(String, nullable=True)
+
+    # For SELL transactions: realized gain/loss (calculated using FIFO)
+    realized_gain_loss = Column(Float, nullable=True)
 
     # Relationships
     portfolio = relationship("Portfolio", back_populates="transactions")

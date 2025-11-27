@@ -1,13 +1,24 @@
 """
 API endpoints for transactions.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 
 from app import crud
-from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
+from app.schemas.transaction import (
+    Transaction,
+    TransactionCreate,
+    TransactionUpdate,
+    CashTransactionCreate,
+    TransactionWithAsset
+)
 from app.core.database import get_db
+from app.models.user import User
+from app.models.transaction import TransactionType
+from app.utils.dependencies import get_current_active_user
+from app.crud.portfolio_extended import update_portfolio_cash_balance, get_portfolio_cash_balance
+from app.crud.transaction import create_cash_transaction, get_total_realized_gains
 
 router = APIRouter()
 
@@ -80,3 +91,158 @@ async def delete_transaction(
         raise HTTPException(status_code=404, detail="Transaction not found")
     await crud.transaction.delete_transaction(db=db, db_obj=transaction)
     return transaction
+
+
+@router.post("/portfolios/{portfolio_id}/cash/deposit")
+async def deposit_cash(
+    portfolio_id: int,
+    cash_in: CashTransactionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Deposit cash into portfolio.
+
+    This creates a DEPOSIT transaction and increases the portfolio's cash balance.
+    """
+    # Verify portfolio belongs to user
+    portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
+    if not portfolio or portfolio.id != portfolio_id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    if cash_in.amount <= 0:
+        raise HTTPException(status_code=400, detail="Deposit amount must be positive")
+
+    if cash_in.transaction_type != TransactionType.DEPOSIT:
+        raise HTTPException(status_code=400, detail="Transaction type must be DEPOSIT")
+
+    # Create transaction
+    transaction = await create_cash_transaction(
+        db=db,
+        portfolio_id=portfolio_id,
+        transaction_type=TransactionType.DEPOSIT,
+        amount=cash_in.amount,
+        notes=cash_in.notes
+    )
+
+    # Update portfolio cash balance
+    await update_portfolio_cash_balance(
+        db=db,
+        portfolio_id=portfolio_id,
+        amount=cash_in.amount,
+        operation="add"
+    )
+
+    return {
+        "message": "Cash deposited successfully",
+        "transaction_id": transaction.id,
+        "amount": cash_in.amount,
+        "new_balance": portfolio.cash_balance + cash_in.amount
+    }
+
+
+@router.post("/portfolios/{portfolio_id}/cash/withdrawal")
+async def withdraw_cash(
+    portfolio_id: int,
+    cash_in: CashTransactionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Withdraw cash from portfolio.
+
+    This creates a WITHDRAWAL transaction and decreases the portfolio's cash balance.
+    Validates that sufficient cash is available.
+    """
+    # Verify portfolio belongs to user
+    portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
+    if not portfolio or portfolio.id != portfolio_id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    if cash_in.amount <= 0:
+        raise HTTPException(status_code=400, detail="Withdrawal amount must be positive")
+
+    if cash_in.transaction_type != TransactionType.WITHDRAWAL:
+        raise HTTPException(status_code=400, detail="Transaction type must be WITHDRAWAL")
+
+    # Check sufficient balance
+    if portfolio.cash_balance < cash_in.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient cash balance. Available: {portfolio.cash_balance}, Requested: {cash_in.amount}"
+        )
+
+    # Create transaction
+    transaction = await create_cash_transaction(
+        db=db,
+        portfolio_id=portfolio_id,
+        transaction_type=TransactionType.WITHDRAWAL,
+        amount=cash_in.amount,
+        notes=cash_in.notes
+    )
+
+    # Update portfolio cash balance
+    await update_portfolio_cash_balance(
+        db=db,
+        portfolio_id=portfolio_id,
+        amount=cash_in.amount,
+        operation="subtract"
+    )
+
+    return {
+        "message": "Cash withdrawn successfully",
+        "transaction_id": transaction.id,
+        "amount": cash_in.amount,
+        "new_balance": portfolio.cash_balance - cash_in.amount
+    }
+
+
+@router.get("/portfolios/{portfolio_id}/cash/balance")
+async def get_cash_balance(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    currency: Optional[str] = Query(None, description="Currency to display balance in")
+):
+    """
+    Get portfolio cash balance.
+
+    Optionally convert to specified currency.
+    """
+    # Verify portfolio belongs to user
+    portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
+    if not portfolio or portfolio.id != portfolio_id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    balance_info = await get_portfolio_cash_balance(
+        db=db,
+        portfolio_id=portfolio_id,
+        display_currency=currency
+    )
+
+    return balance_info
+
+
+@router.get("/portfolios/{portfolio_id}/realized-gains")
+async def get_realized_gains(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get total realized gains/losses from all SELL transactions.
+
+    Calculated using FIFO cost basis method.
+    """
+    # Verify portfolio belongs to user
+    portfolio = await crud.portfolio.get_user_portfolio(db, current_user.id)
+    if not portfolio or portfolio.id != portfolio_id:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    total_realized = await get_total_realized_gains(db, portfolio_id)
+
+    return {
+        "portfolio_id": portfolio_id,
+        "total_realized_gains": total_realized,
+        "currency": portfolio.currency
+    }

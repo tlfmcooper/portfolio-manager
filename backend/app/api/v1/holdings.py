@@ -251,6 +251,12 @@ async def sell_asset(
 ):
     """
     Sell an asset from a portfolio.
+
+    This will:
+    1. Calculate realized gain/loss using FIFO method
+    2. Create a SELL transaction with realized gain/loss
+    3. Update holding quantity
+    4. Credit the sale proceeds to portfolio cash balance
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -268,25 +274,55 @@ async def sell_asset(
     if not holding or holding.quantity < sell_request.quantity:
         raise HTTPException(status_code=400, detail="Not enough quantity to sell")
 
+    # Calculate realized gain/loss using FIFO
+    from app.crud.transaction import calculate_realized_gain_loss_fifo
+    realized_gain_loss = await calculate_realized_gain_loss_fifo(
+        db=db,
+        portfolio_id=portfolio.id,
+        asset_id=holding.asset_id,
+        sell_quantity=sell_request.quantity,
+        sell_price=sell_request.price
+    )
+
+    # Calculate sale proceeds
+    sale_proceeds = sell_request.quantity * sell_request.price
+
     # Update holding quantity
     holding.quantity -= sell_request.quantity
     holding.market_value = holding.quantity * (holding.current_price or sell_request.price)
     holding.cost_basis = holding.quantity * holding.average_cost
 
-    # If quantity becomes 0, we could optionally delete the holding
+    # If quantity becomes 0, mark as inactive or delete
     if holding.quantity == 0:
-        await db.delete(holding)
-    
-    # Create a sell transaction
+        holding.is_active = False  # Soft delete
+
+    # Create a sell transaction with realized gain/loss
     transaction_in = TransactionCreate(
         asset_id=holding.asset_id,
         transaction_type="SELL",
         quantity=sell_request.quantity,
         price=sell_request.price,
         transaction_date=datetime.utcnow(),
+        realized_gain_loss=realized_gain_loss
     )
     await create_transaction(db, portfolio_id=portfolio.id, obj_in=transaction_in)
 
+    # Credit cash balance with sale proceeds
+    from app.crud.portfolio_extended import update_portfolio_cash_balance
+    await update_portfolio_cash_balance(
+        db=db,
+        portfolio_id=portfolio.id,
+        amount=sale_proceeds,
+        operation="add"
+    )
+
     await db.commit()
 
-    return {"message": "Asset sold successfully"}
+    return {
+        "message": "Asset sold successfully",
+        "quantity_sold": sell_request.quantity,
+        "sale_price": sell_request.price,
+        "sale_proceeds": sale_proceeds,
+        "realized_gain_loss": realized_gain_loss,
+        "new_cash_balance": portfolio.cash_balance + sale_proceeds
+    }
