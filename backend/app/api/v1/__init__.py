@@ -25,8 +25,8 @@ api_router.include_router(holdings.router, prefix="/holdings", tags=["holdings"]
 # Include assets management routes
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
 
-# Include transactions management routes
-api_router.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
+# Include transactions management routes (no prefix - routes define their own paths)
+api_router.include_router(transactions.router, tags=["transactions"])
 
 # Include analysis routes
 api_router.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
