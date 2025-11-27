@@ -9,9 +9,16 @@ import ReactMarkdown from 'react-markdown';
 import html2canvas from 'html2canvas';
 import Logo from '../assets/portfolio_pilot_logo.png';
 
-const NeonSpinner = () => (
-  <div className="flex items-center justify-center p-3 bg-transparent border-2 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.3)] rounded-2xl rounded-bl-none w-fit">
-    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+const ThinkingIndicator = () => (
+  <div className="flex justify-start">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex items-center gap-2">
+      <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">Thinking</span>
+      <div className="flex gap-1">
+        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+      </div>
+    </div>
   </div>
 );
 
@@ -27,7 +34,7 @@ const PortfolioChatWidget = () => {
   
   const messagesEndRef = useRef(null);
   const { isAgentActive, resetAllParams, ...agentContext } = useAgentContext();
-  const { api } = useAuth(); // Access to backend API
+  const { api, portfolioId } = useAuth(); // Access to backend API and portfolio ID
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -171,6 +178,7 @@ const PortfolioChatWidget = () => {
           const toolResult = await executeTool(functionName, functionArgs, {
             navigate,
             api,
+            portfolioId,
             ...agentContext
           });
 
@@ -308,9 +316,7 @@ const PortfolioChatWidget = () => {
           </div>
         ))}
         {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-          <div className="flex justify-start">
-             <NeonSpinner />
-          </div>
+           <ThinkingIndicator />
         )}
         <div ref={messagesEndRef} />
       </div>
