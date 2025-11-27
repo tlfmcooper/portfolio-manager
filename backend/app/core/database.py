@@ -20,8 +20,8 @@ if settings.DATABASE_URL.startswith("sqlite"):
     db_path = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
     db_file = Path(db_path)
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    print(f"📁 Database directory: {db_file.parent.absolute()}")
-    print(f"💾 Database file: {db_file.absolute()}")
+    print(f"[DATABASE] Directory: {db_file.parent.absolute()}")
+    print(f"[DATABASE] File: {db_file.absolute()}")
 
 
 # Create async engine

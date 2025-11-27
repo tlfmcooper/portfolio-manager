@@ -122,8 +122,8 @@ async def upload_database(
 ):
     """
     Upload portfolio.db file to replace current database.
-    ⚠️ WARNING: This will overwrite the existing database!
-    🔒 PROTECTED: Requires superuser authentication
+    WARNING: This will overwrite the existing database!
+    PROTECTED: Requires superuser authentication
 
     Usage:
     1. Login to get JWT token: POST /api/v1/auth/login
@@ -199,7 +199,7 @@ async def upload_database(
 async def warm_cache_endpoint(current_user: User = Depends(get_current_superuser)):
     """
     Warm up Redis cache with stock data from portfolio.
-    🔒 PROTECTED: Requires superuser authentication
+    PROTECTED: Requires superuser authentication
 
     This will fetch and cache:
     - Stock quotes for all portfolio holdings
@@ -260,7 +260,7 @@ async def create_first_superuser(
 ):
     """
     Create the first superuser account.
-    🔒 PROTECTED: Requires ADMIN_UPLOAD_TOKEN environment variable
+    PROTECTED: Requires ADMIN_UPLOAD_TOKEN environment variable
 
     This endpoint is for initial setup when no users exist yet.
     After creating the first superuser, use normal authentication.
