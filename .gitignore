@@ -83,3 +83,6 @@ PWA_IMPLEMENTATION_PLAN.md
 RESPONSIVE_CHARTS_SUMMARY.md
 SUMMARY.md
 THEME_USAGE_GUIDE.md
+portfolio.db.bak
+backend/portfolio.db.backup_migrate_asset_id
+test_deposit.py
