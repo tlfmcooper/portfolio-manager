@@ -126,18 +126,21 @@ async def deposit_cash(
     )
 
     # Update portfolio cash balance
-    await update_portfolio_cash_balance(
+    updated_portfolio = await update_portfolio_cash_balance(
         db=db,
         portfolio_id=portfolio_id,
         amount=cash_in.amount,
         operation="add"
     )
 
+    if not updated_portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found during update")
+
     return {
         "message": "Cash deposited successfully",
         "transaction_id": transaction.id,
         "amount": cash_in.amount,
-        "new_balance": portfolio.cash_balance + cash_in.amount
+        "new_balance": updated_portfolio.cash_balance
     }
 
 
@@ -182,18 +185,21 @@ async def withdraw_cash(
     )
 
     # Update portfolio cash balance
-    await update_portfolio_cash_balance(
+    updated_portfolio = await update_portfolio_cash_balance(
         db=db,
         portfolio_id=portfolio_id,
         amount=cash_in.amount,
         operation="subtract"
     )
 
+    if not updated_portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found during update")
+
     return {
         "message": "Cash withdrawn successfully",
         "transaction_id": transaction.id,
         "amount": cash_in.amount,
-        "new_balance": portfolio.cash_balance - cash_in.amount
+        "new_balance": updated_portfolio.cash_balance
     }
 
 
