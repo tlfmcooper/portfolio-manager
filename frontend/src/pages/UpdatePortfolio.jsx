@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import BuyAssetForm from '../components/forms/BuyAssetForm';
 import SellAssetForm from '../components/forms/SellAssetForm';
 import EditAssetForm from '../components/forms/EditAssetForm';
+import AddCashFormInline from '../components/forms/AddCashFormInline';
 
 const UpdatePortfolio = () => {
   const [activeTab, setActiveTab] = useState('buy');
@@ -21,6 +21,8 @@ const UpdatePortfolio = () => {
         return <SellAssetForm onAssetSold={handleAssetUpdated} />;
       case 'edit':
         return <EditAssetForm onAssetEdited={handleAssetUpdated} />;
+      case 'cash':
+        return <AddCashFormInline onSuccess={handleAssetUpdated} />;
       default:
         return <BuyAssetForm onAssetAdded={handleAssetUpdated} />;
     }
@@ -98,6 +100,16 @@ const UpdatePortfolio = () => {
               }}
             >
               Edit Holdings
+            </button>
+            <button
+              onClick={() => setActiveTab('cash')}
+              className="py-2 px-1 border-b-2 font-medium text-sm transition-all duration-200"
+              style={{
+                borderBottomColor: activeTab === 'cash' ? 'var(--color-warning)' : 'transparent',
+                color: activeTab === 'cash' ? 'var(--color-warning)' : 'var(--color-text-secondary)'
+              }}
+            >
+              Add/Withdraw Cash
             </button>
           </nav>
         </div>

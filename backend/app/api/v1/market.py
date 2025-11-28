@@ -65,6 +65,9 @@ async def get_live_market_data(
         return {
             "holdings": [],
             "market_data": {},
+            "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, {}),
+            "portfolio_currency": portfolio.currency,
+            "display_currency": display_currency,
             "updated_at": datetime.utcnow().isoformat(),
             "message": "No holdings found in portfolio"
         }
@@ -230,6 +233,9 @@ async def get_live_market_data(
         return {
             "holdings": enriched_holdings,
             "market_data": {},
+            "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, exchange_rates),
+            "portfolio_currency": portfolio.currency,
+            "display_currency": display_currency,
             "updated_at": datetime.utcnow().isoformat()
         }
 
@@ -326,6 +332,9 @@ async def get_live_market_data(
     return {
         "holdings": enriched_holdings,
         "market_data": market_data,
+        "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, exchange_rates),
+        "portfolio_currency": portfolio.currency,
+        "display_currency": display_currency,
         "updated_at": datetime.utcnow().isoformat()
     }
 

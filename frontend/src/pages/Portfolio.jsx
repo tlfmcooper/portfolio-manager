@@ -2,7 +2,6 @@ import React, { Suspense, useState } from 'react';
 import { Loader2, PieChart, TrendingUp, Wallet, DollarSign, Receipt } from 'lucide-react';
 import CashBalance from '../components/CashBalance';
 import TransactionHistory from '../components/TransactionHistory';
-import AddCashForm from '../components/forms/AddCashForm';
 import ErrorBoundary from '../components/ErrorBoundary';
 
 // Lazy load portfolio-related sections
@@ -17,13 +16,7 @@ const LoadingSpinner = () => (
 );
 
 const Portfolio = () => {
-  const [showAddCashModal, setShowAddCashModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  const handleAddCashSuccess = () => {
-    // Refresh components by updating key
-    setRefreshKey(prev => prev + 1);
-  };
 
   return (
     <section className="dashboard-section active">
@@ -71,7 +64,6 @@ const Portfolio = () => {
           </div>
           <CashBalance
             key={`cash-${refreshKey}`}
-            onAddCash={() => setShowAddCashModal(true)}
           />
         </div>
         {/* Asset Allocation Section */}
@@ -120,13 +112,6 @@ const Portfolio = () => {
         </div>
       </Suspense>
 
-      {/* Add Cash Modal */}
-      {showAddCashModal && (
-        <AddCashForm
-          onClose={() => setShowAddCashModal(false)}
-          onSuccess={handleAddCashSuccess}
-        />
-      )}
     </section>
   );
 };

@@ -656,7 +656,7 @@ class AdvancedPortfolioAnalytics:
             return {}
 
     async def sector_analysis(self, display_currency: Optional[str] = None) -> Dict:
-        """Analyze portfolio by sector with currency conversion."""
+        """Analyze portfolio by sector with currency conversion, including cash balance."""
         import logging
         logger = logging.getLogger(__name__)
         from app.services.exchange_rate_service import get_exchange_rate_service
@@ -670,17 +670,17 @@ class AdvancedPortfolioAnalytics:
         )
         holdings = result.scalars().all()
 
-        if not holdings:
+        # Get portfolio to determine base currency and cash balance
+        portfolio_result = await self.db.execute(
+            select(PortfolioModel).where(PortfolioModel.id == self.portfolio_id)
+        )
+        portfolio_obj = portfolio_result.scalar_one_or_none()
+        
+        if not portfolio_obj:
             return {}
-
-        # Get portfolio to determine base currency if needed
+            
         if not display_currency:
-            portfolio_result = await self.db.execute(
-                select(PortfolioModel).where(PortfolioModel.id == self.portfolio_id)
-            )
-            portfolio_obj = portfolio_result.scalar_one_or_none()
-            if portfolio_obj:
-                display_currency = portfolio_obj.currency
+            display_currency = portfolio_obj.currency
 
         display_currency = (display_currency or "USD").upper()
         exchange_service = get_exchange_rate_service()
@@ -693,6 +693,8 @@ class AdvancedPortfolioAnalytics:
         for holding in holdings:
             if holding.asset:
                 currencies_needed.add(holding.asset.currency)
+        # Also need portfolio currency for cash balance conversion
+        currencies_needed.add(portfolio_obj.currency)
 
         for currency in currencies_needed:
             if currency != display_currency:
@@ -705,8 +707,6 @@ class AdvancedPortfolioAnalytics:
 
         # We need to fetch current prices to get market values
         portfolio = await self._build_portfolio()
-        if not portfolio:
-            return {}
 
         for holding in holdings:
             asset_symbol = holding.asset.ticker
@@ -715,7 +715,7 @@ class AdvancedPortfolioAnalytics:
 
             # Check if asset exists in portfolio (stocks with historical data)
             # For mutual funds and crypto, use holding's current_price from database
-            if asset_symbol in portfolio.assets:
+            if portfolio and asset_symbol in portfolio.assets:
                 asset_obj = portfolio.assets[asset_symbol]
                 current_price = asset_obj.get_current_price()
                 if current_price is None:
@@ -758,6 +758,22 @@ class AdvancedPortfolioAnalytics:
             sector_data[sector]["value"] += market_value
             sector_data[sector]["positions"] += 1
             total_value += market_value
+
+        # Add cash balance as a separate "sector"
+        cash_balance = portfolio_obj.cash_balance or 0.0
+        if cash_balance > 0:
+            # Convert cash to display currency if needed
+            if portfolio_obj.currency != display_currency and portfolio_obj.currency in exchange_rates:
+                rate = exchange_rates[portfolio_obj.currency]
+                cash_balance = cash_balance * rate
+                logger.info(f"[SECTOR_ANALYSIS] Cash: converted to {cash_balance:.2f} {display_currency} (rate: {rate})")
+            
+            sector_data["Cash"] = {
+                "value": cash_balance,
+                "positions": 1,
+            }
+            total_value += cash_balance
+            logger.info(f"[SECTOR_ANALYSIS] Added Cash: {cash_balance:.2f} {display_currency}")
 
         if total_value > 0:
             for sector in sector_data:

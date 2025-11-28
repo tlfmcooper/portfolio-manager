@@ -105,23 +105,25 @@ const CashBalance = ({ onAddCash }) => {
           </div>
         </div>
 
-        <button
-          onClick={onAddCash}
-          className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors"
-          style={{
-            backgroundColor: 'var(--color-primary)',
-            color: 'white',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = '0.9';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = '1';
-          }}
-        >
-          <Plus className="h-5 w-5" />
-          <span>Add Cash</span>
-        </button>
+        {onAddCash && (
+          <button
+            onClick={onAddCash}
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors"
+            style={{
+              backgroundColor: 'var(--color-primary)',
+              color: 'white',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '0.9';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+          >
+            <Plus className="h-5 w-5" />
+            <span>Add Cash</span>
+          </button>
+        )}
       </div>
 
       {/* Realized Gains Section */}

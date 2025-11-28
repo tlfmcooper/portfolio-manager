@@ -14,6 +14,7 @@ const UNSUPPORTED_TICKERS = ['MAU.TO'];
 
 const LiveMarket = () => {
   const [holdings, setHoldings] = useState([]);
+  const [cashBalance, setCashBalance] = useState(0);
   const [chartData, setChartData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -171,6 +172,7 @@ const LiveMarket = () => {
       console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
+      setCashBalance(response.data.cash_balance || 0);
       setLastUpdate(new Date());
 
       // Set initial selected stock
@@ -388,8 +390,13 @@ const LiveMarket = () => {
             <Activity className="h-5 w-5" style={{ color: 'var(--color-primary)' }} />
           </div>
           <p className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>
-            {formatCurrency(holdings.reduce((sum, h) => sum + h.market_value, 0))}
+            {formatCurrency(holdings.reduce((sum, h) => sum + h.market_value, 0) + cashBalance)}
           </p>
+          {cashBalance > 0 && (
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+              Includes {formatCurrency(cashBalance)} cash
+            </p>
+          )}
         </div>
 
         {/* Total Unrealized Gain/Loss */}
@@ -746,8 +753,18 @@ const LiveMarket = () => {
               <div className="font-bold mb-3" style={{ color: 'var(--color-text)' }}>Portfolio Total</div>
               <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
                 <div className="flex justify-between">
-                  <span style={{ color: 'var(--color-text-secondary)' }}>Value:</span>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Holdings:</span>
                   <span style={{ color: 'var(--color-text)' }}>{formatCurrency(holdings.reduce((sum, h) => sum + h.market_value, 0))}</span>
+                </div>
+                {cashBalance > 0 && (
+                  <div className="flex justify-between">
+                    <span style={{ color: 'var(--color-text-secondary)' }}>Cash:</span>
+                    <span style={{ color: 'var(--color-text)' }}>{formatCurrency(cashBalance)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between col-span-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Total Value:</span>
+                  <span className="font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(holdings.reduce((sum, h) => sum + h.market_value, 0) + cashBalance)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span style={{ color: 'var(--color-text-secondary)' }}>Day:</span>
