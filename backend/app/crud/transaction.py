@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import desc
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 
 from app.models.transaction import Transaction, TransactionType

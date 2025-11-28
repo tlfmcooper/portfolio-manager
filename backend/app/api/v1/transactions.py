@@ -274,7 +274,7 @@ async def get_realized_gains(
     }
 
 
-@router.get("/portfolios/{portfolio_id}/realized-gains/detailed")
+@router.get("/{portfolio_id}/realized-gains/detailed")
 async def get_realized_gains_detailed(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),

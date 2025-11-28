@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { DollarSign, Plus, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 
@@ -7,12 +7,15 @@ const CashBalance = ({ onAddCash }) => {
   const [cashData, setCashData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [realizedGains, setRealizedGains] = useState(null);
+  const [realizedGainsDetailed, setRealizedGainsDetailed] = useState(null);
+  const [showDetailedTable, setShowDetailedTable] = useState(false);
   const { api, portfolioId } = useAuth();
   const { currentCurrency, formatCurrency } = useCurrency();
 
   useEffect(() => {
     fetchCashBalance();
     fetchRealizedGains();
+    fetchRealizedGainsDetailed();
   }, [portfolioId, currentCurrency]);
 
   const fetchCashBalance = async () => {
@@ -40,6 +43,17 @@ const CashBalance = ({ onAddCash }) => {
       setRealizedGains(response.data);
     } catch (error) {
       console.error('Error fetching realized gains:', error);
+    }
+  };
+
+  const fetchRealizedGainsDetailed = async () => {
+    if (!portfolioId) return;
+
+    try {
+      const response = await api.get(`/portfolios/${portfolioId}/realized-gains/detailed`);
+      setRealizedGainsDetailed(response.data);
+    } catch (error) {
+      console.error('Error fetching detailed realized gains:', error);
     }
   };
 
@@ -145,6 +159,79 @@ const CashBalance = ({ onAddCash }) => {
           >
             Calculated using FIFO (First In, First Out) method
           </p>
+
+          {/* Toggle for detailed breakdown */}
+          {realizedGainsDetailed?.realized_gains?.length > 0 && (
+            <button
+              onClick={() => setShowDetailedTable(!showDetailedTable)}
+              className="flex items-center space-x-1 mt-3 text-sm font-medium transition-colors hover:opacity-80"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              <span>{showDetailedTable ? 'Hide' : 'Show'} Detailed Breakdown</span>
+              {showDetailedTable ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </button>
+          )}
+
+          {/* Detailed Realized Gains Table */}
+          {showDetailedTable && realizedGainsDetailed?.realized_gains?.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                    <th className="text-left py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>Ticker</th>
+                    <th className="text-left py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>Name</th>
+                    <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>Qty Sold</th>
+                    <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>Cost Basis</th>
+                    <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>Proceeds</th>
+                    <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>Realized G/L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {realizedGainsDetailed.realized_gains.map((item, index) => {
+                    const isPositive = item.realized_gain_loss >= 0;
+                    return (
+                      <tr
+                        key={index}
+                        style={{ borderBottom: '1px solid var(--color-border)' }}
+                      >
+                        <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                          {item.ticker}
+                        </td>
+                        <td className="py-2 px-2" style={{ color: 'var(--color-text-secondary)' }}>
+                          {item.name?.length > 20 ? `${item.name.substring(0, 20)}...` : item.name}
+                        </td>
+                        <td className="py-2 px-2 text-right" style={{ color: 'var(--color-text-primary)' }}>
+                          {item.quantity_sold?.toFixed(2)}
+                        </td>
+                        <td className="py-2 px-2 text-right" style={{ color: 'var(--color-text-primary)' }}>
+                          {formatCurrency(item.cost_basis, realizedGainsDetailed.currency || 'USD')}
+                        </td>
+                        <td className="py-2 px-2 text-right" style={{ color: 'var(--color-text-primary)' }}>
+                          {formatCurrency(item.proceeds, realizedGainsDetailed.currency || 'USD')}
+                        </td>
+                        <td className={`py-2 px-2 text-right font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                          {isPositive ? '+' : ''}{formatCurrency(item.realized_gain_loss, realizedGainsDetailed.currency || 'USD')}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* No data message */}
+          {showDetailedTable && (!realizedGainsDetailed?.realized_gains || realizedGainsDetailed.realized_gains.length === 0) && (
+            <div className="mt-4 p-4 text-center rounded" style={{ backgroundColor: 'var(--color-background)' }}>
+              <p style={{ color: 'var(--color-text-secondary)' }}>
+                No realized gains/losses yet. Sell some assets to see detailed breakdown.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
