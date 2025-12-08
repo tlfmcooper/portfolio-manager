@@ -15,7 +15,11 @@ const OverviewSection = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
+      // If no portfolio ID, we can't fetch data
+      if (!portfolioId) {
+         setLoading(false);
+         return;
+      }
 
       try {
         const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
@@ -24,6 +28,7 @@ const OverviewSection = () => {
         console.log('API Response:', response.data)
         console.log('Individual Performance:', response.data?.individual_performance)
         setData(response.data)
+        setError(null)
       } catch (err) {
         setError('Failed to fetch overview data')
         console.error('API Error:', err)

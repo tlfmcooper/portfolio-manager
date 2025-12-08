@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
   const [portfolioId, setPortfolioId] = useState(null); // CRITICAL FIX: Store portfolio ID
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isOnboarded, setIsOnboarded] = useState(true); // New state for onboarding status
+  const [isOnboarded, setIsOnboarded] = useState(false); // Initialize as false to prevent premature dashboard access
   const navigate = useNavigate();
 
   const portfolioService = new PortfolioService(api); // Initialize portfolio service
@@ -117,15 +117,22 @@ export const AuthProvider = ({ children }) => {
       // This is simpler and doesn't require heavy computation
       // Wrap in retry logic to handle Railway cold starts
       const portfolio = await retryRequest(() => portfolioService.getPortfolio());
+      
       // Check if portfolio exists to determine onboarding status
-      const hasPortfolio = portfolio && portfolio.id;
+      const hasPortfolio = !!(portfolio && portfolio.id);
       setIsOnboarded(hasPortfolio);
 
       if (hasPortfolio) {
         setPortfolioId(portfolio.id); // Store portfolio ID
+      } else {
+        setPortfolioId(null);
       }
     } catch (err) {
       console.error('AuthContext: Error checking onboarding status:', err);
+      // If we can't check, assume not onboarded or handle gracefully
+      // For now, if we fail to get portfolio, we assume false to provoke retry or onboarding
+      setIsOnboarded(false); 
+      setPortfolioId(null);
     }
   };
 

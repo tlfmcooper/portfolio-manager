@@ -19,7 +19,10 @@ const CPPISection = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return;
+      if (!portfolioId) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true)

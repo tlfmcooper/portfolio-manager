@@ -87,7 +87,13 @@ class AdvancedPortfolioAnalytics:
         Builds a portfolio_manager.Portfolio object from database data.
         Weights are calculated dynamically as: weight = (quantity × current_price) / total_portfolio_value
         Currency conversion is applied if display_currency is specified.
+        Returns cached portfolio if already built to avoid redundant yfinance calls.
         """
+        # Return cached portfolio if already built
+        if self._cached_portfolio is not None:
+            print(f"[INFO] Returning cached portfolio (value: ${self._cached_portfolio_value:.2f})")
+            return self._cached_portfolio
+
         result = await self.db.execute(
             select(Holding)
             .where(Holding.portfolio_id == self.portfolio_id)
@@ -255,7 +261,10 @@ class AdvancedPortfolioAnalytics:
         print(f"[INFO] Portfolio value (yfinance closing): ${total_portfolio_value:.2f}")
         print(f"[INFO] Price difference: ${abs(self._cached_portfolio_value - total_portfolio_value):.2f}")
 
-        return portfolio if portfolio.assets else None
+        # Cache the built portfolio to avoid redundant yfinance calls
+        self._cached_portfolio = portfolio if portfolio.assets else None
+
+        return self._cached_portfolio
 
     async def get_current_portfolio_value(self) -> float:
         """Get the current market value of the portfolio."""

@@ -14,7 +14,10 @@ const AllocationSection = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
+      if (!portfolioId) {
+        setLoading(false);
+        return;
+      }
 
       try {
         console.log('[AllocationSection] Fetching sector allocation with currency:', currency);

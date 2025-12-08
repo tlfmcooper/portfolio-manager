@@ -1,9 +1,10 @@
 import React, { Suspense, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Shield, TrendingUp, BarChart3, Target } from 'lucide-react';
+import { Loader2, Shield, TrendingUp, BarChart3, Target, PieChart as PieChartIcon } from 'lucide-react';
 
 // Lazy load analytics sections
 const RiskSection = React.lazy(() => import('../components/RiskSection'));
+const AllocationSection = React.lazy(() => import('../components/AllocationSection'));
 const EfficientFrontierSection = React.lazy(() => import('../components/EfficientFrontierSection'));
 const MonteCarloSection = React.lazy(() => import('../components/MonteCarloSection'));
 const CPPISection = React.lazy(() => import('../components/CPPISection'));
@@ -24,6 +25,7 @@ const Analytics = () => {
 
   const tabs = [
     { id: 'risk', label: 'Risk Analytics', icon: Shield },
+    { id: 'allocation', label: 'Asset Allocation', icon: PieChartIcon }, // Added Asset Allocation tab
     { id: 'efficient-frontier', label: 'Efficient Frontier', icon: Target },
     { id: 'monte-carlo', label: 'Monte Carlo', icon: BarChart3 },
     { id: 'cppi', label: 'CPPI Strategy', icon: TrendingUp },
@@ -64,6 +66,7 @@ const Analytics = () => {
       <Suspense fallback={<LoadingSpinner />}>
         <div className="min-h-[500px]">
           {activeTab === 'risk' && <RiskSection />}
+          {activeTab === 'allocation' && <AllocationSection />}
           {activeTab === 'efficient-frontier' && <EfficientFrontierSection />}
           {activeTab === 'monte-carlo' && <MonteCarloSection />}
           {activeTab === 'cppi' && <CPPISection />}

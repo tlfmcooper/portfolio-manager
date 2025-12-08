@@ -73,9 +73,23 @@ async def get_efficient_frontier(
     currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get efficient frontier data with currency conversion."""
+    """Get efficient frontier data with currency conversion and caching."""
+    cache_key = f"portfolio:{portfolio_id}:efficient-frontier:{currency or 'default'}"
+    redis_client = await get_redis_client()
+
+    # Try cache first
+    cached_data = await redis_client.get(cache_key)
+    if cached_data:
+        logger.info(f"Cache hit for portfolio {portfolio_id} efficient frontier")
+        return cached_data
+
+    # Calculate if not cached
     analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
     frontier_data = await analytics.generate_efficient_frontier()
+
+    # Cache for 15 minutes (optimization is computationally expensive)
+    await redis_client.set(cache_key, frontier_data, ttl=900)
+
     return frontier_data
 
 
@@ -87,11 +101,25 @@ async def run_monte_carlo_simulation(
     scenarios: int = 1000,
     time_horizon: int = 252,
 ):
-    """Run a Monte Carlo simulation with currency conversion."""
+    """Run a Monte Carlo simulation with currency conversion and caching."""
+    cache_key = f"portfolio:{portfolio_id}:monte-carlo:{currency or 'default'}:{scenarios}:{time_horizon}"
+    redis_client = await get_redis_client()
+
+    # Try cache first
+    cached_data = await redis_client.get(cache_key)
+    if cached_data:
+        logger.info(f"Cache hit for portfolio {portfolio_id} Monte Carlo simulation")
+        return cached_data
+
+    # Calculate if not cached
     analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
     simulation_data = await analytics.run_monte_carlo_simulation(
         scenarios=scenarios, time_horizon=time_horizon
     )
+
+    # Cache for 10 minutes
+    await redis_client.set(cache_key, simulation_data, ttl=600)
+
     return simulation_data
 
 
@@ -104,9 +132,23 @@ async def run_cppi_simulation(
     floor: float = 0.8,
     time_horizon: int = 252,
 ):
-    """Run a CPPI simulation with currency conversion."""
+    """Run a CPPI simulation with currency conversion and caching."""
+    cache_key = f"portfolio:{portfolio_id}:cppi:{currency or 'default'}:{multiplier}:{floor}:{time_horizon}"
+    redis_client = await get_redis_client()
+
+    # Try cache first
+    cached_data = await redis_client.get(cache_key)
+    if cached_data:
+        logger.info(f"Cache hit for portfolio {portfolio_id} CPPI simulation")
+        return cached_data
+
+    # Calculate if not cached
     analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
     simulation_data = await analytics.run_cppi_simulation(
         multiplier=multiplier, floor=floor, time_horizon=time_horizon
     )
+
+    # Cache for 10 minutes
+    await redis_client.set(cache_key, simulation_data, ttl=600)
+
     return simulation_data
