@@ -31,3 +31,9 @@ api_router.include_router(market.router, prefix="/market", tags=["market"])
 
 # Include exchange rate routes
 api_router.include_router(exchange.router, prefix="/exchange", tags=["exchange"])
+
+# Include holdings management routes
+api_router.include_router(holdings.router, prefix="/holdings", tags=["holdings"])
+
+# Include assets management routes
+api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
