@@ -1,6 +1,11 @@
 const normalizeEnvUrl = (value) => {
   let url = value.trim();
 
+  // Force HTTPS for non-local URLs to prevent mixed content errors
+  if (url.startsWith('http://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+    url = url.replace('http://', 'https://');
+  }
+
   if (!/^https?:\/\//i.test(url)) {
     // Allow protocol-relative strings like //api.example.com
     if (url.startsWith('//')) {
