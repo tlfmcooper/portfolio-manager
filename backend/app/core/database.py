@@ -30,8 +30,13 @@ if is_sqlite:
     print(f"[DATABASE] File: {db_file.absolute()}")
 elif is_postgres:
     # Log PostgreSQL connection (without password)
-    db_url_safe = settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "configured"
-    print(f"[DATABASE] Using PostgreSQL: {db_url_safe}")
+    if "@" in settings.DATABASE_URL:
+        # Find the last @ symbol (which separates credentials from host)
+        # Format: postgresql+asyncpg://user:password@host:port/database
+        host_part = settings.DATABASE_URL.rsplit("@", 1)[1].split("/")[0]  # Get host:port only
+        print(f"[DATABASE] Using PostgreSQL: {host_part}")
+    else:
+        print(f"[DATABASE] Using PostgreSQL: configured")
 
 # Create async engine with appropriate settings
 engine_kwargs = {
@@ -43,8 +48,12 @@ engine_kwargs = {
 if is_postgres:
     # Use NullPool for serverless/pooler connections (Supabase uses PgBouncer)
     engine_kwargs["poolclass"] = NullPool
-    # Disable prepared statements for transaction pooling mode
-    engine_kwargs["connect_args"] = {"prepared_statement_cache_size": 0}
+    # Disable prepared statements for transaction pooling mode (asyncpg specific)
+    engine_kwargs["connect_args"] = {
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+        "server_settings": {"jit": "off"}
+    }
 
 engine = create_async_engine(
     settings.DATABASE_URL,

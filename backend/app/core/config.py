@@ -8,7 +8,7 @@ from pydantic import validator
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def build_database_url() -> str:
@@ -26,6 +26,9 @@ def build_database_url() -> str:
 
     # Check for explicit DATABASE_URL first
     explicit_db_url = os.getenv("DATABASE_URL")
+    if explicit_db_url:
+        explicit_db_url = explicit_db_url.strip()
+
     if explicit_db_url and not explicit_db_url.startswith("sqlite"):
         # Handle PostgreSQL URLs with special characters in password
         url = explicit_db_url

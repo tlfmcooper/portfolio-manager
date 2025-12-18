@@ -36,8 +36,17 @@ from app.utils.dependencies import get_current_superuser
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    await create_tables()
+    try:
+        print("[STARTUP] Attempting to connect to database...")
+        await create_tables()
+        print("[STARTUP] Database connected successfully!")
+    except Exception as e:
+        print(f"[STARTUP] WARNING: Database connection failed: {type(e).__name__}: {str(e)}")
+        print("[STARTUP] Server will start but database operations may fail.")
+        print("[STARTUP] Please check your network connection and DATABASE_URL configuration.")
+
     yield
+
     # Shutdown (if needed)
     pass
 
