@@ -136,6 +136,8 @@ async def root():
 
 
 # Admin endpoint for database upload (requires superuser authentication)
+# NOTE: This endpoint only works with SQLite databases. For PostgreSQL/Supabase,
+# use database migrations or Supabase dashboard.
 @app.post("/admin/upload-db")
 async def upload_database(
     file: UploadFile = File(...),
@@ -147,11 +149,19 @@ async def upload_database(
     Upload portfolio.db file to replace current database.
     WARNING: This will overwrite the existing database!
     PROTECTED: Requires superuser authentication
+    NOTE: Only available for SQLite databases. For PostgreSQL/Supabase, use migrations.
 
     Usage:
     1. Login to get JWT token: POST /api/v1/auth/login
     2. Upload database with Authorization header: Bearer <token>
     """
+    # Check if using PostgreSQL - this endpoint only works with SQLite
+    if not settings.DATABASE_URL.startswith("sqlite"):
+        raise HTTPException(
+            status_code=400,
+            detail="Database upload is only available for SQLite. For PostgreSQL/Supabase, use database migrations or the Supabase dashboard."
+        )
+
     if file.filename != "portfolio.db":
         raise HTTPException(400, "File must be named portfolio.db")
 

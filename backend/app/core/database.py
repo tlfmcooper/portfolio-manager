@@ -3,6 +3,7 @@ Database configuration and session management.
 """
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from typing import AsyncGenerator
 from pathlib import Path
 
@@ -14,21 +15,40 @@ class Base(DeclarativeBase):
     pass
 
 
+# Determine if using SQLite or PostgreSQL
+is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+is_postgres = settings.DATABASE_URL.startswith("postgresql")
+
 # Ensure data directory exists for SQLite
-if settings.DATABASE_URL.startswith("sqlite"):
+if is_sqlite:
     # Extract database path from URL
     db_path = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
     db_file = Path(db_path)
     db_file.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[DATABASE] Using SQLite")
     print(f"[DATABASE] Directory: {db_file.parent.absolute()}")
     print(f"[DATABASE] File: {db_file.absolute()}")
+elif is_postgres:
+    # Log PostgreSQL connection (without password)
+    db_url_safe = settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "configured"
+    print(f"[DATABASE] Using PostgreSQL: {db_url_safe}")
 
+# Create async engine with appropriate settings
+engine_kwargs = {
+    "echo": settings.DATABASE_ECHO,
+    "future": True,
+}
 
-# Create async engine
+# PostgreSQL-specific settings for Supabase pooler compatibility
+if is_postgres:
+    # Use NullPool for serverless/pooler connections (Supabase uses PgBouncer)
+    engine_kwargs["poolclass"] = NullPool
+    # Disable prepared statements for transaction pooling mode
+    engine_kwargs["connect_args"] = {"prepared_statement_cache_size": 0}
+
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DATABASE_ECHO,
-    future=True
+    **engine_kwargs
 )
 
 # Create async session factory

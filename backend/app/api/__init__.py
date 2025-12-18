@@ -21,19 +21,28 @@ api_router.include_router(api_v1_router, prefix=settings.API_V1_STR)
 async def health_check(db: AsyncSession = Depends(get_db)):
     """Health check endpoint with database and Redis status."""
     from app.core.redis_client import get_redis_client
+    from sqlalchemy import text
     import os
+
+    # Determine database type
+    is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+    is_postgres = settings.DATABASE_URL.startswith("postgresql")
+    db_type = "sqlite" if is_sqlite else ("postgresql" if is_postgres else "unknown")
 
     # Check database connectivity
     db_status = "unknown"
+    db_exists = None
     try:
         # Try a simple query to verify database is accessible
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         db_status = "connected"
-        db_file = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "")
-        db_exists = os.path.exists(db_file) if db_file.startswith(".") else True
+        if is_sqlite:
+            db_file = settings.DATABASE_URL.replace("sqlite+aiosqlite:///", "")
+            db_exists = os.path.exists(db_file) if db_file.startswith(".") else True
     except Exception as e:
         db_status = f"error: {str(e)}"
-        db_exists = False
+        if is_sqlite:
+            db_exists = False
 
     # Check Redis connectivity
     redis_status = "unknown"
@@ -43,6 +52,14 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         redis_status = f"error: {str(e)}"
 
+    # Build safe database URL for display (hide password)
+    if "@" in settings.DATABASE_URL:
+        db_url_display = settings.DATABASE_URL.split("@")[-1]
+    elif is_sqlite:
+        db_url_display = "sqlite:portfolio.db"
+    else:
+        db_url_display = "configured"
+
     return {
         "status": "healthy",
         "version": settings.VERSION,
@@ -50,12 +67,9 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "environment": settings.ENVIRONMENT,
         "database": {
             "status": db_status,
-            "url": (
-                settings.DATABASE_URL.split("@")[-1]
-                if "@" in settings.DATABASE_URL
-                else "sqlite"
-            ),
-            "file_exists": db_exists if "sqlite" in settings.DATABASE_URL else None,
+            "type": db_type,
+            "url": db_url_display,
+            "file_exists": db_exists,
         },
         "redis": {
             "status": redis_status,

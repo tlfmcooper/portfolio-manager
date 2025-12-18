@@ -3,12 +3,61 @@ Application configuration settings.
 """
 
 import os
-from typing import List, Any
+from typing import List, Any, Optional
 from pydantic import validator
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def build_database_url() -> str:
+    """
+    Build the database URL from environment variables.
+    Priority:
+    1. DATABASE_URL if explicitly set (PostgreSQL connection string)
+    2. Fallback to SQLite for local development
+
+    For Supabase, get the connection string from:
+    Supabase Dashboard > Project Settings > Database > Connection string > URI
+    Choose "Transaction" mode (port 6543) for serverless/pooled connections.
+    """
+    from urllib.parse import quote_plus
+
+    # Check for explicit DATABASE_URL first
+    explicit_db_url = os.getenv("DATABASE_URL")
+    if explicit_db_url and not explicit_db_url.startswith("sqlite"):
+        # Handle PostgreSQL URLs with special characters in password
+        url = explicit_db_url
+
+        # Convert postgres:// to postgresql://
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+
+        # Parse and URL-encode password if needed (handles @ # ! etc in password)
+        if url.startswith("postgresql://") and "+asyncpg" not in url:
+            rest = url.replace("postgresql://", "")
+            last_at_idx = rest.rfind("@")
+
+            if last_at_idx != -1:
+                credentials = rest[:last_at_idx]
+                host_and_db = rest[last_at_idx + 1:]
+
+                first_colon_idx = credentials.find(":")
+                if first_colon_idx != -1:
+                    user = credentials[:first_colon_idx]
+                    password = credentials[first_colon_idx + 1:]
+                    encoded_password = quote_plus(password)
+                    url = f"postgresql+asyncpg://{user}:{encoded_password}@{host_and_db}"
+                else:
+                    url = f"postgresql+asyncpg://{credentials}@{host_and_db}"
+            else:
+                url = f"postgresql+asyncpg://{rest}"
+
+        return url
+
+    # Fallback to SQLite for local development
+    return "sqlite+aiosqlite:///./portfolio.db"
 
 
 class Settings(BaseSettings):
@@ -30,8 +79,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
-    # Database settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./portfolio.db")
+    # Supabase settings (optional - for Supabase client API, not database connection)
+    SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
+    SUPABASE_ANON_KEY: Optional[str] = os.getenv("SUPABASE_ANON_KEY")
+
+    # Database settings (use DATABASE_URL for PostgreSQL/Supabase connection)
+    DATABASE_URL: str = build_database_url()
     DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
 
     # CORS settings
