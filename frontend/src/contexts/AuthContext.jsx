@@ -188,7 +188,7 @@ export const AuthProvider = ({ children }) => {
 
       return {
         success: true,
-        isOnboarded: hasPortfolioData
+        isOnboarded: hasPortfolio
       };
     } catch (err) {
       console.error('Login error:', err);
