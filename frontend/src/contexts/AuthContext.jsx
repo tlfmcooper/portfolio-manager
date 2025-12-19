@@ -64,6 +64,14 @@ export const AuthProvider = ({ children }) => {
 
   const portfolioService = new PortfolioService(api); // Initialize portfolio service
 
+  const markOnboarded = (maybePortfolio) => {
+    const id = maybePortfolio?.id;
+    if (id) {
+      setPortfolioId(id);
+    }
+    setIsOnboarded((prev) => prev || !!id);
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('access_token');
@@ -86,8 +94,7 @@ export const AuthProvider = ({ children }) => {
 
         if (portfolioResponse.status === 'fulfilled') {
           const portfolioData = portfolioResponse.value.data;
-          setPortfolioId(portfolioData.id); // Store portfolio ID
-          
+          markOnboarded(portfolioData);
           await checkOnboardingStatus(userResponse.value?.data, portfolioData); // Pass portfolioData to avoid extra call
         } else {
           await checkOnboardingStatus(userResponse.value?.data);
@@ -116,13 +123,7 @@ export const AuthProvider = ({ children }) => {
     
     // Optimization: Use existing portfolio data if provided to avoid redundant API calls
     if (existingPortfolio) {
-      const hasPortfolio = !!(existingPortfolio && existingPortfolio.id);
-      setIsOnboarded(hasPortfolio);
-      if (hasPortfolio) {
-        setPortfolioId(existingPortfolio.id);
-      } else {
-        setPortfolioId(null);
-      }
+      markOnboarded(existingPortfolio);
       return;
     }
 
@@ -131,22 +132,11 @@ export const AuthProvider = ({ children }) => {
       // This is simpler and doesn't require heavy computation
       // Wrap in retry logic to handle Railway cold starts
       const portfolio = await retryRequest(() => portfolioService.getPortfolio());
-      
-      // Check if portfolio exists to determine onboarding status
-      const hasPortfolio = !!(portfolio && portfolio.id);
-      setIsOnboarded(hasPortfolio);
 
-      if (hasPortfolio) {
-        setPortfolioId(portfolio.id); // Store portfolio ID
-      } else {
-        setPortfolioId(null);
-      }
+      markOnboarded(portfolio);
     } catch (err) {
       console.error('AuthContext: Error checking onboarding status:', err);
-      // If we can't check, assume not onboarded or handle gracefully
-      // For now, if we fail to get portfolio, we assume false to provoke retry or onboarding
-      setIsOnboarded(false); 
-      setPortfolioId(null);
+      // Preserve current onboarding state on transient errors
     }
   };
 
@@ -194,11 +184,13 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Check onboarding status from portfolio existence (not expensive analysis)
-      const hasPortfolio = portfolioResponse.status === 'fulfilled' &&
-                          portfolioResponse.value?.data?.id;
-      setIsOnboarded(hasPortfolio);
+      if (portfolioResponse.status === 'fulfilled') {
+        markOnboarded(portfolioResponse.value?.data);
+      }
 
       toast.success('Login successful!');
+
+      const hasPortfolio = portfolioResponse.status === 'fulfilled' && Boolean(portfolioResponse.value?.data?.id);
 
       return {
         success: true,

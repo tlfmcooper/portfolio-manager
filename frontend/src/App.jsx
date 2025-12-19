@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -40,6 +40,7 @@ const DashboardLoadingFallback = () => (
 // Protected layout component
 const ProtectedLayout = () => {
   const { user, loading, isOnboarded } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <LoadingSpinner />;
@@ -47,6 +48,10 @@ const ProtectedLayout = () => {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (isOnboarded && location.pathname.startsWith('/onboarding')) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
@@ -67,7 +72,7 @@ const ProtectedLayout = () => {
               <Route path="live-market" element={<LiveMarket />} />
               <Route path="update-portfolio" element={<UpdatePortfolio />} />
             </Route>
-            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/onboarding" element={<Navigate to="/dashboard" replace />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
           </>
