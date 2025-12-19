@@ -91,11 +91,14 @@ export default defineConfig(({ mode }) => {
       assetsDir: 'assets',
       sourcemap: false,
       minify: 'terser',
+      chunkSizeWarningLimit: 500, // Warn if chunk > 500KB
       rollupOptions: {
         output: {
           manualChunks: {
             vendor: ['react', 'react-dom'],
             charts: ['recharts'],
+            ai: ['@google/generative-ai'], // Separate chunk for AI library
+            utils: ['html2canvas'], // Separate chunk for utilities
           },
         },
       },

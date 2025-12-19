@@ -162,11 +162,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
 
-      // CRITICAL FIX: Fetch user data, portfolio info, and onboarding status in parallel
-      const [userResponse, portfolioResponse, analysisResponse] = await Promise.allSettled([
+      // PERFORMANCE FIX: Only fetch user and portfolio data during login
+      // Portfolio analysis is expensive and should be lazy loaded by dashboard components
+      const [userResponse, portfolioResponse] = await Promise.allSettled([
         api.get('/users/me'),
-        api.get('/portfolios'),
-        portfolioService.getPortfolioAnalysis()
+        api.get('/portfolios')
       ]);
 
       if (userResponse.status === 'fulfilled') {
@@ -179,11 +179,10 @@ export const AuthProvider = ({ children }) => {
         setPortfolioId(portfolioData.id); // Store portfolio ID
       }
 
-      // Check onboarding status from analysis response
-      const hasPortfolioData = analysisResponse.status === 'fulfilled' &&
-                               analysisResponse.value &&
-                               Object.keys(analysisResponse.value).length > 0;
-      setIsOnboarded(hasPortfolioData);
+      // Check onboarding status from portfolio existence (not expensive analysis)
+      const hasPortfolio = portfolioResponse.status === 'fulfilled' &&
+                          portfolioResponse.value?.data?.id;
+      setIsOnboarded(hasPortfolio);
 
       toast.success('Login successful!');
 

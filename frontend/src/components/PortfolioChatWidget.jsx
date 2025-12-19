@@ -4,9 +4,7 @@ import { useAgentContext } from '../contexts/AgentContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { tools, executeTool } from '../tools/agentTools';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
-import html2canvas from 'html2canvas';
 import Logo from '../assets/portfolio_pilot_logo.png';
 
 const ThinkingIndicator = () => (
@@ -71,27 +69,35 @@ const PortfolioChatWidget = () => {
     setIsLoading(true);
 
     try {
-      // Capture dashboard screenshot for context
-      // Defer screenshot to allow UI to update (show spinner) first
+      // Check if message needs visual context (chart, graph, etc.)
+      const needsScreenshot = /\b(chart|graph|see|showing|visual|display|image|picture|screenshot)\b/i.test(userMessage);
+
+      // Capture dashboard screenshot only if needed for context
       let imagePart = null;
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      try {
-        const canvas = await html2canvas(document.body, {
-          ignoreElements: (element) => element.id === 'portfolio-chat-widget',
-          logging: false,
-          useCORS: true
-        });
-        
-        const base64Data = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
-        imagePart = {
-          inlineData: {
-            data: base64Data,
-            mimeType: "image/jpeg",
-          },
-        };
-      } catch (err) {
-        console.warn("Failed to capture screenshot:", err);
+      if (needsScreenshot) {
+        // Lazy load html2canvas only when needed
+        const html2canvas = (await import('html2canvas')).default;
+
+        // Defer screenshot to allow UI to update (show spinner) first
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        try {
+          const canvas = await html2canvas(document.body, {
+            ignoreElements: (element) => element.id === 'portfolio-chat-widget',
+            logging: false,
+            useCORS: true
+          });
+
+          const base64Data = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+          imagePart = {
+            inlineData: {
+              data: base64Data,
+              mimeType: "image/jpeg",
+            },
+          };
+        } catch (err) {
+          console.warn("Failed to capture screenshot:", err);
+        }
       }
 
       const systemPrompt = `
@@ -113,9 +119,11 @@ const PortfolioChatWidget = () => {
         - Be concise, professional, and helpful.
       `;
 
+      // Lazy load Google Generative AI
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(apiKey);
       const modelName = "gemini-2.5-pro";
-      
+
       const model = genAI.getGenerativeModel({ 
         model: modelName,
         systemInstruction: systemPrompt,

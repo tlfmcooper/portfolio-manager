@@ -13,47 +13,28 @@ const CashBalance = ({ onAddCash }) => {
   const { currentCurrency, formatCurrency } = useCurrency();
 
   useEffect(() => {
-    fetchCashBalance();
-    fetchRealizedGains();
-    fetchRealizedGainsDetailed();
+    fetchDashboardData();
   }, [portfolioId, currentCurrency]);
 
-  const fetchCashBalance = async () => {
+  const fetchDashboardData = async () => {
     if (!portfolioId) return;
 
     try {
       setLoading(true);
+      // Use the new batched dashboard endpoint
       const response = await api.get(
-        `/portfolios/${portfolioId}/cash/balance`,
+        `/dashboard/overview`,
         { params: { currency: currentCurrency } }
       );
-      setCashData(response.data);
+
+      // Extract data from the batched response
+      setCashData(response.data.cash_balance);
+      setRealizedGains(response.data.realized_gains);
+      setRealizedGainsDetailed(response.data.realized_gains_detailed);
     } catch (error) {
-      console.error('Error fetching cash balance:', error);
+      console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchRealizedGains = async () => {
-    if (!portfolioId) return;
-
-    try {
-      const response = await api.get(`/portfolios/${portfolioId}/realized-gains`);
-      setRealizedGains(response.data);
-    } catch (error) {
-      console.error('Error fetching realized gains:', error);
-    }
-  };
-
-  const fetchRealizedGainsDetailed = async () => {
-    if (!portfolioId) return;
-
-    try {
-      const response = await api.get(`/portfolios/${portfolioId}/realized-gains/detailed`);
-      setRealizedGainsDetailed(response.data);
-    } catch (error) {
-      console.error('Error fetching detailed realized gains:', error);
     }
   };
 

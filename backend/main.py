@@ -21,6 +21,7 @@ from typing import List, Tuple
 import uvicorn
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import api_router
@@ -100,6 +101,9 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["*"],
     )
+
+    # Enable GZip compression for responses
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # Global exception handler to ensure CORS headers on error responses
     @app.exception_handler(Exception)

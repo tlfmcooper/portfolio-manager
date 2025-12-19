@@ -13,6 +13,7 @@ from app.schemas.holding_extended import HoldingUpdateRequest, AssetSellRequest
 from app.crud import (
     get_user_portfolio,
     get_portfolio_holdings,
+    get_portfolio_holdings_count,
     get_holding,
     create_holding,
     update_holding,
@@ -24,21 +25,35 @@ from app.utils.dependencies import get_current_active_user
 from app.models import User
 from app.models.holding import Holding as HoldingModel
 from app.services.exchange_rate_service import get_exchange_rate_service
+from app.core.redis_client import get_redis_client
+import json
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[HoldingInDB])
+@router.get("/")
 async def get_holdings(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
-    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: Optional[int] = Query(None, ge=1, le=500, description="Maximum number of records to return")
 ) -> Any:
     """
-    Get all holdings in current user's portfolio.
+    Get holdings in current user's portfolio with pagination.
 
     Args:
         currency: Optional currency to display values in (USD or CAD)
+        skip: Number of records to skip (for pagination)
+        limit: Maximum number of records to return (default: all)
+
+    Returns:
+        {
+            "items": [...holdings...],
+            "total": total_count,
+            "skip": skip,
+            "limit": limit
+        }
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -47,10 +62,25 @@ async def get_holdings(
             detail="Portfolio not found"
         )
 
-    holdings = await get_portfolio_holdings(db, portfolio.id)
-
     # Use portfolio currency if not specified
     display_currency = currency.upper() if currency else portfolio.currency
+
+    # Check Redis cache first (only for non-paginated requests)
+    use_cache = skip == 0 and limit is None
+    cache_key = f"portfolio:{portfolio.id}:holdings:{display_currency}"
+    redis_client = await get_redis_client()
+
+    if use_cache:
+        try:
+            cached_data = await redis_client.get(cache_key)
+            if cached_data:
+                return json.loads(cached_data)
+        except Exception:
+            pass  # Continue without cache if Redis fails
+
+    # Get total count and holdings
+    total_count = await get_portfolio_holdings_count(db, portfolio.id)
+    holdings = await get_portfolio_holdings(db, portfolio.id, skip=skip, limit=limit)
     exchange_service = get_exchange_rate_service()
 
     # Pre-fetch all needed exchange rates
@@ -88,7 +118,25 @@ async def get_holdings(
             holding.unrealized_gain_loss = holding.market_value - holding.cost_basis
             holding.unrealized_gain_loss_percentage = (holding.unrealized_gain_loss / holding.cost_basis) * 100
 
-    return holdings
+    # Convert holdings to dict
+    holdings_data = [HoldingInDB.from_orm(h).dict() for h in holdings]
+
+    # Prepare response
+    response = {
+        "items": holdings_data,
+        "total": total_count,
+        "skip": skip,
+        "limit": limit
+    }
+
+    # Cache the result for 5 minutes (only for non-paginated requests)
+    if use_cache:
+        try:
+            await redis_client.set(cache_key, json.dumps(response), ttl=300)
+        except Exception:
+            pass  # Continue without caching if Redis fails
+
+    return response
 
 
 @router.post("/", response_model=HoldingInDB)

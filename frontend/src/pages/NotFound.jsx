@@ -1,42 +1,29 @@
 import React from 'react';
-import { Box, Button, Container, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 const NotFound = () => {
   const navigate = useNavigate();
 
   return (
-    <Container maxWidth="md">
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '80vh',
-          textAlign: 'center',
-          p: 3,
-        }}
-      >
-        <Typography variant="h1" sx={{ fontSize: '6rem', fontWeight: 'bold', mb: 2 }}>
+    <div className="max-w-4xl mx-auto">
+      <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-3">
+        <h1 className="text-9xl font-bold mb-8 text-gray-800 dark:text-gray-100">
           404
-        </Typography>
-        <Typography variant="h4" sx={{ mb: 3 }}>
+        </h1>
+        <h2 className="text-4xl mb-6 text-gray-700 dark:text-gray-200">
           Page Not Found
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 4, maxWidth: '600px' }}>
+        </h2>
+        <p className="mb-8 max-w-[600px] text-gray-600 dark:text-gray-300">
           The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
+        </p>
+        <button
           onClick={() => navigate('/')}
-          sx={{ px: 4, py: 1.5 }}
+          className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200"
         >
           Go to Homepage
-        </Button>
-      </Box>
-    </Container>
+        </button>
+      </div>
+    </div>
   );
 };
 

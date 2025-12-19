@@ -301,4 +301,4 @@ const RiskSection = () => {
   )
 }
 
-export default RiskSection
+export default React.memo(RiskSection)

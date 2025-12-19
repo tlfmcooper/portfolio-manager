@@ -37,6 +37,7 @@ from app.crud.asset import (
 from app.crud.holding import (
     get_holding,
     get_portfolio_holdings,
+    get_portfolio_holdings_count,
     get_holding_by_asset,
 )
 from app.crud.holding_extended import (
@@ -74,7 +75,8 @@ __all__ = [
     "update_asset",
     # Holding CRUD
     "get_holding",
-    "get_portfolio_holdings", 
+    "get_portfolio_holdings",
+    "get_portfolio_holdings_count",
     "get_holding_by_asset",
     "create_holding",
     "update_holding",

@@ -420,4 +420,4 @@ const MonteCarloSection = () => {
   )
 }
 
-export default MonteCarloSection
+export default React.memo(MonteCarloSection)

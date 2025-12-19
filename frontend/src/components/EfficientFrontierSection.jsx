@@ -347,4 +347,4 @@ const EfficientFrontierSection = () => {
   )
 }
 
-export default EfficientFrontierSection
+export default React.memo(EfficientFrontierSection)

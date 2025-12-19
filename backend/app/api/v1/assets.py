@@ -12,11 +12,12 @@ from app.models.holding import Holding
 from app.models.transaction import Transaction
 from app.services.finance_service import FinanceService
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 import logging
 import csv
 import io
+import asyncio
 
 from app.utils.dependencies import get_current_active_user # Import current user dependency
 from app.models import User # Import User model
@@ -98,6 +99,43 @@ async def parse_csv_file(file: UploadFile) -> List[AssetOnboardingRequest]:
     return assets
 
 
+async def batch_fetch_asset_data(
+    items: List[AssetOnboardingRequest],
+    existing_assets: Dict[str, Asset]
+) -> Dict[str, Optional[dict]]:
+    """
+    Fetch asset data for multiple tickers in parallel.
+
+    Args:
+        items: List of asset onboarding requests
+        existing_assets: Dictionary of existing assets by ticker
+
+    Returns:
+        Dictionary mapping ticker to asset data (or None if fetch failed)
+    """
+    async def fetch_single_asset(item: AssetOnboardingRequest) -> Tuple[str, Optional[dict]]:
+        ticker = item.ticker.upper().strip()
+
+        # Skip if asset already exists
+        if ticker in existing_assets:
+            return (ticker, None)
+
+        try:
+            asset_data = await FinanceService.get_asset_info(ticker, item.asset_type)
+            if asset_data and item.currency:
+                asset_data['currency'] = item.currency
+            return (ticker, asset_data)
+        except Exception as e:
+            logger.error(f"Error fetching data for {ticker}: {e}")
+            return (ticker, None)
+
+    # Fetch all asset data in parallel
+    results = await asyncio.gather(*[fetch_single_asset(item) for item in items])
+
+    # Convert to dictionary
+    return dict(results)
+
+
 @router.post("/onboard", status_code=201, response_model=dict)
 async def onboard_asset(
     request: Request,
@@ -171,27 +209,32 @@ async def onboard_asset(
 
     portfolio_id = portfolio.id
 
+    # Pre-fetch existing assets from database
+    tickers = [item.ticker.upper().strip() for item in data]
+    stmt = select(Asset).where(Asset.ticker.in_(tickers))
+    result = await db.execute(stmt)
+    existing_assets_list = result.scalars().all()
+    existing_assets = {asset.ticker: asset for asset in existing_assets_list}
+
+    # Batch fetch asset data for new tickers in parallel
+    logger.info(f"Batch fetching data for {len(data)} assets in parallel...")
+    asset_data_map = await batch_fetch_asset_data(data, existing_assets)
+    logger.info(f"Batch fetch complete. Processing assets...")
+
     for item in data:
         try:
             ticker = item.ticker.upper().strip()
 
-            # Check if asset already exists
-            stmt = select(Asset).where(Asset.ticker == ticker)
-            result = await db.execute(stmt)
-            asset_obj = result.scalar_one_or_none()
+            # Get asset from existing assets or create new one
+            asset_obj = existing_assets.get(ticker)
 
             if not asset_obj:
-                # Fetch asset data based on asset_type
-                logger.info(f"Fetching data for new ticker: {ticker} (type: {item.asset_type}, currency: {item.currency})")
-                asset_data = await FinanceService.get_asset_info(ticker, item.asset_type)
+                # Use pre-fetched asset data
+                asset_data = asset_data_map.get(ticker)
 
                 if not asset_data:
                     errors.append(f"Could not fetch data for ticker: {ticker}")
                     continue
-
-                # Override currency with user-provided value
-                if item.currency:
-                    asset_data['currency'] = item.currency
 
                 # Filter out fields that are not part of the Asset model
                 # (e.g., change_percent, change, previous_close from mutual fund data)
