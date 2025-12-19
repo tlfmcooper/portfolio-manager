@@ -1,9 +1,12 @@
 const normalizeEnvUrl = (value) => {
   let url = value.trim();
 
-  // Force HTTPS for non-local URLs to prevent mixed content errors
-  if (url.startsWith('http://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+  // Force HTTPS if the current page is loaded over HTTPS (unless local dev)
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
     url = url.replace('http://', 'https://');
+  } else if (url.startsWith('http://') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+     // Still useful to upgrade even if we can't check window protocol, just in case
+     url = url.replace('http://', 'https://');
   }
 
   if (!/^https?:\/\//i.test(url)) {

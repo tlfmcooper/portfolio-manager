@@ -87,10 +87,11 @@ export const AuthProvider = ({ children }) => {
         if (portfolioResponse.status === 'fulfilled') {
           const portfolioData = portfolioResponse.value.data;
           setPortfolioId(portfolioData.id); // Store portfolio ID
+          
+          await checkOnboardingStatus(userResponse.value?.data, portfolioData); // Pass portfolioData to avoid extra call
+        } else {
+          await checkOnboardingStatus(userResponse.value?.data);
         }
-
-        setError(null);
-        await checkOnboardingStatus(userResponse.value?.data); // Check onboarding status after setting user
       } catch (err) {
         console.error('Token validation failed:', err);
         localStorage.removeItem('access_token');
@@ -107,11 +108,24 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Function to check onboarding status
-  const checkOnboardingStatus = async (currentUser) => {
+  const checkOnboardingStatus = async (currentUser, existingPortfolio = null) => {
     if (!currentUser) {
       setIsOnboarded(false);
       return;
     }
+    
+    // Optimization: Use existing portfolio data if provided to avoid redundant API calls
+    if (existingPortfolio) {
+      const hasPortfolio = !!(existingPortfolio && existingPortfolio.id);
+      setIsOnboarded(hasPortfolio);
+      if (hasPortfolio) {
+        setPortfolioId(existingPortfolio.id);
+      } else {
+        setPortfolioId(null);
+      }
+      return;
+    }
+
     try {
       // Use portfolio summary instead of analysis for onboarding check
       // This is simpler and doesn't require heavy computation
