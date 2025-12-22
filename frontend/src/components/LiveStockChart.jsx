@@ -12,7 +12,7 @@ const LiveStockChart = ({
 }) => {
   if (!selectedStock || !chartData || chartData.length === 0) return null;
 
-  const currentPrice = chartData[chartData.length - 1].price;
+  const currentPrice = stockInfo?.current_price || chartData[chartData.length - 1].price;
   const dayChangePercent = stockInfo?.change_percent || 0;
 
   return (
@@ -20,7 +20,7 @@ const LiveStockChart = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
         <div>
           <h4 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-            {stockInfo?.name || selectedStock}
+            {stockInfo?.asset?.name || selectedStock}
           </h4>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {selectedStock}

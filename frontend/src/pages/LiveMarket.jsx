@@ -487,7 +487,7 @@ const LiveMarket = () => {
               <LiveStockChart 
                 selectedStock={selectedStock}
                 chartData={chartData[selectedStock]}
-                stockInfo={holdings.find(h => h.ticker === selectedStock)?.asset}
+                stockInfo={holdings.find(h => h.ticker === selectedStock)}
                 wsConnected={wsConnected}
                 formatCurrency={formatCurrency}
                 formatPercentage={formatPercentage}
