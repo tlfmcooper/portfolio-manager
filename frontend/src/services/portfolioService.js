@@ -209,10 +209,12 @@ export class PortfolioService {
     if (this.checkOnlineStatus()) {
       try {
         const response = await this.api.get('/holdings/');
+        // Extract items array from paginated response
+        const holdings = response.data?.items || response.data || [];
         // Cache successful response
-        await offlineStorage.saveHoldings(response.data);
+        await offlineStorage.saveHoldings(holdings);
         console.log('[PortfolioService] Holdings cached from API response');
-        return response.data;
+        return holdings;
       } catch (error) {
         console.error('[PortfolioService] API error, attempting offline fallback:', error.message);
         return await this.getHoldingsOffline();

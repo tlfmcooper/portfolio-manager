@@ -15,6 +15,7 @@ from app.crud.transaction import (
     get_realized_gains_by_asset
 )
 from app.core.redis_client import get_redis_client
+from app.services.exchange_rate_service import get_exchange_rate_service
 import json
 
 router = APIRouter()
@@ -73,21 +74,46 @@ async def get_dashboard_overview(
         display_currency=display_currency
     )
 
-    # 2. Get realized gains summary
+    # Get exchange rate for currency conversion if needed
+    portfolio_currency = portfolio.currency.upper()
+    if portfolio_currency != display_currency:
+        exchange_service = get_exchange_rate_service()
+        exchange_rate = await exchange_service.get_exchange_rate(portfolio_currency, display_currency)
+    else:
+        exchange_rate = 1.0
+
+    # 2. Get realized gains summary (convert to display currency)
     total_realized = await get_total_realized_gains(db, portfolio.id)
+    total_realized_converted = total_realized * exchange_rate
     realized_gains_data = {
         "portfolio_id": portfolio.id,
-        "total_realized_gains": total_realized,
-        "currency": portfolio.currency
+        "total_realized_gains": total_realized_converted,
+        "currency": display_currency,
+        "original_currency": portfolio_currency,
+        "exchange_rate": exchange_rate
     }
 
-    # 3. Get detailed realized gains
+    # 3. Get detailed realized gains (convert each item to display currency)
     realized_gains_list = await get_realized_gains_by_asset(db, portfolio.id)
+    
+    # Convert each item's monetary values to display currency
+    converted_gains_list = []
+    for item in realized_gains_list:
+        converted_item = {
+            **item,
+            "cost_basis": item.get("cost_basis", 0) * exchange_rate,
+            "proceeds": item.get("proceeds", 0) * exchange_rate,
+            "realized_gain_loss": item.get("realized_gain_loss", 0) * exchange_rate,
+        }
+        converted_gains_list.append(converted_item)
+    
     realized_gains_detailed_data = {
         "portfolio_id": portfolio.id,
-        "currency": portfolio.currency,
-        "realized_gains": realized_gains_list,
-        "total": sum(item["realized_gain_loss"] for item in realized_gains_list)
+        "currency": display_currency,
+        "original_currency": portfolio_currency,
+        "exchange_rate": exchange_rate,
+        "realized_gains": converted_gains_list,
+        "total": sum(item["realized_gain_loss"] for item in converted_gains_list)
     }
 
     # Combine all data into a single response

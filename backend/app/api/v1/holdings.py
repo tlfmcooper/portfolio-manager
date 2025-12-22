@@ -332,8 +332,20 @@ async def sell_asset(
         sell_price=sell_request.price
     )
 
-    # Calculate sale proceeds
-    sale_proceeds = sell_request.quantity * sell_request.price
+    # Calculate sale proceeds in asset's currency
+    sale_proceeds_original = sell_request.quantity * sell_request.price
+
+    # Get asset currency and portfolio currency for conversion
+    asset_currency = holding.asset.currency if holding.asset else "USD"
+    portfolio_currency = portfolio.currency or "USD"
+
+    # Convert sale proceeds to portfolio currency if different
+    if asset_currency != portfolio_currency:
+        exchange_service = get_exchange_rate_service()
+        exchange_rate = await exchange_service.get_exchange_rate(asset_currency, portfolio_currency)
+        sale_proceeds = sale_proceeds_original * exchange_rate
+    else:
+        sale_proceeds = sale_proceeds_original
 
     # Update holding quantity
     holding.quantity -= sell_request.quantity
@@ -355,7 +367,7 @@ async def sell_asset(
     )
     await create_transaction(db, portfolio_id=portfolio.id, obj_in=transaction_in)
 
-    # Credit cash balance with sale proceeds
+    # Credit cash balance with sale proceeds (converted to portfolio currency)
     from app.crud.portfolio_extended import update_portfolio_cash_balance
     await update_portfolio_cash_balance(
         db=db,
@@ -370,7 +382,10 @@ async def sell_asset(
         "message": "Asset sold successfully",
         "quantity_sold": sell_request.quantity,
         "sale_price": sell_request.price,
+        "sale_proceeds_original": sale_proceeds_original,
+        "sale_proceeds_original_currency": asset_currency,
         "sale_proceeds": sale_proceeds,
+        "sale_proceeds_currency": portfolio_currency,
         "realized_gain_loss": realized_gain_loss,
         "new_cash_balance": portfolio.cash_balance + sale_proceeds
     }

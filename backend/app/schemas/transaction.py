@@ -53,6 +53,7 @@ class CashTransactionCreate(BaseModel):
 
     amount: float
     transaction_type: TransactionType  # Must be DEPOSIT or WITHDRAWAL
+    currency: Optional[str] = None  # Currency of the amount (USD or CAD). If None, uses portfolio currency.
     notes: Optional[str] = None
 
 

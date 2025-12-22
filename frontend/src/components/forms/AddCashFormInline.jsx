@@ -10,7 +10,7 @@ const AddCashFormInline = ({ onSuccess }) => {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const { api, portfolioId } = useAuth();
-  const { getCurrencySymbol } = useCurrency();
+  const { currency, getCurrencySymbol } = useCurrency();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,6 +31,7 @@ const AddCashFormInline = ({ onSuccess }) => {
       const response = await api.post(endpoint, {
         amount: parseFloat(amount),
         transaction_type: transactionType,
+        currency: currency,  // Send the current dashboard currency
         notes: notes || null,
       });
 

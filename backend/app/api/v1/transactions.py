@@ -14,13 +14,29 @@ from app.schemas.transaction import (
     TransactionWithAsset
 )
 from app.core.database import get_db
+from app.core.redis_client import get_redis_client
 from app.models.user import User
 from app.models.transaction import TransactionType
 from app.utils.dependencies import get_current_active_user
 from app.crud.portfolio_extended import update_portfolio_cash_balance, get_portfolio_cash_balance
 from app.crud.transaction import create_cash_transaction, get_total_realized_gains, get_realized_gains_by_asset
+from app.services.exchange_rate_service import get_exchange_rate_service
 
 router = APIRouter()
+
+
+async def invalidate_dashboard_cache(portfolio_id: int):
+    """Invalidate dashboard cache for all currencies after cash transactions."""
+    redis_client = await get_redis_client()
+    try:
+        # Invalidate cache for both USD and CAD views
+        for currency in ["USD", "CAD"]:
+            cache_key = f"dashboard:overview:{portfolio_id}:{currency}"
+            await redis_client.delete(cache_key)
+        print(f"[CACHE] Invalidated dashboard cache for portfolio {portfolio_id}")
+    except Exception as e:
+        print(f"[CACHE] Failed to invalidate cache: {e}")
+        pass  # Continue even if cache invalidation fails
 
 
 @router.post("/{portfolio_id}/transactions/", response_model=Transaction)
@@ -126,23 +142,38 @@ async def deposit_cash(
         raise HTTPException(status_code=400, detail="Transaction type must be DEPOSIT")
 
     try:
-        # Create transaction
+        # Determine the currency of the deposit and convert if needed
+        deposit_currency = (cash_in.currency or portfolio.currency).upper()
+        portfolio_currency = portfolio.currency.upper()
+        original_amount = cash_in.amount
+
+        # Convert to portfolio currency if different
+        if deposit_currency != portfolio_currency:
+            exchange_service = get_exchange_rate_service()
+            exchange_rate = await exchange_service.get_exchange_rate(deposit_currency, portfolio_currency)
+            converted_amount = original_amount * exchange_rate
+            print(f"[DEPOSIT] Converting {original_amount} {deposit_currency} -> {converted_amount:.2f} {portfolio_currency} (rate: {exchange_rate})")
+        else:
+            converted_amount = original_amount
+            exchange_rate = 1.0
+
+        # Create transaction (record original amount and currency)
         print(f"[DEPOSIT] Creating transaction...")
         transaction = await create_cash_transaction(
             db=db,
             portfolio_id=portfolio_id,
             transaction_type=TransactionType.DEPOSIT,
-            amount=cash_in.amount,
-            notes=cash_in.notes
+            amount=original_amount,
+            notes=f"{cash_in.notes or ''} [Currency: {deposit_currency}]".strip()
         )
         print(f"[DEPOSIT] Transaction created: {transaction.id}")
 
-        # Update portfolio cash balance
+        # Update portfolio cash balance (using converted amount)
         print(f"[DEPOSIT] Updating portfolio balance...")
         updated_portfolio = await update_portfolio_cash_balance(
             db=db,
             portfolio_id=portfolio_id,
-            amount=cash_in.amount,
+            amount=converted_amount,
             operation="add"
         )
         print(f"[DEPOSIT] Balance updated. New balance: {updated_portfolio.cash_balance if updated_portfolio else 'None'}")
@@ -150,11 +181,18 @@ async def deposit_cash(
         if not updated_portfolio:
             raise HTTPException(status_code=404, detail="Portfolio not found during update")
 
+        # Invalidate dashboard cache
+        await invalidate_dashboard_cache(portfolio_id)
+
         print(f"[DEPOSIT] SUCCESS - Deposit completed")
         return {
             "message": "Cash deposited successfully",
             "transaction_id": transaction.id,
-            "amount": cash_in.amount,
+            "amount_original": original_amount,
+            "amount_original_currency": deposit_currency,
+            "amount_converted": converted_amount,
+            "amount_converted_currency": portfolio_currency,
+            "exchange_rate": exchange_rate,
             "new_balance": updated_portfolio.cash_balance
         }
     except Exception as e:
@@ -188,37 +226,58 @@ async def withdraw_cash(
     if cash_in.transaction_type != TransactionType.WITHDRAWAL:
         raise HTTPException(status_code=400, detail="Transaction type must be WITHDRAWAL")
 
-    # Check sufficient balance
-    if portfolio.cash_balance < cash_in.amount:
+    # Determine the currency of the withdrawal and convert if needed
+    withdrawal_currency = (cash_in.currency or portfolio.currency).upper()
+    portfolio_currency = portfolio.currency.upper()
+    original_amount = cash_in.amount
+
+    # Convert to portfolio currency if different
+    if withdrawal_currency != portfolio_currency:
+        exchange_service = get_exchange_rate_service()
+        exchange_rate = await exchange_service.get_exchange_rate(withdrawal_currency, portfolio_currency)
+        converted_amount = original_amount * exchange_rate
+    else:
+        converted_amount = original_amount
+        exchange_rate = 1.0
+
+    # Check sufficient balance (in portfolio currency)
+    if portfolio.cash_balance < converted_amount:
         raise HTTPException(
             status_code=400,
-            detail=f"Insufficient cash balance. Available: {portfolio.cash_balance}, Requested: {cash_in.amount}"
+            detail=f"Insufficient cash balance. Available: {portfolio.cash_balance} {portfolio_currency}, Requested: {converted_amount:.2f} {portfolio_currency} ({original_amount} {withdrawal_currency})"
         )
 
-    # Create transaction
+    # Create transaction (record original amount and currency)
     transaction = await create_cash_transaction(
         db=db,
         portfolio_id=portfolio_id,
         transaction_type=TransactionType.WITHDRAWAL,
-        amount=cash_in.amount,
-        notes=cash_in.notes
+        amount=original_amount,
+        notes=f"{cash_in.notes or ''} [Currency: {withdrawal_currency}]".strip()
     )
 
-    # Update portfolio cash balance
+    # Update portfolio cash balance (using converted amount)
     updated_portfolio = await update_portfolio_cash_balance(
         db=db,
         portfolio_id=portfolio_id,
-        amount=cash_in.amount,
+        amount=converted_amount,
         operation="subtract"
     )
 
     if not updated_portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found during update")
 
+    # Invalidate dashboard cache
+    await invalidate_dashboard_cache(portfolio_id)
+
     return {
         "message": "Cash withdrawn successfully",
         "transaction_id": transaction.id,
-        "amount": cash_in.amount,
+        "amount_original": original_amount,
+        "amount_original_currency": withdrawal_currency,
+        "amount_converted": converted_amount,
+        "amount_converted_currency": portfolio_currency,
+        "exchange_rate": exchange_rate,
         "new_balance": updated_portfolio.cash_balance
     }
 

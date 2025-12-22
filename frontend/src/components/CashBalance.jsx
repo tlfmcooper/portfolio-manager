@@ -10,11 +10,11 @@ const CashBalance = ({ onAddCash }) => {
   const [realizedGainsDetailed, setRealizedGainsDetailed] = useState(null);
   const [showDetailedTable, setShowDetailedTable] = useState(false);
   const { api, portfolioId } = useAuth();
-  const { currentCurrency, formatCurrency } = useCurrency();
+  const { currency, formatCurrency } = useCurrency();
 
   useEffect(() => {
     fetchDashboardData();
-  }, [portfolioId, currentCurrency]);
+  }, [portfolioId, currency]);
 
   const fetchDashboardData = async () => {
     if (!portfolioId) return;
@@ -24,7 +24,7 @@ const CashBalance = ({ onAddCash }) => {
       // Use the new batched dashboard endpoint
       const response = await api.get(
         `/dashboard/overview`,
-        { params: { currency: currentCurrency } }
+        { params: { currency: currency } }
       );
 
       // Extract data from the batched response
@@ -81,7 +81,7 @@ const CashBalance = ({ onAddCash }) => {
               className="text-3xl font-bold"
               style={{ color: 'var(--color-text-primary)' }}
             >
-              {formatCurrency(cashBalance, currentCurrency)}
+              {formatCurrency(cashBalance, currency)}
             </p>
           </div>
         </div>
