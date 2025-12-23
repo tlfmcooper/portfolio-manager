@@ -130,8 +130,25 @@ const PortfolioChatWidget = () => {
         tools: [{ functionDeclarations: tools }]
       });
 
-      const history = messages
-        .filter((_, index) => index > 0)
+      // Build history excluding the initial assistant greeting (index 0)
+      // and ensuring it starts with a user message
+      const filteredMessages = messages.filter((m, index) => {
+        // Skip the initial greeting
+        if (index === 0 && m.role === 'assistant') return false;
+        return true;
+      });
+
+      // Ensure history starts with a user message (Gemini requirement)
+      let startIndex = 0;
+      for (let i = 0; i < filteredMessages.length; i++) {
+        if (filteredMessages[i].role === 'user') {
+          startIndex = i;
+          break;
+        }
+      }
+
+      const history = filteredMessages
+        .slice(startIndex)
         .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content }]
