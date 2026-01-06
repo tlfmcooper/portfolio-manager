@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AgentProvider } from './contexts/AgentContext';
+import { DataCacheProvider } from './contexts/DataCacheContext';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import OfflineIndicator from './components/OfflineIndicator';
@@ -88,40 +89,42 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <CurrencyProvider>
-            <AgentProvider>
-              <OfflineIndicator />
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                  },
-                  success: {
-                    duration: 3000,
-                    theme: {
-                      primary: 'green',
-                      secondary: 'black',
+            <DataCacheProvider>
+              <AgentProvider>
+                <OfflineIndicator />
+                <Toaster
+                  position="top-right"
+                  toastOptions={{
+                    duration: 4000,
+                    style: {
+                      background: '#363636',
+                      color: '#fff',
                     },
-                  },
-                }}
-              />
-              <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
-                <Suspense fallback={<DashboardLoadingFallback />}>
-                  <Routes>
-                    {/* Public routes */}
-                    <Route path="/" element={<LandingPage />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
+                    success: {
+                      duration: 3000,
+                      theme: {
+                        primary: 'green',
+                        secondary: 'black',
+                      },
+                    },
+                  }}
+                />
+                <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background)' }}>
+                  <Suspense fallback={<DashboardLoadingFallback />}>
+                    <Routes>
+                      {/* Public routes */}
+                      <Route path="/" element={<LandingPage />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
 
-                    {/* Protected routes */}
-                    <Route path="/*" element={<ProtectedLayout />} />
-                  </Routes>
-                </Suspense>
-                <Tooltip />
-              </div>
-            </AgentProvider>
+                      {/* Protected routes */}
+                      <Route path="/*" element={<ProtectedLayout />} />
+                    </Routes>
+                  </Suspense>
+                  <Tooltip />
+                </div>
+              </AgentProvider>
+            </DataCacheProvider>
           </CurrencyProvider>
         </AuthProvider>
       </ThemeProvider>

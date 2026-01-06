@@ -37,6 +37,50 @@ const api = axios.create({
   timeout: 120000, // Increased to 120 seconds for portfolio analysis with currency conversion
 });
 
+// Track if we're currently refreshing the token
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// Function to attempt token refresh
+const refreshAccessToken = async () => {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) {
+    throw new Error('No refresh token available');
+  }
+
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/auth/refresh`,
+      { refresh_token: refreshToken },
+      { timeout: 30000 }
+    );
+    
+    const { access_token, refresh_token: newRefreshToken } = response.data;
+    localStorage.setItem('access_token', access_token);
+    if (newRefreshToken) {
+      localStorage.setItem('refresh_token', newRefreshToken);
+    }
+    
+    return access_token;
+  } catch (error) {
+    // Refresh failed - clear tokens
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    throw error;
+  }
+};
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
@@ -45,6 +89,60 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
+  }
+);
+
+// Response interceptor to handle 401 errors and token refresh
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If error is 401 and we haven't already tried to refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip token refresh for auth endpoints
+      if (originalRequest.url?.includes('/auth/login') || 
+          originalRequest.url?.includes('/auth/register') ||
+          originalRequest.url?.includes('/auth/refresh')) {
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        // Queue this request to retry after token refresh
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const newToken = await refreshAccessToken();
+        processQueue(null, newToken);
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        
+        // Token refresh failed - trigger logout by dispatching event
+        // Components will listen for this to redirect to login
+        window.dispatchEvent(new CustomEvent('auth:sessionExpired', { 
+          detail: { message: 'Session expired. Please log in again.' }
+        }));
+        
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
   }
 );
 
@@ -71,6 +169,25 @@ export const AuthProvider = ({ children }) => {
     }
     setIsOnboarded((prev) => prev || !!id);
   };
+
+  // Handle session expiration from interceptor
+  useEffect(() => {
+    const handleSessionExpired = (event) => {
+      console.log('Session expired, redirecting to login...');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setUser(null);
+      setPortfolioId(null);
+      setIsOnboarded(false);
+      toast.error(event.detail?.message || 'Session expired. Please log in again.');
+      navigate('/login');
+    };
+
+    window.addEventListener('auth:sessionExpired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('auth:sessionExpired', handleSessionExpired);
+    };
+  }, [navigate]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -237,6 +354,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('refresh_token');
       setUser(null);
       setPortfolioId(null); // CRITICAL FIX: Clear portfolio ID on logout
+      // Dispatch event to clear data cache
+      window.dispatchEvent(new CustomEvent('auth:logout'));
       navigate('/login');
       toast.success('Logged out successfully');
     }

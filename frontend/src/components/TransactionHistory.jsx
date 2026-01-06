@@ -30,7 +30,10 @@ const TransactionHistory = () => {
       const response = await api.get(`/portfolios/${portfolioId}/transactions/`);
       setTransactions(response.data);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
+      // Don't log or handle 401 errors - interceptor handles redirect
+      if (error.response?.status !== 401) {
+        console.error('Error fetching transactions:', error);
+      }
     } finally {
       setLoading(false);
     }

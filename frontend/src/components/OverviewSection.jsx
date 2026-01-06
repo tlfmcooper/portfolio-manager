@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
+import { useDataCache } from '../contexts/DataCacheContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
 import { DashboardSkeleton } from './ui/Skeleton'
 
@@ -12,6 +13,7 @@ const OverviewSection = () => {
   const [error, setError] = useState(null)
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency()
+  const { fetchWithCache, CACHE_TTL } = useDataCache()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -22,15 +24,29 @@ const OverviewSection = () => {
       }
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
-          params: { currency }
-        }) // Pass currency parameter
-        console.log('API Response:', response.data)
-        console.log('Individual Performance:', response.data?.individual_performance)
-        setData(response.data)
+        // Use cache to prevent redundant API calls
+        const response = await fetchWithCache(
+          'portfolio_metrics',
+          async () => {
+            const res = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
+              params: { currency }
+            });
+            return res.data;
+          },
+          CACHE_TTL.PORTFOLIO_METRICS,
+          currency
+        );
+        
+        console.log('API Response:', response)
+        console.log('Individual Performance:', response?.individual_performance)
+        setData(response)
         setError(null)
       } catch (err) {
-        setError('Failed to fetch overview data')
+        // Don't show error for auth issues - interceptor handles redirect
+        if (err.response?.status === 401) {
+          return;
+        }
+        setError('Failed to load portfolio overview. Please refresh the page.')
         console.error('API Error:', err)
       } finally {
         setLoading(false)
@@ -38,7 +54,7 @@ const OverviewSection = () => {
     }
 
     fetchData()
-  }, [api, portfolioId, currency]) // Add currency to dependencies
+  }, [api, portfolioId, currency, fetchWithCache, CACHE_TTL]) // Add currency to dependencies
 
   if (loading) return <DashboardSkeleton />
   if (error) return <div className="text-red-500">{error}</div>

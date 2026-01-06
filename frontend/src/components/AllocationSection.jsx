@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { TrendingUp, DollarSign, Percent, PieChart as PieChartIcon } from 'lucide-react';
 import ResponsiveChartContainer from './ResponsiveChartContainer';
 
@@ -11,6 +12,7 @@ const AllocationSection = () => {
   const [error, setError] = useState(null);
   const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency();
+  const { fetchWithCache, CACHE_TTL } = useDataCache();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -21,14 +23,30 @@ const AllocationSection = () => {
 
       try {
         console.log('[AllocationSection] Fetching sector allocation with currency:', currency);
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`, {
-          params: { currency }
-        }); // Pass currency parameter
-        console.log('[AllocationSection] Received data:', response.data);
+        
+        // Use cache to prevent redundant API calls
+        const response = await fetchWithCache(
+          'sector_allocation',
+          async () => {
+            const res = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`, {
+              params: { currency }
+            });
+            return res.data;
+          },
+          CACHE_TTL.ALLOCATION,
+          currency
+        );
+        
+        console.log('[AllocationSection] Received data:', response);
         console.log('[AllocationSection] Currency used:', currency);
-        setData(response.data);
+        setData(response);
+        setError(null);
       } catch (err) {
-        setError('Failed to fetch allocation data');
+        // Don't show error for auth issues - interceptor handles redirect
+        if (err.response?.status === 401) {
+          return;
+        }
+        setError('Failed to load allocation data. Please refresh the page.');
         console.error(err);
       } finally {
         setLoading(false);
@@ -36,7 +54,7 @@ const AllocationSection = () => {
     };
 
     fetchData();
-  }, [api, portfolioId, currency]); // Add currency to dependencies
+  }, [api, portfolioId, currency, fetchWithCache, CACHE_TTL]); // Add currency to dependencies
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">

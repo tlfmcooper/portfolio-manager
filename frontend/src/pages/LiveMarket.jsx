@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { TrendingUp, TrendingDown, Activity, RefreshCw, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import { ChartSkeleton } from '../components/ui/Skeleton';
@@ -25,6 +26,7 @@ const LiveMarket = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const { api } = useAuth();
   const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency();
+  const { fetchWithCache, CACHE_TTL, invalidateCache } = useDataCache();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const priceHistoryRef = useRef({});
@@ -195,8 +197,19 @@ const LiveMarket = () => {
 
     } catch (err) {
       console.error('Error fetching live market data:', err);
+      
+      // Don't show error for auth-related issues (interceptor handles redirect)
+      if (err.response?.status === 401) {
+        return; // Session expired - interceptor will handle redirect
+      }
+      
       if (!silentUpdate) {
-        const errorMsg = err.response?.data?.detail || err.message || 'Failed to fetch live market data';
+        // Show user-friendly error message
+        const errorMsg = err.response?.status === 403 
+          ? 'Access denied. Please try logging in again.'
+          : err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK'
+          ? 'Connection timed out. Please check your internet connection.'
+          : 'Failed to load market data. Please refresh the page.';
         setError(errorMsg);
         toast.error(errorMsg);
       }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, Plus, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 
 const CashBalance = ({ onAddCash }) => {
   const [cashData, setCashData] = useState(null);
@@ -11,6 +12,7 @@ const CashBalance = ({ onAddCash }) => {
   const [showDetailedTable, setShowDetailedTable] = useState(false);
   const { api, portfolioId } = useAuth();
   const { currency, formatCurrency } = useCurrency();
+  const { fetchWithCache, CACHE_TTL } = useDataCache();
 
   useEffect(() => {
     fetchDashboardData();
@@ -21,18 +23,30 @@ const CashBalance = ({ onAddCash }) => {
 
     try {
       setLoading(true);
-      // Use the new batched dashboard endpoint
-      const response = await api.get(
-        `/dashboard/overview`,
-        { params: { currency: currency } }
+      
+      // Use cache to prevent redundant API calls
+      const response = await fetchWithCache(
+        'dashboard_overview',
+        async () => {
+          const res = await api.get(
+            `/dashboard/overview`,
+            { params: { currency: currency } }
+          );
+          return res.data;
+        },
+        CACHE_TTL.DASHBOARD,
+        currency
       );
 
       // Extract data from the batched response
-      setCashData(response.data.cash_balance);
-      setRealizedGains(response.data.realized_gains);
-      setRealizedGainsDetailed(response.data.realized_gains_detailed);
+      setCashData(response.cash_balance);
+      setRealizedGains(response.realized_gains);
+      setRealizedGainsDetailed(response.realized_gains_detailed);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      // Don't log or handle 401 errors - interceptor handles redirect
+      if (error.response?.status !== 401) {
+        console.error('Error fetching dashboard data:', error);
+      }
     } finally {
       setLoading(false);
     }
