@@ -112,11 +112,37 @@ const PortfolioChatWidget = () => {
         1. You can control the dashboard using the provided tools.
         2. You can answer general financial questions directly.
         3. You can SEE the dashboard.
+        4. You can fetch and analyze portfolio data using specialized tools.
+        
+        AVAILABLE DATA TOOLS:
+        - get_portfolio_summary: Get overall portfolio performance summary
+        - analyze_portfolio: Perform analysis with these query_type options:
+          * "largest_holding" - single largest by market value
+          * "smallest_holding" - single smallest by market value  
+          * "top_performers" - best performers by period return (use limit param)
+          * "worst_performers" - worst performers by period return (use limit param)
+          * "holdings_summary" - ALL holdings sorted by market value (use this for 2nd, 3rd, Nth largest!)
+          * "sector_breakdown" - allocation by sector
+        - get_holding_performance: Get detailed performance for a specific holding by ticker
+        - get_all_holdings_performance: Get performance metrics for ALL holdings at once
+        
+        CRITICAL WORKFLOW RULES:
+        1. For "largest holding" → use analyze_portfolio with query_type="largest_holding"
+        2. For "second largest", "third largest", "Nth largest" → use analyze_portfolio with query_type="holdings_summary", then pick the Nth item from the sorted list (index 1 for 2nd, index 2 for 3rd, etc.)
+        3. For YTD/performance of a specific ticker → use get_holding_performance with that ticker
+        4. For "YTD of largest holding" → call analyze_portfolio FIRST, then call get_holding_performance with the ticker from the result
+        5. For "YTD of second largest" → call analyze_portfolio with holdings_summary, identify the 2nd item, then call get_holding_performance with that ticker
+        6. For best/worst performers → use analyze_portfolio with query_type="top_performers" or "worst_performers"
+        
+        IMPORTANT LIMITATIONS:
+        - For mutual funds (tickers ending in .CF like PHN9756.CF), historical period returns (YTD, 1M, 3M, 1Y) are NOT available.
+        - For mutual funds, you can only report their cost-basis gain/loss (gain_loss_percent), not period returns.
         
         GUIDELINES:
-        - If the user asks to change a view or parameter, USE A TOOL.
-        - If the user asks a general question, ANSWER DIRECTLY.
-        - Be concise, professional, and helpful.
+        - Always use tools to get real data - never guess or make up numbers.
+        - When you need multiple pieces of data, call multiple tools.
+        - Format numbers clearly: $10,234.56 for currency, +15.2% for percentages.
+        - Be concise and direct in your responses.
       `;
 
       // Lazy load Google Generative AI
@@ -196,6 +222,21 @@ const PortfolioChatWidget = () => {
       const functionCalls = response.functionCalls();
 
       if (functionCalls && functionCalls.length > 0) {
+        // Collect all tool results
+        const toolResults = [];
+        
+        // Show fetching indicator once (not per tool)
+        let baseMessageContent = '';
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage.role === 'assistant') {
+            baseMessageContent = lastMessage.content;
+            lastMessage.content = lastMessage.content + '\n\n*Fetching data...*';
+          }
+          return newMessages;
+        });
+        
         for (const call of functionCalls) {
           const functionName = call.name;
           const functionArgs = call.args;
@@ -207,11 +248,48 @@ const PortfolioChatWidget = () => {
             ...agentContext
           });
 
-          // Append tool result to the chat
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: `Action: ${toolResult}` 
-          }]);
+          toolResults.push({
+            name: functionName,
+            args: functionArgs,
+            result: toolResult
+          });
+        }
+        
+        // Update to show analyzing
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage.role === 'assistant') {
+            lastMessage.content = baseMessageContent + '\n\n*Analyzing results...*';
+          }
+          return newMessages;
+        });
+        
+        // Send tool results back to LLM for natural language response
+        const toolResultsText = toolResults.map(tr => 
+          `Tool "${tr.name}" returned:\n${tr.result}`
+        ).join('\n\n');
+        
+        // Send tool results to LLM for natural language summary
+        const followUpResult = await chat.sendMessageStream([{ 
+          text: `Here are the results from the tools I called. Please provide a clear, concise natural language response to the user's question based on this data. Format numbers nicely (e.g., $64,482.40 instead of 64482.4). Do not show raw JSON. Give a single direct answer.\n\n${toolResultsText}` 
+        }]);
+        
+        let followUpText = '';
+        
+        for await (const chunk of followUpResult.stream) {
+          const chunkText = chunk.text();
+          followUpText += chunkText;
+          
+          // Always update with the complete follow-up text
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage.role === 'assistant') {
+              lastMessage.content = baseMessageContent + '\n\n' + followUpText;
+            }
+            return newMessages;
+          });
         }
       }
 

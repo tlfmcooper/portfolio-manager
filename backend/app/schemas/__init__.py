@@ -38,6 +38,13 @@ from app.schemas.holding import (
     HoldingUpdate,
     HoldingInDB,
 )
+from app.schemas.analysis import (
+    HoldingPerformance,
+    BatchHoldingPerformance,
+    PortfolioAnalysisQuery,
+    PortfolioAnalysisResponse,
+    HoldingSummary,
+)
 
 __all__ = [
     # User schemas
@@ -72,4 +79,10 @@ __all__ = [
     "HoldingCreate",
     "HoldingUpdate",
     "HoldingInDB",
+    # Analysis schemas
+    "HoldingPerformance",
+    "BatchHoldingPerformance",
+    "PortfolioAnalysisQuery",
+    "PortfolioAnalysisResponse",
+    "HoldingSummary",
 ]

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from datetime import datetime
 
 from app.core.database import get_db
-from app.schemas import HoldingInDB, HoldingCreate, HoldingUpdate
+from app.schemas import HoldingInDB, HoldingCreate, HoldingUpdate, HoldingPerformance, BatchHoldingPerformance
 from app.schemas.holding_extended import HoldingUpdateRequest, AssetSellRequest
 from app.crud import (
     get_user_portfolio,
@@ -25,6 +25,7 @@ from app.utils.dependencies import get_current_active_user
 from app.models import User
 from app.models.holding import Holding as HoldingModel
 from app.services.exchange_rate_service import get_exchange_rate_service
+from app.services.finance_service import FinanceService
 from app.core.redis_client import get_redis_client
 import json
 
@@ -389,3 +390,220 @@ async def sell_asset(
         "realized_gain_loss": realized_gain_loss,
         "new_cash_balance": portfolio.cash_balance + sale_proceeds
     }
+
+
+@router.get("/performance/batch", response_model=BatchHoldingPerformance)
+async def get_holdings_performance_batch(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)"),
+    period: Optional[str] = Query("ytd", description="Time period: ytd, 1m, 3m, 1y")
+) -> Any:
+    """
+    Get performance metrics for all holdings in the user's portfolio.
+    
+    Returns YTD, 1M, 3M, 1Y returns for each holding. For mutual funds (.CF suffix),
+    only cost-basis returns are available as historical price data is not accessible.
+    
+    Results are cached for 30 minutes to reduce API calls.
+    """
+    portfolio = await get_user_portfolio(db, current_user.id)
+    if not portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio not found"
+        )
+    
+    display_currency = currency.upper() if currency else portfolio.currency
+    
+    # Check Redis cache
+    cache_key = f"perf:batch:{portfolio.id}:{display_currency}:{period}"
+    redis_client = await get_redis_client()
+    cached = False
+    
+    try:
+        cached_data = await redis_client.get(cache_key)
+        if cached_data:
+            data = json.loads(cached_data)
+            data["cached"] = True
+            return data
+    except Exception:
+        pass
+    
+    # Get all holdings
+    holdings = await get_portfolio_holdings(db, portfolio.id, skip=0, limit=None)
+    exchange_service = get_exchange_rate_service()
+    
+    # Pre-fetch exchange rates
+    exchange_rates = {}
+    for holding in holdings:
+        if holding.asset:
+            asset_curr = holding.asset.currency
+            if asset_curr != display_currency and asset_curr not in exchange_rates:
+                rate = await exchange_service.get_exchange_rate(asset_curr, display_currency)
+                exchange_rates[asset_curr] = rate
+    
+    # Calculate performance for each holding
+    performance_list = []
+    for holding in holdings:
+        if not holding.is_active:
+            continue
+            
+        asset = holding.asset
+        asset_type = asset.asset_type if asset else None
+        asset_currency = asset.currency if asset else "USD"
+        
+        # Get performance data from yfinance (or barchart for mutual funds)
+        perf_data = await FinanceService.calculate_ticker_performance(
+            ticker=holding.ticker,
+            asset_type=asset_type,
+            periods=["ytd", "1m", "3m", "1y"]
+        )
+        
+        # Calculate market value with currency conversion
+        cost_basis = holding.quantity * holding.average_cost
+        market_value = holding.quantity * (holding.current_price or holding.average_cost)
+        
+        if asset_currency != display_currency and asset_currency in exchange_rates:
+            rate = exchange_rates[asset_currency]
+            cost_basis *= rate
+            market_value *= rate
+        
+        gain_loss = market_value - cost_basis
+        gain_loss_percent = (gain_loss / cost_basis * 100) if cost_basis > 0 else 0
+        
+        performance_list.append(HoldingPerformance(
+            ticker=holding.ticker,
+            name=asset.name if asset else holding.ticker,
+            asset_type=asset_type,
+            current_price=perf_data.get("current_price") or holding.current_price,
+            quantity=holding.quantity,
+            market_value=round(market_value, 2),
+            cost_basis=round(cost_basis, 2),
+            ytd_return=perf_data.get("ytd_return"),
+            one_month_return=perf_data.get("one_month_return"),
+            three_month_return=perf_data.get("three_month_return"),
+            one_year_return=perf_data.get("one_year_return"),
+            gain_loss=round(gain_loss, 2),
+            gain_loss_percent=round(gain_loss_percent, 2),
+            historical_data_available=perf_data.get("historical_data_available", True),
+            data_source=perf_data.get("data_source"),
+            last_updated=datetime.utcnow()
+        ))
+    
+    response = BatchHoldingPerformance(
+        holdings=performance_list,
+        total_count=len(performance_list),
+        currency=display_currency,
+        cached=cached
+    )
+    
+    # Cache for 30 minutes
+    try:
+        await redis_client.set(cache_key, response.json(), ttl=1800)
+    except Exception:
+        pass
+    
+    return response
+
+
+@router.get("/{ticker}/performance", response_model=HoldingPerformance)
+async def get_holding_performance(
+    ticker: str,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")
+) -> Any:
+    """
+    Get performance metrics for a specific holding by ticker symbol.
+    
+    Returns YTD, 1M, 3M, 1Y returns for the holding. For mutual funds (.CF suffix),
+    only cost-basis returns are available as historical price data is not accessible.
+    
+    Results are cached for 1 hour.
+    """
+    portfolio = await get_user_portfolio(db, current_user.id)
+    if not portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio not found"
+        )
+    
+    display_currency = currency.upper() if currency else portfolio.currency
+    ticker = ticker.upper().strip()
+    
+    # Check Redis cache
+    cache_key = f"perf:{portfolio.id}:{ticker}:{display_currency}"
+    redis_client = await get_redis_client()
+    
+    try:
+        cached_data = await redis_client.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+    except Exception:
+        pass
+    
+    # Find the holding
+    result = await db.execute(
+        select(HoldingModel).where(
+            HoldingModel.portfolio_id == portfolio.id,
+            HoldingModel.ticker == ticker
+        )
+    )
+    holding = result.scalar_one_or_none()
+    
+    if not holding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Holding with ticker '{ticker}' not found in portfolio"
+        )
+    
+    asset = holding.asset
+    asset_type = asset.asset_type if asset else None
+    asset_currency = asset.currency if asset else "USD"
+    
+    # Get exchange rate if needed
+    exchange_rate = 1.0
+    if asset_currency != display_currency:
+        exchange_service = get_exchange_rate_service()
+        exchange_rate = await exchange_service.get_exchange_rate(asset_currency, display_currency)
+    
+    # Get performance data
+    perf_data = await FinanceService.calculate_ticker_performance(
+        ticker=ticker,
+        asset_type=asset_type,
+        periods=["ytd", "1m", "3m", "1y"]
+    )
+    
+    # Calculate values with currency conversion
+    cost_basis = holding.quantity * holding.average_cost * exchange_rate
+    market_value = holding.quantity * (holding.current_price or holding.average_cost) * exchange_rate
+    gain_loss = market_value - cost_basis
+    gain_loss_percent = (gain_loss / cost_basis * 100) if cost_basis > 0 else 0
+    
+    response = HoldingPerformance(
+        ticker=ticker,
+        name=asset.name if asset else ticker,
+        asset_type=asset_type,
+        current_price=perf_data.get("current_price") or holding.current_price,
+        quantity=holding.quantity,
+        market_value=round(market_value, 2),
+        cost_basis=round(cost_basis, 2),
+        ytd_return=perf_data.get("ytd_return"),
+        one_month_return=perf_data.get("one_month_return"),
+        three_month_return=perf_data.get("three_month_return"),
+        one_year_return=perf_data.get("one_year_return"),
+        gain_loss=round(gain_loss, 2),
+        gain_loss_percent=round(gain_loss_percent, 2),
+        historical_data_available=perf_data.get("historical_data_available", True),
+        data_source=perf_data.get("data_source"),
+        last_updated=datetime.utcnow()
+    )
+    
+    # Cache for 1 hour
+    try:
+        await redis_client.set(cache_key, response.json(), ttl=3600)
+    except Exception:
+        pass
+    
+    return response

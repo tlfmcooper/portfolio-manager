@@ -127,6 +127,82 @@ export const tools = [
         }
       }
     }
+  },
+  {
+    name: "analyze_portfolio",
+    description: "Perform portfolio analysis to answer questions about holdings. Use this to find largest/smallest holdings, best/worst performers, or get a summary of all holdings.",
+    parameters: {
+      type: "object",
+      properties: {
+        query_type: {
+          type: "string",
+          enum: [
+            "largest_holding",
+            "smallest_holding", 
+            "top_performers",
+            "worst_performers",
+            "holdings_summary",
+            "sector_breakdown"
+          ],
+          description: "Type of analysis: largest_holding (highest market value), smallest_holding (lowest market value), top_performers (best period returns), worst_performers (worst period returns), holdings_summary (all holdings with metrics), sector_breakdown (allocation by sector)."
+        },
+        period: {
+          type: "string",
+          enum: ["ytd", "1m", "3m", "1y"],
+          description: "Time period for performance calculations. Default is 'ytd' (year-to-date). Options: ytd, 1m (1 month), 3m (3 months), 1y (1 year)."
+        },
+        limit: {
+          type: "integer",
+          description: "Number of results for top/worst performers queries. Default is 5.",
+          minimum: 1,
+          maximum: 50
+        },
+        currency: {
+          type: "string",
+          enum: ["USD", "CAD"],
+          description: "Optional currency for values."
+        }
+      },
+      required: ["query_type"]
+    }
+  },
+  {
+    name: "get_holding_performance",
+    description: "Get detailed performance metrics for a specific holding by ticker symbol. Returns YTD, 1-month, 3-month, and 1-year returns along with cost-basis gain/loss. Note: For mutual funds (.CF suffix), only cost-basis returns are available - historical period returns are not accessible.",
+    parameters: {
+      type: "object",
+      properties: {
+        ticker: {
+          type: "string",
+          description: "The ticker symbol of the holding (e.g., AAPL, GOOG, PHN9756.CF)."
+        },
+        currency: {
+          type: "string",
+          enum: ["USD", "CAD"],
+          description: "Optional currency for values."
+        }
+      },
+      required: ["ticker"]
+    }
+  },
+  {
+    name: "get_all_holdings_performance",
+    description: "Get performance metrics for ALL holdings in the portfolio at once. Use this when you need to compare holdings or find the best/worst performers. Returns YTD, 1M, 3M, 1Y returns for each holding.",
+    parameters: {
+      type: "object",
+      properties: {
+        currency: {
+          type: "string",
+          enum: ["USD", "CAD"],
+          description: "Optional currency for values."
+        },
+        period: {
+          type: "string",
+          enum: ["ytd", "1m", "3m", "1y"],
+          description: "Primary period of interest. All periods are returned but this helps focus the response."
+        }
+      }
+    }
   }
 ];
 
@@ -193,6 +269,47 @@ export const executeTool = async (name, args, context) => {
           return JSON.stringify(response.data);
         } catch (error) {
           return `Error fetching summary: ${error.message}`;
+        }
+
+      case "analyze_portfolio":
+        // Perform portfolio analysis based on query_type
+        try {
+          const params = {
+            query_type: args.query_type,
+            currency: args.currency,
+            period: args.period || 'ytd',
+            limit: args.limit || 5
+          };
+          const response = await api.get('/portfolios/analyze', { params });
+          return JSON.stringify(response.data);
+        } catch (error) {
+          return `Error analyzing portfolio: ${error.message}`;
+        }
+
+      case "get_holding_performance":
+        // Get performance metrics for a specific holding
+        try {
+          const ticker = args.ticker.toUpperCase().trim();
+          const response = await api.get(`/holdings/${ticker}/performance`, { 
+            params: { currency: args.currency } 
+          });
+          return JSON.stringify(response.data);
+        } catch (error) {
+          return `Error fetching holding performance: ${error.message}`;
+        }
+
+      case "get_all_holdings_performance":
+        // Get performance for all holdings in batch
+        try {
+          const response = await api.get('/holdings/performance/batch', { 
+            params: { 
+              currency: args.currency,
+              period: args.period || 'ytd'
+            } 
+          });
+          return JSON.stringify(response.data);
+        } catch (error) {
+          return `Error fetching holdings performance: ${error.message}`;
         }
 
       default:

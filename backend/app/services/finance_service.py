@@ -8,8 +8,8 @@ import ast
 import re
 import time
 from bs4 import BeautifulSoup
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -328,6 +328,128 @@ class FinanceService:
         except Exception as e:
             logger.error(f"Error fetching OHLC data for {ticker}: {str(e)}")
             return None
+
+    @staticmethod
+    async def calculate_ticker_performance(
+        ticker: str, 
+        asset_type: Optional[str] = None,
+        periods: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate performance metrics for a ticker over various time periods.
+        
+        Uses yfinance for stocks/ETFs/crypto. For mutual funds, historical data
+        is not available via Barchart, so only cost-basis returns can be calculated.
+        
+        Args:
+            ticker: Asset ticker symbol
+            asset_type: Type of asset (stock, mutual_fund, crypto) - affects data source
+            periods: List of periods to calculate (ytd, 1m, 3m, 1y). Defaults to all.
+            
+        Returns:
+            Dictionary with performance metrics for each period
+        """
+        if periods is None:
+            periods = ["ytd", "1m", "3m", "1y"]
+        
+        result = {
+            "ticker": ticker.upper(),
+            "asset_type": asset_type,
+            "ytd_return": None,
+            "one_month_return": None,
+            "three_month_return": None,
+            "one_year_return": None,
+            "current_price": None,
+            "historical_data_available": True,
+            "data_source": "yfinance",
+            "last_updated": datetime.utcnow()
+        }
+        
+        # Mutual funds don't have historical data via Barchart
+        if asset_type == "mutual_fund":
+            result["historical_data_available"] = False
+            result["data_source"] = "barchart"
+            
+            # Try to get current price from Barchart
+            try:
+                mf_info = await FinanceService._get_mutual_fund_info(ticker)
+                if mf_info and "current_price" in mf_info:
+                    result["current_price"] = mf_info["current_price"]
+            except Exception as e:
+                logger.warning(f"Failed to get mutual fund price for {ticker}: {e}")
+            
+            return result
+        
+        try:
+            # Use yfinance for stocks, ETFs, and crypto
+            stock_ticker = ticker
+            if asset_type == "crypto" and "-USD" not in ticker.upper():
+                stock_ticker = f"{ticker.upper()}-USD"
+            
+            stock = yf.Ticker(stock_ticker)
+            
+            # Get current price
+            try:
+                info = stock.info
+                result["current_price"] = info.get("currentPrice") or info.get("regularMarketPrice")
+            except Exception:
+                pass
+            
+            now = datetime.now()
+            
+            # Calculate YTD return
+            if "ytd" in periods:
+                try:
+                    # Get data from start of current year
+                    year_start = datetime(now.year, 1, 1)
+                    hist = stock.history(start=year_start, end=now)
+                    
+                    if not hist.empty and len(hist) >= 2:
+                        start_price = float(hist.iloc[0]['Close'])
+                        end_price = float(hist.iloc[-1]['Close'])
+                        result["ytd_return"] = round(((end_price - start_price) / start_price) * 100, 2)
+                        result["current_price"] = end_price
+                except Exception as e:
+                    logger.warning(f"Failed to calculate YTD for {ticker}: {e}")
+            
+            # Calculate 1-month return
+            if "1m" in periods:
+                try:
+                    hist = stock.history(period="1mo")
+                    if not hist.empty and len(hist) >= 2:
+                        start_price = float(hist.iloc[0]['Close'])
+                        end_price = float(hist.iloc[-1]['Close'])
+                        result["one_month_return"] = round(((end_price - start_price) / start_price) * 100, 2)
+                except Exception as e:
+                    logger.warning(f"Failed to calculate 1M for {ticker}: {e}")
+            
+            # Calculate 3-month return
+            if "3m" in periods:
+                try:
+                    hist = stock.history(period="3mo")
+                    if not hist.empty and len(hist) >= 2:
+                        start_price = float(hist.iloc[0]['Close'])
+                        end_price = float(hist.iloc[-1]['Close'])
+                        result["three_month_return"] = round(((end_price - start_price) / start_price) * 100, 2)
+                except Exception as e:
+                    logger.warning(f"Failed to calculate 3M for {ticker}: {e}")
+            
+            # Calculate 1-year return
+            if "1y" in periods:
+                try:
+                    hist = stock.history(period="1y")
+                    if not hist.empty and len(hist) >= 2:
+                        start_price = float(hist.iloc[0]['Close'])
+                        end_price = float(hist.iloc[-1]['Close'])
+                        result["one_year_return"] = round(((end_price - start_price) / start_price) * 100, 2)
+                except Exception as e:
+                    logger.warning(f"Failed to calculate 1Y for {ticker}: {e}")
+            
+        except Exception as e:
+            logger.error(f"Error calculating performance for {ticker}: {e}")
+            result["historical_data_available"] = False
+        
+        return result
 
 
 def _determine_asset_type(info: Dict[str, Any]) -> str:
