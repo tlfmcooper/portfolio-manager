@@ -44,7 +44,7 @@ jobs:
           file: frontend/Dockerfile
           push: true
           build-args: |
-            VITE_API_URL=https://api.portfolio.alikone.dev
+            VITE_API_URL=https://api.portfolio.alikone.dev/api/v1
           tags: |
             ghcr.io/tlfmcooper/portfolio-manager-frontend:latest
             ghcr.io/tlfmcooper/portfolio-manager-frontend:${{ github.sha }}
