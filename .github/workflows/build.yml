@@ -16,14 +16,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: meta-backend
+        with:
+          images: ghcr.io/tlfmcooper/portfolio-manager-backend
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: backend/Dockerfile
           push: true
-          tags: |
-            ghcr.io/tlfmcooper/portfolio-manager-backend:latest
-            ghcr.io/tlfmcooper/portfolio-manager-backend:${{ github.sha }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -38,6 +43,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: meta-frontend
+        with:
+          images: ghcr.io/tlfmcooper/portfolio-manager-frontend
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -45,8 +57,6 @@ jobs:
           push: true
           build-args: |
             VITE_API_URL=https://api.portfolio.alikone.dev/api/v1
-          tags: |
-            ghcr.io/tlfmcooper/portfolio-manager-frontend:latest
-            ghcr.io/tlfmcooper/portfolio-manager-frontend:${{ github.sha }}
+          tags: ${{ steps.meta-frontend.outputs.tags }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
