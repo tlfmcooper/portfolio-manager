@@ -9,7 +9,8 @@ import re
 import time
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,15 @@ session.mount('http://', adapter)
 
 class FinanceService:
     """Service for fetching financial data from Yahoo Finance and other sources."""
+
+    _BARCHART_USER_AGENT = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    )
+    _BARCHART_HISTORY_FIELDS = (
+        "tradeTime.format(m/d/Y),openPrice,highPrice,lowPrice,lastPrice,"
+        "priceChange,percentChange,volume,symbolCode,symbolType"
+    )
 
     @staticmethod
     async def get_asset_info(ticker: str, asset_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -77,7 +87,7 @@ class FinanceService:
                 'dividend_yield': info.get('dividendYield'),
                 'pe_ratio': info.get('trailingPE') or info.get('forwardPE'),
                 'beta': info.get('beta'),
-                'last_price_update': datetime.utcnow()
+                'last_price_update': datetime.now()
             }
 
             # Clean up None values and convert to appropriate types
@@ -108,7 +118,7 @@ class FinanceService:
         for attempt in range(max_retries):
             try:
                 headers = {
-                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    "user-agent": FinanceService._BARCHART_USER_AGENT,
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
                     "Accept-Language": "en-US,en;q=0.5",
                     "Accept-Encoding": "gzip, deflate, br",
@@ -171,7 +181,7 @@ class FinanceService:
                     'asset_type': 'mutual_fund',
                     'currency': 'USD',
                     'current_price': float(last_price) if last_price else None,
-                    'last_price_update': datetime.utcnow(),
+                    'last_price_update': datetime.now(),
                     # Additional fields for display (not stored in Asset model, filtered out before saving)
                     'change_percent': change_percent,
                     'change': change,
@@ -201,6 +211,120 @@ class FinanceService:
         return None
 
     @staticmethod
+    def _extract_barchart_xsrf_token() -> Optional[str]:
+        token = session.cookies.get("XSRF-TOKEN")
+        if not token:
+            return None
+        return unquote(token)
+
+    @staticmethod
+    def _build_barchart_history_headers(referer: str, xsrf_token: str) -> Dict[str, str]:
+        return {
+            "user-agent": FinanceService._BARCHART_USER_AGENT,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Referer": referer,
+            "X-Requested-With": "XMLHttpRequest",
+            "X-XSRF-TOKEN": xsrf_token,
+        }
+
+    @staticmethod
+    async def _get_mutual_fund_history(ticker: str, limit: int = 400) -> Optional[List[Dict[str, Any]]]:
+        """Fetch mutual fund historical EOD data from Barchart's proxied core API."""
+        max_retries = 3
+        base_timeout = 20
+        page_url = f"https://www.barchart.com/etfs-funds/quotes/{ticker}/price-history/historical"
+        api_url = "https://www.barchart.com/proxies/core-api/v1/historical/get"
+        page_headers = {
+            "user-agent": FinanceService._BARCHART_USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        params = {
+            "symbol": ticker.upper(),
+            "fields": FinanceService._BARCHART_HISTORY_FIELDS,
+            "type": "eod",
+            "orderBy": "tradeTime",
+            "orderDir": "asc",
+            "limit": str(limit),
+            "meta": "field.shortName,field.type,field.description",
+            "raw": "1",
+        }
+
+        for attempt in range(max_retries):
+            try:
+                timeout = base_timeout * (1.5 ** attempt)
+                if attempt > 0:
+                    wait_time = 2 ** attempt
+                    logger.info(f"Retry attempt {attempt + 1}/{max_retries} for mutual fund history {ticker} after {wait_time}s delay")
+                    time.sleep(wait_time)
+
+                session.get(page_url, headers=page_headers, timeout=timeout).raise_for_status()
+                xsrf_token = FinanceService._extract_barchart_xsrf_token()
+                if not xsrf_token:
+                    logger.warning(f"Missing Barchart XSRF token for mutual fund history: {ticker}")
+                    return None
+
+                response = session.get(
+                    api_url,
+                    params=params,
+                    headers=FinanceService._build_barchart_history_headers(page_url, xsrf_token),
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+
+                payload = response.json()
+                rows = payload.get("data")
+                if not isinstance(rows, list) or not rows:
+                    logger.warning(f"No historical mutual fund data returned for ticker: {ticker}")
+                    return None
+
+                logger.info(f"Successfully fetched {len(rows)} historical mutual fund rows for {ticker}")
+                return rows
+
+            except requests.exceptions.Timeout as e:
+                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries} for mutual fund history {ticker}: {str(e)}")
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to fetch mutual fund history for {ticker} after {max_retries} attempts")
+                    return None
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request error fetching mutual fund history for {ticker}: {str(e)}")
+                if attempt == max_retries - 1:
+                    return None
+            except ValueError as e:
+                logger.error(f"Invalid JSON fetching mutual fund history for {ticker}: {str(e)}")
+                return None
+            except Exception as e:
+                logger.error(f"Error fetching mutual fund history for {ticker}: {str(e)}")
+                return None
+
+        return None
+
+    @staticmethod
+    def _get_history_start_price(history: List[Dict[str, Any]], period_start: date) -> Optional[float]:
+        for row in history:
+            raw_data = row.get("raw") or {}
+            trade_time = raw_data.get("tradeTime")
+            last_price = raw_data.get("lastPrice")
+            if not trade_time or last_price is None:
+                continue
+
+            try:
+                trade_date = datetime.fromisoformat(str(trade_time)).date()
+                if trade_date < period_start:
+                    continue
+                return float(last_price)
+            except (TypeError, ValueError):
+                continue
+
+        return None
+
+    @staticmethod
     async def _get_crypto_info(ticker: str) -> Optional[Dict[str, Any]]:
         """Fetch cryptocurrency information from Yahoo Finance or CoinGecko."""
         try:
@@ -223,7 +347,7 @@ class FinanceService:
                 'exchange': info.get('exchange'),
                 'current_price': info.get('currentPrice') or info.get('regularMarketPrice'),
                 'market_cap': info.get('marketCap'),
-                'last_price_update': datetime.utcnow()
+                'last_price_update': datetime.now()
             }
 
             # Clean up None values
@@ -319,7 +443,7 @@ class FinanceService:
                 'previous_close': previous_close,
                 'change_percent': change_percent,
                 'change': close_price - (previous_close if previous_close else open_price),
-                'last_updated': datetime.utcnow()
+                'last_updated': datetime.now()
             }
 
             logger.info(f"Successfully fetched OHLC data for {ticker}: close={close_price}, change%={change_percent}")
@@ -338,8 +462,8 @@ class FinanceService:
         """
         Calculate performance metrics for a ticker over various time periods.
         
-        Uses yfinance for stocks/ETFs/crypto. For mutual funds, historical data
-        is not available via Barchart, so only cost-basis returns can be calculated.
+        Uses yfinance for stocks/ETFs/crypto. Mutual funds use Barchart historical
+        NAV data via the same proxied endpoint used by the Barchart history page.
         
         Args:
             ticker: Asset ticker symbol
@@ -362,22 +486,55 @@ class FinanceService:
             "current_price": None,
             "historical_data_available": True,
             "data_source": "yfinance",
-            "last_updated": datetime.utcnow()
+            "last_updated": datetime.now()
         }
         
-        # Mutual funds don't have historical data via Barchart
         if asset_type == "mutual_fund":
-            result["historical_data_available"] = False
             result["data_source"] = "barchart"
-            
-            # Try to get current price from Barchart
+
             try:
-                mf_info = await FinanceService._get_mutual_fund_info(ticker)
-                if mf_info and "current_price" in mf_info:
-                    result["current_price"] = mf_info["current_price"]
+                history = await FinanceService._get_mutual_fund_history(ticker)
+                if history:
+                    latest_row = history[-1].get("raw") or {}
+                    latest_price = latest_row.get("lastPrice")
+                    if latest_price is not None:
+                        result["current_price"] = float(latest_price)
+
+                    result["historical_data_available"] = True
+                    today = datetime.now().date()
+
+                    if "ytd" in periods:
+                        start_price = FinanceService._get_history_start_price(history, date(today.year, 1, 1))
+                        if start_price and result["current_price"]:
+                            result["ytd_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
+
+                    if "1m" in periods:
+                        start_price = FinanceService._get_history_start_price(history, today - timedelta(days=31))
+                        if start_price and result["current_price"]:
+                            result["one_month_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
+
+                    if "3m" in periods:
+                        start_price = FinanceService._get_history_start_price(history, today - timedelta(days=90))
+                        if start_price and result["current_price"]:
+                            result["three_month_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
+
+                    if "1y" in periods:
+                        start_price = FinanceService._get_history_start_price(history, today - timedelta(days=365))
+                        if start_price and result["current_price"]:
+                            result["one_year_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
+                else:
+                    result["historical_data_available"] = False
             except Exception as e:
-                logger.warning(f"Failed to get mutual fund price for {ticker}: {e}")
-            
+                logger.warning(f"Failed to get mutual fund history for {ticker}: {e}")
+
+            if result["current_price"] is None:
+                try:
+                    mf_info = await FinanceService._get_mutual_fund_info(ticker)
+                    if mf_info and "current_price" in mf_info:
+                        result["current_price"] = mf_info["current_price"]
+                except Exception as e:
+                    logger.warning(f"Failed to get mutual fund price for {ticker}: {e}")
+
             return result
         
         try:
