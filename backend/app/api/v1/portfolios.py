@@ -2,6 +2,7 @@
 Portfolio management API routes.
 """
 from typing import Any, Dict, Optional, List, Literal
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,29 @@ from app.services.exchange_rate_service import get_exchange_rate_service
 from app.services.finance_service import FinanceService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _build_summary_from_live_market(portfolio, live_payload: Dict[str, Any]) -> Dict[str, Any]:
+    holdings = live_payload.get("holdings", [])
+    holdings_value = sum(float(holding.get("market_value") or 0.0) for holding in holdings)
+    total_cost = sum(float(holding.get("cost_basis") or 0.0) for holding in holdings)
+    cash_balance = float(live_payload.get("cash_balance") or 0.0)
+    total_return = holdings_value - total_cost
+    total_return_percentage = (total_return / total_cost * 100) if total_cost > 0 else 0.0
+
+    return {
+        "id": portfolio.id,
+        "name": portfolio.name,
+        "total_value": holdings_value + cash_balance,
+        "total_return": total_return,
+        "total_return_percentage": total_return_percentage,
+        "cash_balance": cash_balance,
+        "total_holdings_count": len(holdings),
+        "diversification_score": portfolio.diversification_score,
+        "currency": live_payload.get("display_currency") or portfolio.currency,
+        "last_updated": live_payload.get("updated_at") or portfolio.updated_at,
+    }
 
 
 @router.get("/", response_model=PortfolioInDB)
@@ -84,6 +108,16 @@ async def get_portfolio_summary(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Portfolio not found"
         )
+
+    try:
+        from app.api.v1.market import get_live_market_data
+
+        live_payload = await get_live_market_data(currency=currency, current_user=current_user, db=db)
+        return _build_summary_from_live_market(portfolio, live_payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Falling back to cached portfolio summary metrics", exc_info=exc)
 
     # Calculate metrics with currency conversion
     metrics = await calculate_portfolio_metrics(db, portfolio.id, currency)
