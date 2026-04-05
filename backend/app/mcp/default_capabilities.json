@@ -29,6 +29,11 @@
           "total_value": {"type": "number"},
           "total_return": {"type": "number"},
           "total_return_percentage": {"type": "number"},
+          "ytd_return_percentage": {"type": ["number", "null"]},
+          "ytd_gain": {"type": ["number", "null"]},
+          "ytd_complete": {"type": "boolean"},
+          "ytd_missing_tickers": {"type": "array", "items": {"type": "string"}},
+          "ytd_message": {"type": ["string", "null"]},
           "total_holdings_count": {"type": "integer"},
           "currency": {"type": "string"}
         },

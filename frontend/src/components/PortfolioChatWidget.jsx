@@ -115,7 +115,7 @@ const PortfolioChatWidget = () => {
         4. You can fetch and analyze portfolio data using specialized tools.
         
         AVAILABLE DATA TOOLS:
-        - get_portfolio_summary: Get overall portfolio performance summary
+        - get_portfolio_summary: Get overall portfolio performance summary, including portfolio-level YTD return fields when available
         - analyze_portfolio: Perform analysis with these query_type options:
           * "largest_holding" - single largest by market value
           * "smallest_holding" - single smallest by market value  
@@ -127,12 +127,13 @@ const PortfolioChatWidget = () => {
         - get_all_holdings_performance: Get performance metrics for ALL holdings at once
         
         CRITICAL WORKFLOW RULES:
-        1. For "largest holding" → use analyze_portfolio with query_type="largest_holding"
-        2. For "second largest", "third largest", "Nth largest" → use analyze_portfolio with query_type="holdings_summary", then pick the Nth item from the sorted list (index 1 for 2nd, index 2 for 3rd, etc.)
-        3. For YTD/performance of a specific ticker → use get_holding_performance with that ticker
-        4. For "YTD of largest holding" → call analyze_portfolio FIRST, then call get_holding_performance with the ticker from the result
-        5. For "YTD of second largest" → call analyze_portfolio with holdings_summary, identify the 2nd item, then call get_holding_performance with that ticker
-        6. For best/worst performers → use analyze_portfolio with query_type="top_performers" or "worst_performers"
+        1. For portfolio-level YTD return questions, call get_portfolio_summary and use ytd_return_percentage or ytd_message from the result.
+        2. For "largest holding" → use analyze_portfolio with query_type="largest_holding"
+        3. For "second largest", "third largest", "Nth largest" → use analyze_portfolio with query_type="holdings_summary", then pick the Nth item from the sorted list (index 1 for 2nd, index 2 for 3rd, etc.)
+        4. For YTD/performance of a specific ticker → use get_holding_performance with that ticker
+        5. For "YTD of largest holding" → call analyze_portfolio FIRST, then call get_holding_performance with the ticker from the result
+        6. For "YTD of second largest" → call analyze_portfolio with holdings_summary, identify the 2nd item, then call get_holding_performance with that ticker
+        7. For best/worst performers → use analyze_portfolio with query_type="top_performers" or "worst_performers"
         
         IMPORTANT LIMITATIONS:
         - For mutual funds (tickers ending in .CF like PHN9756.CF), historical period returns (YTD, 1M, 3M, 1Y) are NOT available.

@@ -1,10 +1,13 @@
 """
 Portfolio management API routes.
 """
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List, Literal
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.schemas import PortfolioInDB, PortfolioUpdate, PortfolioSummary, PortfolioAnalysisResponse, HoldingSummary
@@ -17,9 +20,11 @@ from app.crud import (
 )
 from app.utils.dependencies import get_current_active_user
 from app.models import User
+from app.models.transaction import Transaction
 from app.services.portfolio_analysis import AdvancedPortfolioAnalytics
 from app.services.exchange_rate_service import get_exchange_rate_service
 from app.services.finance_service import FinanceService
+from app.services.portfolio_ytd import calculate_portfolio_ytd_metrics
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -45,6 +50,98 @@ def _build_summary_from_live_market(portfolio, live_payload: Dict[str, Any]) -> 
         "currency": live_payload.get("display_currency") or portfolio.currency,
         "last_updated": live_payload.get("updated_at") or portfolio.updated_at,
     }
+
+
+async def _build_ytd_fields(
+    *,
+    db: AsyncSession,
+    portfolio,
+    live_payload: Dict[str, Any] | None,
+    currency: str,
+) -> Dict[str, Any]:
+    holdings = await get_portfolio_holdings(db, portfolio.id, skip=0, limit=None)
+    current_holdings: list[Dict[str, Any]] = []
+
+    live_holdings_by_ticker = {
+        str(item.get("ticker") or "").upper(): item
+        for item in (live_payload or {}).get("holdings", [])
+        if item.get("ticker")
+    }
+
+    exchange_service = get_exchange_rate_service()
+    exchange_rates: Dict[str, float] = {}
+    for holding in holdings:
+        asset_currency = (holding.asset.currency if holding.asset and holding.asset.currency else portfolio.currency).upper()
+        if asset_currency != currency and asset_currency not in exchange_rates:
+            exchange_rates[asset_currency] = await exchange_service.get_exchange_rate(asset_currency, currency)
+
+    for holding in holdings:
+        if not holding.is_active:
+            continue
+
+        asset_currency = (holding.asset.currency if holding.asset and holding.asset.currency else portfolio.currency).upper()
+        live_entry = live_holdings_by_ticker.get(holding.ticker.upper())
+        if live_entry:
+            current_price = live_entry.get("current_price")
+            market_value = live_entry.get("market_value")
+        else:
+            rate = exchange_rates.get(asset_currency, 1.0)
+            current_price = (holding.current_price or holding.average_cost) * rate if asset_currency != currency else (holding.current_price or holding.average_cost)
+            market_value = holding.quantity * current_price
+
+        current_holdings.append(
+            {
+                "ticker": holding.ticker,
+                "quantity": holding.quantity,
+                "current_price": current_price,
+                "market_value": market_value,
+                "asset_type": holding.asset.asset_type if holding.asset else None,
+                "currency": currency,
+            }
+        )
+
+    transactions_result = await db.execute(
+        select(Transaction)
+        .options(selectinload(Transaction.asset))
+        .where(Transaction.portfolio_id == portfolio.id)
+    )
+    transactions = transactions_result.scalars().all()
+
+    transaction_items = []
+    for transaction in transactions:
+        asset_currency = None
+        asset_type = None
+        if transaction.asset is not None:
+            asset_currency = transaction.asset.currency
+            asset_type = transaction.asset.asset_type
+            if asset_currency and asset_currency.upper() != currency and asset_currency.upper() not in exchange_rates:
+                exchange_rates[asset_currency.upper()] = await exchange_service.get_exchange_rate(asset_currency.upper(), currency)
+
+        transaction_items.append(
+            {
+                "transaction_type": getattr(transaction.transaction_type, "value", transaction.transaction_type),
+                "asset_ticker": transaction.asset.ticker if transaction.asset else None,
+                "quantity": transaction.quantity,
+                "price": transaction.price,
+                "transaction_date": transaction.transaction_date,
+                "notes": transaction.notes,
+                "asset_currency": asset_currency,
+                "asset_type": asset_type,
+            }
+        )
+
+    cash_balance = float((live_payload or {}).get("cash_balance", portfolio.cash_balance or 0.0))
+
+    return await calculate_portfolio_ytd_metrics(
+        current_holdings=current_holdings,
+        transactions=transaction_items,
+        current_cash_balance=cash_balance,
+        portfolio_currency=portfolio.currency.upper(),
+        display_currency=currency,
+        exchange_rates=exchange_rates,
+        performance_fetcher=FinanceService.calculate_ticker_performance,
+        as_of=datetime.now(timezone.utc),
+    )
 
 
 @router.get("/", response_model=PortfolioInDB)
@@ -113,7 +210,16 @@ async def get_portfolio_summary(
         from app.api.v1.market import get_live_market_data
 
         live_payload = await get_live_market_data(currency=currency, current_user=current_user, db=db)
-        return _build_summary_from_live_market(portfolio, live_payload)
+        summary = _build_summary_from_live_market(portfolio, live_payload)
+        summary.update(
+            await _build_ytd_fields(
+                db=db,
+                portfolio=portfolio,
+                live_payload=live_payload,
+                currency=summary["currency"],
+            )
+        )
+        return summary
     except HTTPException:
         raise
     except Exception as exc:
@@ -122,7 +228,7 @@ async def get_portfolio_summary(
     # Calculate metrics with currency conversion
     metrics = await calculate_portfolio_metrics(db, portfolio.id, currency)
 
-    return {
+    summary = {
         "id": portfolio.id,
         "name": portfolio.name,
         "total_value": metrics["total_value"],
@@ -134,6 +240,15 @@ async def get_portfolio_summary(
         "currency": metrics["display_currency"],
         "last_updated": portfolio.updated_at,
     }
+    summary.update(
+        await _build_ytd_fields(
+            db=db,
+            portfolio=portfolio,
+            live_payload=None,
+            currency=metrics["display_currency"],
+        )
+    )
+    return summary
 
 
 @router.get("/metrics", response_model=Dict)

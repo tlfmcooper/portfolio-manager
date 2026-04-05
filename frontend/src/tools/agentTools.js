@@ -116,7 +116,7 @@ export const tools = [
   },
   {
     name: "get_portfolio_summary",
-    description: "Get a summary of the portfolio performance.",
+    description: "Get a summary of portfolio performance, including total return and portfolio-level YTD metrics when available.",
     parameters: {
       type: "object",
       properties: {
@@ -261,9 +261,6 @@ export const executeTool = async (name, args, context) => {
         return `Navigated to Analytics (CPPI View). Simulation running with: ${JSON.stringify(args)}.`;
 
       case "get_portfolio_summary":
-        // This tool might return data directly to the LLM to summarize
-        // For now, we can just say we fetched it, or actually fetch it if we want the LLM to see the data.
-        // Let's actually fetch it so the LLM can answer questions.
         try {
           const response = await api.get('/portfolios/summary', { params: { currency: args.currency } });
           return JSON.stringify(response.data);

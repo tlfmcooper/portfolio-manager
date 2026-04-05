@@ -52,5 +52,10 @@ class PortfolioSummary(BaseModel):
     total_holdings_count: int
     diversification_score: float
     currency: str
+    ytd_return_percentage: Optional[float] = None
+    ytd_gain: Optional[float] = None
+    ytd_complete: bool = False
+    ytd_missing_tickers: List[str] = Field(default_factory=list)
+    ytd_message: Optional[str] = None
     last_updated: datetime
 

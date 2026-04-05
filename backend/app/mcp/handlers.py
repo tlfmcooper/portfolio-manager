@@ -250,10 +250,15 @@ async def tool_portfolio_get_summary(ctx: HandlerContext, arguments: Dict[str, A
         },
         "data": result,
     }
+    ytd_text = ""
+    if result.get("ytd_complete") and result.get("ytd_return_percentage") is not None:
+        ytd_text = f" YTD return is {result['ytd_return_percentage']:.2f}%"
+    elif result.get("ytd_message"):
+        ytd_text = f" {result['ytd_message']}"
     return _tool_result(
         text=(
             f"Portfolio {result['name']} is worth {result['total_value']:.2f} {result['currency']} "
-            f"across {result['total_holdings_count']} holdings."
+            f"across {result['total_holdings_count']} holdings.{ytd_text}"
         ),
         data=result,
         ui=ui,
