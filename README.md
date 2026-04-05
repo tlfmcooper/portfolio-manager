@@ -161,10 +161,17 @@ A comprehensive, professional-grade portfolio management dashboard built with Re
 #### Backend Setup
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+./../.venv/bin/python -m uvicorn main:app --reload --port 8000
+```
+
+If you already have a working project virtualenv, use it. In this workspace there is also a fallback bootstrap script for `~/.venvs/portfolio-manager` when the in-project `.venv` becomes slow or hangs in a synced folder such as OneDrive:
+
+```bash
+chmod +x setup_local_venv.sh
+./setup_local_venv.sh
+
+cd backend
+~/.venvs/portfolio-manager/bin/python -m uvicorn main:app --reload --port 8000
 ```
 
 #### Frontend Setup

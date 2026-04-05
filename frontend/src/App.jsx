@@ -20,6 +20,7 @@ const DashboardLayout = lazy(() => import('./pages/DashboardLayout'));
 const Overview = lazy(() => import('./pages/Overview'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
 const Analytics = lazy(() => import('./pages/Analytics'));
+const Settings = lazy(() => import('./pages/Settings'));
 const UpdatePortfolio = lazy(() => import('./pages/UpdatePortfolio'));
 const LiveMarket = lazy(() => import('./pages/LiveMarket'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -70,6 +71,7 @@ const ProtectedLayout = () => {
               <Route path="overview" element={<Overview />} />
               <Route path="portfolio" element={<Portfolio />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="live-market" element={<LiveMarket />} />
               <Route path="update-portfolio" element={<UpdatePortfolio />} />
             </Route>

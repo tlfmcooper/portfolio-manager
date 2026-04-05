@@ -3,7 +3,7 @@ Asset schemas for API request/response models.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class AssetBase(BaseModel):
@@ -16,12 +16,12 @@ class AssetBase(BaseModel):
     currency: str = Field(default="USD", description="Asset currency")
     exchange: Optional[str] = Field(None, max_length=50, description="Exchange")
     
-    @validator("ticker")
+    @field_validator("ticker")
     def validate_ticker(cls, v):
         """Validate ticker symbol."""
         return v.upper().strip()
     
-    @validator("currency")
+    @field_validator("currency")
     def validate_currency(cls, v):
         """Validate currency code."""
         if len(v) != 3:

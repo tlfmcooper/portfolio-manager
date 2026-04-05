@@ -82,7 +82,7 @@ async def update_asset(db: AsyncSession, asset_id: int, asset_update: AssetUpdat
     if not db_asset:
         return None
     
-    update_data = asset_update.dict(exclude_unset=True)
+    update_data = asset_update.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
         setattr(db_asset, field, value)

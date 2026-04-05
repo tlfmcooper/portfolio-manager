@@ -52,7 +52,7 @@ async def update_user(
     if not db_user:
         return None
 
-    update_data = user_update.dict(exclude_unset=True)
+    update_data = user_update.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
         setattr(db_user, field, value)

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.mcp_api_key import MCPAPIKey
     from app.models.portfolio import Portfolio
 
 
@@ -34,6 +35,7 @@ class User(Base):
     
     # Relationships
     portfolio = relationship("Portfolio", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    mcp_api_keys = relationship("MCPAPIKey", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"

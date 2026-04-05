@@ -120,7 +120,7 @@ async def get_holdings(
             holding.unrealized_gain_loss_percentage = (holding.unrealized_gain_loss / holding.cost_basis) * 100
 
     # Convert holdings to dict
-    holdings_data = [HoldingInDB.from_orm(h).dict() for h in holdings]
+    holdings_data = [HoldingInDB.model_validate(h).model_dump() for h in holdings]
 
     # Prepare response
     response = {

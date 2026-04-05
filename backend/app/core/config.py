@@ -2,13 +2,29 @@
 Application configuration settings.
 """
 
+from dataclasses import dataclass
 import os
+from pathlib import Path
 from typing import List, Any, Optional
-from pydantic import validator
-from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
 
-load_dotenv(override=True)
+
+def _load_env_file() -> None:
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ[key] = value
+
+
+_load_env_file()
 
 
 def build_database_url() -> str:
@@ -63,116 +79,125 @@ def build_database_url() -> str:
     return "sqlite+aiosqlite:///./portfolio.db"
 
 
-class Settings(BaseSettings):
-    """Application settings."""
+def _parse_bool(value: str | bool | None, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
-    # Basic app settings
+
+def _parse_int(value: str | int | None, default: int) -> int:
+    if value is None or value == "":
+        return default
+    return int(value)
+
+
+def _parse_cors_origins(value: Any) -> List[str]:
+    """Parse CORS origins from string or list."""
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        return ["*"]
+
+    if isinstance(value, list):
+        return [str(item) for item in value]
+
+    if isinstance(value, str):
+        if not value.startswith("[") and "," not in value:
+            return [value.strip()]
+
+        if "," in value and not value.startswith("["):
+            return [item.strip() for item in value.split(",") if item.strip()]
+
+        if value.startswith("["):
+            import json
+
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed]
+
+    raise ValueError(f"Invalid BACKEND_CORS_ORIGINS format: {value}")
+
+
+@dataclass(slots=True)
+class Settings:
+    """Application settings loaded from environment variables."""
+
     PROJECT_NAME: str = "Portfolio Dashboard API"
     VERSION: str = "1.0.0"
-    DESCRIPTION: str = (
-        "API for managing user portfolios and analyzing investment performance"
-    )
+    DESCRIPTION: str = "API for managing user portfolios and analyzing investment performance"
     API_V1_STR: str = "/api/v1"
-
-    # Security settings
-    SECRET_KEY: str = os.getenv(
-        "SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
-    )
+    SECRET_KEY: str = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-
-    # Supabase settings (optional - for Supabase client API, not database connection)
-    SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
-    SUPABASE_ANON_KEY: Optional[str] = os.getenv("SUPABASE_ANON_KEY")
-
-    # Database settings (use DATABASE_URL for PostgreSQL/Supabase connection)
-    DATABASE_URL: str = build_database_url()
-    DATABASE_ECHO: bool = os.getenv("DATABASE_ECHO", "false").lower() == "true"
-
-    # CORS settings
-    BACKEND_CORS_ORIGINS: Any = "*"  # Will be parsed by validator to List[str]
-
-    # Environment
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
-
-    # Testing
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_ANON_KEY: Optional[str] = None
+    DATABASE_URL: str = "sqlite+aiosqlite:///./portfolio.db"
+    DATABASE_ECHO: bool = False
+    BACKEND_CORS_ORIGINS: List[str] | str = "*"
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = True
     TESTING: bool = False
     TEST_DATABASE_URL: str = "sqlite+aiosqlite:///./test.db"
-
-    # Password settings
     PASSWORD_MIN_LENGTH: int = 8
     PASSWORD_REQUIRE_UPPERCASE: bool = True
     PASSWORD_REQUIRE_LOWERCASE: bool = True
     PASSWORD_REQUIRE_DIGITS: bool = True
     PASSWORD_REQUIRE_SPECIAL: bool = False
-
-    # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60
+    FINNHUB_API_KEY: str = ""
+    EXCHANGE_RATES_API_KEY: str = ""
+    REDIS_URL: str = "redis://localhost:6379/0"
+    WS_HEARTBEAT_INTERVAL: int = 30
+    STOCK_DATA_CACHE_TTL: int = 3600
+    ADMIN_UPLOAD_TOKEN: str = ""
+    MCP_ENABLED: bool = True
+    MCP_ROUTE_PREFIX: str = "/mcp"
+    MCP_PROTOCOL_VERSION: str = "2025-03-26"
+    MCP_SERVER_NAME: str = "portfolio-manager-mcp"
+    MCP_CONFIG_PATH: str = ""
+    MCP_ENABLE_SSE: bool = True
+    MCP_SSE_HEARTBEAT_INTERVAL: int = 10
+    MCP_API_KEYS_JSON: str = ""
 
-    # Finnhub API
-    FINNHUB_API_KEY: str
-
-    # Exchange Rates API
-    EXCHANGE_RATES_API_KEY: str = os.getenv("EXCHANGE_RATES_API_KEY", "")
-
-    # Redis settings
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
-    # WebSocket settings
-    WS_HEARTBEAT_INTERVAL: int = 30  # seconds
-    STOCK_DATA_CACHE_TTL: int = 3600  # 1 hour cache for stock data
-
-    # Admin operations
-    ADMIN_UPLOAD_TOKEN: str = os.getenv("ADMIN_UPLOAD_TOKEN", "")
-
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: Any) -> List[str]:
-        """Parse CORS origins from string or list.
-
-        Accepts:
-        - List[str]: Direct list like ['*'] or ['http://localhost:3000']
-        - str: Comma-separated like "http://localhost:3000,http://localhost:8080"
-        - str: JSON array like '["http://localhost:3000"]'
-        - str: Single value like "*" or "http://localhost:3000"
-        - None or empty string: defaults to ["*"]
-        """
-        # Handle None or empty string - default to allow all
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return ["*"]
-
-        # Handle list input (already parsed)
-        if isinstance(v, list):
-            return [str(item) for item in v]  # Convert all items to strings
-
-        # Handle string input
-        if isinstance(v, str):
-            # Single value (most common)
-            if not v.startswith("[") and "," not in v:
-                return [v.strip()]
-
-            # Comma-separated values
-            if "," in v and not v.startswith("["):
-                return [i.strip() for i in v.split(",") if i.strip()]
-
-            # JSON array string - return as-is for Pydantic to parse
-            if v.startswith("["):
-                import json
-
-                try:
-                    parsed = json.loads(v)
-                    if isinstance(parsed, list):
-                        return [str(item) for item in parsed]
-                except json.JSONDecodeError:
-                    pass
-
-        raise ValueError(f"Invalid BACKEND_CORS_ORIGINS format: {v}")
-
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
-        extra = "ignore"  # Ignore extra fields in .env file
+    def __post_init__(self) -> None:
+        self.PROJECT_NAME = os.getenv("PROJECT_NAME", self.PROJECT_NAME)
+        self.VERSION = os.getenv("VERSION", self.VERSION)
+        self.DESCRIPTION = os.getenv("DESCRIPTION", self.DESCRIPTION)
+        self.API_V1_STR = os.getenv("API_V1_STR", self.API_V1_STR)
+        self.SECRET_KEY = os.getenv("SECRET_KEY", self.SECRET_KEY)
+        self.ALGORITHM = os.getenv("ALGORITHM", self.ALGORITHM)
+        self.ACCESS_TOKEN_EXPIRE_MINUTES = _parse_int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"), self.ACCESS_TOKEN_EXPIRE_MINUTES)
+        self.REFRESH_TOKEN_EXPIRE_MINUTES = _parse_int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES"), self.REFRESH_TOKEN_EXPIRE_MINUTES)
+        self.SUPABASE_URL = os.getenv("SUPABASE_URL")
+        self.SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+        self.DATABASE_URL = build_database_url()
+        self.DATABASE_ECHO = _parse_bool(os.getenv("DATABASE_ECHO"), self.DATABASE_ECHO)
+        self.BACKEND_CORS_ORIGINS = _parse_cors_origins(os.getenv("BACKEND_CORS_ORIGINS", self.BACKEND_CORS_ORIGINS))
+        self.ENVIRONMENT = os.getenv("ENVIRONMENT", self.ENVIRONMENT)
+        self.DEBUG = _parse_bool(os.getenv("DEBUG"), self.DEBUG)
+        self.TESTING = _parse_bool(os.getenv("TESTING"), self.TESTING)
+        self.TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", self.TEST_DATABASE_URL)
+        self.PASSWORD_MIN_LENGTH = _parse_int(os.getenv("PASSWORD_MIN_LENGTH"), self.PASSWORD_MIN_LENGTH)
+        self.PASSWORD_REQUIRE_UPPERCASE = _parse_bool(os.getenv("PASSWORD_REQUIRE_UPPERCASE"), self.PASSWORD_REQUIRE_UPPERCASE)
+        self.PASSWORD_REQUIRE_LOWERCASE = _parse_bool(os.getenv("PASSWORD_REQUIRE_LOWERCASE"), self.PASSWORD_REQUIRE_LOWERCASE)
+        self.PASSWORD_REQUIRE_DIGITS = _parse_bool(os.getenv("PASSWORD_REQUIRE_DIGITS"), self.PASSWORD_REQUIRE_DIGITS)
+        self.PASSWORD_REQUIRE_SPECIAL = _parse_bool(os.getenv("PASSWORD_REQUIRE_SPECIAL"), self.PASSWORD_REQUIRE_SPECIAL)
+        self.RATE_LIMIT_PER_MINUTE = _parse_int(os.getenv("RATE_LIMIT_PER_MINUTE"), self.RATE_LIMIT_PER_MINUTE)
+        self.FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", self.FINNHUB_API_KEY)
+        self.EXCHANGE_RATES_API_KEY = os.getenv("EXCHANGE_RATES_API_KEY", self.EXCHANGE_RATES_API_KEY)
+        self.REDIS_URL = os.getenv("REDIS_URL", self.REDIS_URL)
+        self.WS_HEARTBEAT_INTERVAL = _parse_int(os.getenv("WS_HEARTBEAT_INTERVAL"), self.WS_HEARTBEAT_INTERVAL)
+        self.STOCK_DATA_CACHE_TTL = _parse_int(os.getenv("STOCK_DATA_CACHE_TTL"), self.STOCK_DATA_CACHE_TTL)
+        self.ADMIN_UPLOAD_TOKEN = os.getenv("ADMIN_UPLOAD_TOKEN", self.ADMIN_UPLOAD_TOKEN)
+        self.MCP_ENABLED = _parse_bool(os.getenv("MCP_ENABLED"), self.MCP_ENABLED)
+        self.MCP_ROUTE_PREFIX = os.getenv("MCP_ROUTE_PREFIX", self.MCP_ROUTE_PREFIX)
+        self.MCP_PROTOCOL_VERSION = os.getenv("MCP_PROTOCOL_VERSION", self.MCP_PROTOCOL_VERSION)
+        self.MCP_SERVER_NAME = os.getenv("MCP_SERVER_NAME", self.MCP_SERVER_NAME)
+        self.MCP_CONFIG_PATH = os.getenv("MCP_CONFIG_PATH", self.MCP_CONFIG_PATH)
+        self.MCP_ENABLE_SSE = _parse_bool(os.getenv("MCP_ENABLE_SSE"), self.MCP_ENABLE_SSE)
+        self.MCP_SSE_HEARTBEAT_INTERVAL = _parse_int(os.getenv("MCP_SSE_HEARTBEAT_INTERVAL"), self.MCP_SSE_HEARTBEAT_INTERVAL)
+        self.MCP_API_KEYS_JSON = os.getenv("MCP_API_KEYS_JSON", self.MCP_API_KEYS_JSON)
 
 
 # Create settings instance

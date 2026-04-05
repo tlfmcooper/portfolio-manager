@@ -45,6 +45,16 @@ from app.crud.holding_extended import (
     update_holding,
     delete_holding,
 )
+from app.crud.mcp_api_key import (
+    authenticate_user_mcp_api_key,
+    create_user_mcp_api_key,
+    get_user_mcp_api_key,
+    list_user_mcp_api_keys,
+    revoke_user_mcp_api_key,
+    rotate_user_mcp_api_key,
+    serialize_mcp_api_key,
+    touch_mcp_api_key_last_used,
+)
 
 __all__ = [
     # User CRUD
@@ -81,4 +91,13 @@ __all__ = [
     "create_holding",
     "update_holding",
     "delete_holding",
+    # MCP API key CRUD
+    "authenticate_user_mcp_api_key",
+    "create_user_mcp_api_key",
+    "get_user_mcp_api_key",
+    "list_user_mcp_api_keys",
+    "revoke_user_mcp_api_key",
+    "rotate_user_mcp_api_key",
+    "serialize_mcp_api_key",
+    "touch_mcp_api_key_last_used",
 ]

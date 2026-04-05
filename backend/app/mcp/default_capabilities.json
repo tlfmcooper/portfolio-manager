@@ -1,0 +1,762 @@
+{
+  "server": {
+    "name": "portfolio-manager-mcp",
+    "version": "1.0.0",
+    "instructions": "Use the portfolio tools and resources before answering analytical questions. Prefer structured outputs and the dashboard, table, form, and workflow metadata when the client can render MCP Apps responses."
+  },
+  "tools": [
+    {
+      "name": "portfolio_get_summary",
+      "description": "Get the current authenticated user's portfolio summary with value, return, holdings count, and currency-aware totals.",
+      "handler": "tool_portfolio_get_summary",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": ["USD", "CAD"]
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "total_value": {"type": "number"},
+          "total_return": {"type": "number"},
+          "total_return_percentage": {"type": "number"},
+          "total_holdings_count": {"type": "integer"},
+          "currency": {"type": "string"}
+        },
+        "required": ["id", "name", "total_value", "currency"]
+      },
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "portfolio_get_analysis",
+      "description": "Get advanced portfolio analytics for the current authenticated user.",
+      "handler": "tool_portfolio_get_analysis",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": ["USD", "CAD"]
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      },
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "portfolio_get_cash_balance",
+      "description": "Get the current authenticated user's cash balance in the requested display currency.",
+      "handler": "tool_portfolio_get_cash_balance",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "enum": ["USD", "CAD"]
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      },
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "holdings_list",
+      "description": "List current holdings with pagination and currency conversion.",
+      "handler": "tool_holdings_list",
+      "requiresAuth": true,
+      "permissions": ["holdings:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {"type": "string", "enum": ["USD", "CAD"]},
+          "skip": {"type": "integer", "minimum": 0},
+          "limit": {"type": ["integer", "null"], "minimum": 1, "maximum": 500}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {"type": "array"},
+          "total": {"type": "integer"},
+          "skip": {"type": "integer"},
+          "limit": {}
+        },
+        "required": ["items", "total", "skip"]
+      },
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "holdings_create",
+      "description": "Create a new holding for the authenticated user's portfolio.",
+      "handler": "tool_holdings_create",
+      "requiresAuth": true,
+      "permissions": ["holdings:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ticker": {"type": "string", "minLength": 1, "maxLength": 20},
+          "quantity": {"type": "number", "exclusiveMinimum": 0},
+          "average_cost": {"type": "number", "exclusiveMinimum": 0},
+          "target_allocation": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+          "notes": {"type": ["string", "null"], "maxLength": 500}
+        },
+        "required": ["ticker", "quantity", "average_cost"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "holdings_open_create_form",
+      "description": "Return a form schema for creating a holding through MCP Apps-capable clients.",
+      "handler": "tool_holdings_open_create_form",
+      "requiresAuth": false,
+      "permissions": [],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ticker": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      },
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "holdings_open_sell_form",
+      "description": "Return a form schema for selling a holding through MCP Apps-capable clients.",
+      "handler": "tool_holdings_open_sell_form",
+      "requiresAuth": true,
+      "permissions": ["holdings:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ticker": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "holdings_open_edit_form",
+      "description": "Return a form schema for editing a holding through MCP Apps-capable clients.",
+      "handler": "tool_holdings_open_edit_form",
+      "requiresAuth": true,
+      "permissions": ["holdings:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "holding_id": {"type": "integer", "minimum": 1}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "holdings_update",
+      "description": "Update an existing holding for the authenticated user's portfolio.",
+      "handler": "tool_holdings_update",
+      "requiresAuth": true,
+      "permissions": ["holdings:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "holding_id": {"type": "integer", "minimum": 1},
+          "quantity": {"type": "number", "exclusiveMinimum": 0},
+          "average_cost": {"type": "number", "exclusiveMinimum": 0},
+          "target_allocation": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+          "notes": {"type": ["string", "null"], "maxLength": 500}
+        },
+        "required": ["holding_id"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"}
+    },
+    {
+      "name": "holdings_sell",
+      "description": "Sell part or all of a holding and credit proceeds to portfolio cash.",
+      "handler": "tool_holdings_sell",
+      "requiresAuth": true,
+      "permissions": ["holdings:write", "portfolio:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ticker": {"type": "string", "minLength": 1, "maxLength": 20},
+          "quantity": {"type": "number", "exclusiveMinimum": 0},
+          "price": {"type": "number", "exclusiveMinimum": 0}
+        },
+        "required": ["ticker", "quantity", "price"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"}
+    },
+    {
+      "name": "cash_open_transaction_form",
+      "description": "Return a form schema for depositing or withdrawing portfolio cash through MCP Apps-capable clients.",
+      "handler": "tool_cash_open_transaction_form",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "transaction_type": {"type": "string", "enum": ["DEPOSIT", "WITHDRAWAL"]}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "cash_deposit",
+      "description": "Deposit cash into the authenticated user's portfolio.",
+      "handler": "tool_cash_deposit",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {"type": "number", "exclusiveMinimum": 0},
+          "currency": {"type": ["string", "null"], "enum": ["USD", "CAD", null]},
+          "notes": {"type": ["string", "null"]}
+        },
+        "required": ["amount"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"}
+    },
+    {
+      "name": "cash_withdraw",
+      "description": "Withdraw cash from the authenticated user's portfolio.",
+      "handler": "tool_cash_withdraw",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {"type": "number", "exclusiveMinimum": 0},
+          "currency": {"type": ["string", "null"], "enum": ["USD", "CAD", null]},
+          "notes": {"type": ["string", "null"]}
+        },
+        "required": ["amount"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"}
+    },
+    {
+      "name": "transactions_list",
+      "description": "List transaction history for the authenticated user's portfolio.",
+      "handler": "tool_transactions_list",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "skip": {"type": "integer", "minimum": 0},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 500}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "market_get_quote",
+      "description": "Fetch the latest quote and asset profile for a ticker symbol.",
+      "handler": "tool_market_get_quote",
+      "requiresAuth": false,
+      "permissions": ["market:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string", "minLength": 1},
+          "asset_type": {"type": ["string", "null"]}
+        },
+        "required": ["symbol"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "market_get_live_board",
+      "description": "Get live market board data for all holdings in the authenticated user's portfolio.",
+      "handler": "tool_market_get_live_board",
+      "requiresAuth": true,
+      "permissions": ["market:read", "portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "currency": {"type": "string", "enum": ["USD", "CAD"]}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "overview_get_dashboard",
+      "description": "Get the overview dashboard payload combining overview cards and portfolio metrics.",
+      "handler": "tool_overview_get_dashboard",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {"currency": {"type": "string", "enum": ["USD", "CAD"]}}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "analytics_get_risk",
+      "description": "Get risk analytics for the authenticated user's portfolio.",
+      "handler": "tool_analytics_get_risk",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "analytics_get_allocation",
+      "description": "Get allocation analytics for the authenticated user's portfolio.",
+      "handler": "tool_analytics_get_allocation",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {"currency": {"type": "string", "enum": ["USD", "CAD"]}}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "analytics_get_efficient_frontier",
+      "description": "Get efficient frontier analytics for the authenticated user's portfolio.",
+      "handler": "tool_analytics_get_efficient_frontier",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {"currency": {"type": "string", "enum": ["USD", "CAD"]}}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "analytics_get_monte_carlo",
+      "description": "Get Monte Carlo analytics for the authenticated user's portfolio.",
+      "handler": "tool_analytics_get_monte_carlo",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {"currency": {"type": "string", "enum": ["USD", "CAD"]}, "scenarios": {"type": "integer", "minimum": 1, "maximum": 100000}, "time_horizon": {"type": "integer", "minimum": 1, "maximum": 5000}}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "analytics_get_cppi",
+      "description": "Get CPPI analytics for the authenticated user's portfolio.",
+      "handler": "tool_analytics_get_cppi",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {"currency": {"type": "string", "enum": ["USD", "CAD"]}, "multiplier": {"type": "integer", "minimum": 1, "maximum": 20}, "floor": {"type": "number", "minimum": 0, "maximum": 1}, "time_horizon": {"type": "integer", "minimum": 1, "maximum": 5000}}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "onboarding_open_manual_form",
+      "description": "Return a form schema for manual portfolio onboarding.",
+      "handler": "tool_onboarding_open_manual_form",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write"],
+      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "onboarding_open_csv_import_form",
+      "description": "Return a form schema for CSV portfolio onboarding.",
+      "handler": "tool_onboarding_open_csv_import_form",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write"],
+      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "onboarding_import_assets",
+      "description": "Import manually entered onboarding assets into the authenticated user's portfolio.",
+      "handler": "tool_onboarding_import_assets",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write", "holdings:write"],
+      "inputSchema": {"type": "object", "properties": {"assets": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {"ticker": {"type": "string", "minLength": 1, "maxLength": 20}, "quantity": {"type": "number", "exclusiveMinimum": 0}, "average_cost": {"type": "number", "exclusiveMinimum": 0}, "asset_type": {"type": "string"}, "currency": {"type": "string"}}, "required": ["ticker", "quantity", "average_cost"], "additionalProperties": false}}}, "required": ["assets"], "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "onboarding_import_csv",
+      "description": "Import onboarding assets from CSV content into the authenticated user's portfolio.",
+      "handler": "tool_onboarding_import_csv",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write", "holdings:write"],
+      "inputSchema": {"type": "object", "properties": {"csv_content": {"type": "string", "minLength": 1}}, "required": ["csv_content"], "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "onboarding_get_status",
+      "description": "Get onboarding status for the authenticated user.",
+      "handler": "tool_onboarding_get_status",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
+      "outputSchema": {"type": "object"},
+      "meta": {"apps": {"ui": true}}
+    },
+    {
+      "name": "settings_list_mcp_api_keys",
+      "description": "List MCP API keys for the authenticated user.",
+      "handler": "tool_settings_list_mcp_api_keys",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "settings_open_create_mcp_api_key_form",
+      "description": "Return a form schema for creating a personal MCP API key.",
+      "handler": "tool_settings_open_create_mcp_api_key_form",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "settings_create_mcp_api_key",
+      "description": "Create a personal MCP API key for the authenticated user.",
+      "handler": "tool_settings_create_mcp_api_key",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 100},
+          "expires_in_days": {"type": ["integer", "null"], "minimum": 1, "maximum": 3650}
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "settings_rotate_mcp_api_key",
+      "description": "Rotate an existing personal MCP API key.",
+      "handler": "tool_settings_rotate_mcp_api_key",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "key_id": {"type": "integer", "minimum": 1},
+          "name": {"type": "string", "minLength": 1, "maxLength": 100},
+          "expires_in_days": {"type": ["integer", "null"], "minimum": 1, "maximum": 3650}
+        },
+        "required": ["key_id", "name"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"},
+      "meta": {
+        "apps": {"ui": true}
+      }
+    },
+    {
+      "name": "settings_revoke_mcp_api_key",
+      "description": "Revoke an existing personal MCP API key.",
+      "handler": "tool_settings_revoke_mcp_api_key",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "key_id": {"type": "integer", "minimum": 1}
+        },
+        "required": ["key_id"],
+        "additionalProperties": false
+      },
+      "outputSchema": {"type": "object"}
+    },
+    {
+      "name": "exchange_convert",
+      "description": "Convert an amount between supported currencies.",
+      "handler": "tool_exchange_convert",
+      "requiresAuth": false,
+      "permissions": ["exchange:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {"type": "number"},
+          "from_currency": {"type": "string", "enum": ["USD", "CAD"]},
+          "to_currency": {"type": "string", "enum": ["USD", "CAD"]}
+        },
+        "required": ["amount", "from_currency", "to_currency"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "portfolio_refresh_metrics",
+      "description": "Trigger a refresh of the authenticated user's cached portfolio metrics.",
+      "handler": "tool_portfolio_refresh_metrics",
+      "requiresAuth": true,
+      "permissions": ["portfolio:write"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "portfolio_rebalance_workflow",
+      "description": "Build a multi-step rebalance workflow preview with concentration-based suggestions.",
+      "handler": "tool_portfolio_rebalance_workflow",
+      "requiresAuth": true,
+      "permissions": ["workflow:use", "portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "step": {"type": "string", "enum": ["preview", "validate", "confirm"]},
+          "currency": {"type": "string", "enum": ["USD", "CAD"]}
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object"
+      },
+      "meta": {
+        "apps": {"ui": true}
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "system.health",
+      "description": "Read backend health and dependency status.",
+      "handler": "resource_system_health",
+      "mimeType": "application/json",
+      "uri": "system://health",
+      "requiresAuth": false,
+      "permissions": []
+    },
+    {
+      "name": "portfolio.current.summary",
+      "description": "Read the current authenticated user's portfolio summary.",
+      "handler": "resource_portfolio_summary",
+      "mimeType": "application/json",
+      "uri": "portfolio://current/summary",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "portfolio.current.holdings",
+      "description": "Read the current authenticated user's holdings list.",
+      "handler": "resource_portfolio_holdings",
+      "mimeType": "application/json",
+      "uri": "portfolio://current/holdings",
+      "requiresAuth": true,
+      "permissions": ["holdings:read"]
+    },
+    {
+      "name": "portfolio.current.cash_balance",
+      "description": "Read the current authenticated user's cash balance.",
+      "handler": "resource_portfolio_cash_balance",
+      "mimeType": "application/json",
+      "uri": "portfolio://current/cash-balance",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "portfolio.current.transactions",
+      "description": "Read the current authenticated user's transaction history.",
+      "handler": "resource_portfolio_transactions",
+      "mimeType": "application/json",
+      "uri": "portfolio://current/transactions",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "market.quote",
+      "description": "Read quote data for a ticker symbol.",
+      "handler": "resource_market_quote",
+      "mimeType": "application/json",
+      "uriTemplate": "market://quote/{symbol}",
+      "requiresAuth": false,
+      "permissions": ["market:read"]
+    },
+    {
+      "name": "market.live_board",
+      "description": "Read live market board data for the authenticated user's holdings.",
+      "handler": "resource_market_live_board",
+      "mimeType": "application/json",
+      "uri": "market://portfolio/live-board",
+      "requiresAuth": true,
+      "permissions": ["market:read", "portfolio:read"]
+    },
+    {
+      "name": "overview.dashboard",
+      "description": "Read the current authenticated user's overview dashboard payload.",
+      "handler": "resource_overview_dashboard",
+      "mimeType": "application/json",
+      "uri": "overview://dashboard/current",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "analytics.risk",
+      "description": "Read current risk analytics.",
+      "handler": "resource_analytics_risk",
+      "mimeType": "application/json",
+      "uri": "analytics://risk/current",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "analytics.allocation",
+      "description": "Read current allocation analytics.",
+      "handler": "resource_analytics_allocation",
+      "mimeType": "application/json",
+      "uri": "analytics://allocation/current",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "analytics.efficient_frontier",
+      "description": "Read current efficient frontier analytics.",
+      "handler": "resource_analytics_efficient_frontier",
+      "mimeType": "application/json",
+      "uri": "analytics://efficient-frontier/current",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "analytics.monte_carlo",
+      "description": "Read current Monte Carlo analytics.",
+      "handler": "resource_analytics_monte_carlo",
+      "mimeType": "application/json",
+      "uri": "analytics://monte-carlo/current",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "analytics.cppi",
+      "description": "Read current CPPI analytics.",
+      "handler": "resource_analytics_cppi",
+      "mimeType": "application/json",
+      "uri": "analytics://cppi/current",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "portfolio.current.onboarding_status",
+      "description": "Read onboarding status for the authenticated user.",
+      "handler": "resource_onboarding_status",
+      "mimeType": "application/json",
+      "uri": "portfolio://current/onboarding-status",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    },
+    {
+      "name": "settings.mcp_api_keys",
+      "description": "Read MCP API keys for the authenticated user.",
+      "handler": "resource_settings_mcp_api_keys",
+      "mimeType": "application/json",
+      "uri": "settings://mcp-api-keys",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"]
+    }
+  ],
+  "prompts": [
+    {
+      "name": "portfolio.analysis.summary",
+      "description": "Prompt template for portfolio analysis and summarization.",
+      "handler": "prompt_portfolio_analysis_summary",
+      "arguments": [
+        {"name": "question", "description": "User question to answer.", "required": false},
+        {"name": "currency", "description": "Display currency.", "required": false}
+      ]
+    },
+    {
+      "name": "portfolio.rebalance.suggestion",
+      "description": "Prompt template for rebalance planning.",
+      "handler": "prompt_rebalance_suggestion",
+      "arguments": [
+        {"name": "objective", "description": "Rebalance objective or constraint.", "required": false}
+      ]
+    },
+    {
+      "name": "portfolio.onboarding.import_guidance",
+      "description": "Prompt template for portfolio import and onboarding guidance.",
+      "handler": "prompt_onboarding_import_guidance",
+      "arguments": [
+        {"name": "source", "description": "Import source such as CSV or broker export.", "required": false}
+      ]
+    }
+  ]
+}

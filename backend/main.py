@@ -14,6 +14,7 @@ New, completely rewritten authentication system with:
 import os
 import secrets
 import shutil
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Tuple
@@ -22,13 +23,19 @@ import uvicorn
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.datastructures import Headers
 from sqlalchemy.ext.asyncio import AsyncSession
+
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 from app.api import api_router
 from app.core.config import settings
 from app.core.database import create_tables, get_db
 from app.core.security import verify_token
 from app.crud import get_user_by_username
+from app.mcp.router import router as mcp_router
 from app.models import User
 from app.utils.dependencies import get_current_superuser
 
@@ -77,6 +84,18 @@ def _build_cors_config() -> Tuple[List[str], bool]:
     return origins, True
 
 
+class ConditionalGZipMiddleware(GZipMiddleware):
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            headers = Headers(scope=scope)
+            accept_header = headers.get("accept", "")
+            if "text/event-stream" in accept_header:
+                await self.app(scope, receive, send)
+                return
+
+        await super().__call__(scope, receive, send)
+
+
 def create_application() -> FastAPI:
     """Create FastAPI application with all configurations."""
 
@@ -103,7 +122,7 @@ def create_application() -> FastAPI:
     )
 
     # Enable GZip compression for responses
-    app.add_middleware(GZipMiddleware, minimum_size=1000)
+    app.add_middleware(ConditionalGZipMiddleware, minimum_size=1000)
 
     # Global exception handler to ensure CORS headers on error responses
     @app.exception_handler(Exception)
@@ -129,6 +148,9 @@ def create_application() -> FastAPI:
 
     # Include API router
     app.include_router(api_router)
+
+    if settings.MCP_ENABLED:
+        app.include_router(mcp_router)
 
     return app
 

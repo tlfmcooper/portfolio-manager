@@ -3,7 +3,7 @@ Portfolio schemas continued - Create, Update, and Response models.
 """
 from datetime import datetime
 from typing import Optional, List, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.portfolio import PortfolioBase
 
 
@@ -23,6 +23,8 @@ class PortfolioUpdate(BaseModel):
 
 class PortfolioInDB(PortfolioBase):
     """Schema for portfolio data stored in database."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     initial_value: float
@@ -36,12 +38,11 @@ class PortfolioInDB(PortfolioBase):
     updated_at: datetime
     last_rebalance: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
 
 class PortfolioSummary(BaseModel):
     """Schema for portfolio summary data."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     total_value: float
@@ -53,5 +54,3 @@ class PortfolioSummary(BaseModel):
     currency: str
     last_updated: datetime
 
-    class Config:
-        from_attributes = True

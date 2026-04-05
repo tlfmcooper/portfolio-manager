@@ -1,6 +1,6 @@
 """
 Exchange rate service for currency conversion.
-Uses exchangerate.host API with API key and frankfurter.app as backup.
+Uses exchangerate.host API with API key and Frankfurter as backup.
 """
 
 import httpx
@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 # Exchange rate API configuration
 # Primary API (requires API key) - Updated to /live endpoint
 EXCHANGE_RATE_API_URL = "https://api.exchangerate.host/live"
-# Backup API (frankfurter.app is free and doesn't require API key)
-BACKUP_API_URL = "https://api.frankfurter.app/latest"
+# Backup API (Frankfurter is free and doesn't require an API key).
+# The old frankfurter.app host now redirects to frankfurter.dev.
+BACKUP_API_URL = "https://api.frankfurter.dev/v1/latest"
 CACHE_TTL = 3600  # 1 hour in seconds
 SUPPORTED_CURRENCIES = ["USD", "CAD"]
 
@@ -87,7 +88,7 @@ class ExchangeRateService:
         # Try primary API first (with API key)
         if settings.EXCHANGE_RATES_API_KEY:
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                     params = {
                         "source": from_currency,
                         "currencies": to_currency,
@@ -117,7 +118,7 @@ class ExchangeRateService:
 
         # Try backup API (frankfurter.app)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 params = {"from": from_currency, "to": to_currency}
                 response = await client.get(BACKUP_API_URL, params=params)
                 response.raise_for_status()

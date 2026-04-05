@@ -9,6 +9,7 @@ from datetime import datetime
 from app.models import Holding, Portfolio, Asset
 from app.schemas import HoldingCreate, HoldingUpdate
 from app.crud.asset import get_or_create_asset, AssetCreate
+from app.crud.holding import get_holding, get_holding_by_asset
 
 
 async def create_holding(db: AsyncSession, portfolio_id: int, holding_create: HoldingCreate) -> Holding:
@@ -16,8 +17,8 @@ async def create_holding(db: AsyncSession, portfolio_id: int, holding_create: Ho
     # Get or create the asset
     asset = await get_or_create_asset(
         db, 
-        holding_create.asset_ticker,
-        AssetCreate(ticker=holding_create.asset_ticker)
+        holding_create.ticker,
+        AssetCreate(ticker=holding_create.ticker)
     )
     
     # Check if holding already exists
@@ -49,7 +50,7 @@ async def create_holding(db: AsyncSession, portfolio_id: int, holding_create: Ho
     db_holding = Holding(
         portfolio_id=portfolio_id,
         asset_id=asset.id,
-        ticker=holding_create.asset_ticker,  # CRITICAL FIX: Add ticker to new holdings
+        ticker=holding_create.ticker,
         quantity=holding_create.quantity,
         average_cost=holding_create.average_cost,
         target_allocation=holding_create.target_allocation,
@@ -71,7 +72,7 @@ async def update_holding(db: AsyncSession, holding_id: int, holding_update: Hold
     if not db_holding:
         return None
     
-    update_data = holding_update.dict(exclude_unset=True)
+    update_data = holding_update.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
         setattr(db_holding, field, value)

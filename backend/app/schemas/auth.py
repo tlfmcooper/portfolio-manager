@@ -2,7 +2,7 @@
 Authentication schemas for API request/response models.
 """
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -18,7 +18,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, description="User password")
     full_name: Optional[str] = Field(None, max_length=100, description="User's full name")
     
-    @validator("username")
+    @field_validator("username")
     def validate_username(cls, v):
         """Validate username format."""
         import re
@@ -26,7 +26,7 @@ class RegisterRequest(BaseModel):
             raise ValueError("Username can only contain letters, numbers, underscores, and hyphens")
         return v.lower()
     
-    @validator("password")
+    @field_validator("password")
     def validate_password(cls, v):
         """Validate password strength."""
         import re
@@ -71,7 +71,7 @@ class PasswordResetConfirm(BaseModel):
     token: str = Field(..., description="Password reset token")
     new_password: str = Field(..., min_length=8, description="New password")
     
-    @validator("new_password")
+    @field_validator("new_password")
     def validate_password(cls, v):
         """Validate password strength."""
         import re
@@ -91,7 +91,7 @@ class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., description="Current password")
     new_password: str = Field(..., min_length=8, description="New password")
     
-    @validator("new_password")
+    @field_validator("new_password")
     def validate_password(cls, v):
         """Validate password strength."""
         import re

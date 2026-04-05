@@ -4,7 +4,7 @@ Holding schemas for API request/response models.
 
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class HoldingBase(BaseModel):
@@ -26,7 +26,7 @@ class HoldingBase(BaseModel):
 class HoldingCreate(HoldingBase):
     """Schema for creating a new holding."""
 
-    @validator("ticker")
+    @field_validator("ticker")
     def validate_ticker(cls, v):
         """Validate ticker symbol."""
         return v.upper().strip()
@@ -43,6 +43,7 @@ class HoldingUpdate(BaseModel):
 
 class HoldingInDB(HoldingBase):
     """Schema for holding data stored in database."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     portfolio_id: int
@@ -55,5 +56,3 @@ class HoldingInDB(HoldingBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True

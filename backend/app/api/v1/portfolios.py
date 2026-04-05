@@ -94,6 +94,7 @@ async def get_portfolio_summary(
         "total_value": metrics["total_value"],
         "total_return": metrics["total_return"],
         "total_return_percentage": metrics["total_return_percentage"],
+        "cash_balance": metrics.get("cash_balance", portfolio.cash_balance or 0.0),
         "total_holdings_count": metrics["holdings_count"],
         "diversification_score": portfolio.diversification_score,
         "currency": metrics["display_currency"],

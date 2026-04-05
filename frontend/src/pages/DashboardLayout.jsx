@@ -103,7 +103,7 @@ const DashboardLayout = () => {
   };
 
   const renderTabContent = () => {
-    if (location.pathname.includes('update-portfolio') || location.pathname.includes('live-market') || location.pathname.includes('portfolio')) {
+    if (location.pathname.includes('update-portfolio') || location.pathname.includes('live-market') || location.pathname.includes('portfolio') || location.pathname.includes('settings')) {
       return <Outlet />;
     }
     
@@ -198,7 +198,7 @@ const DashboardLayout = () => {
         </header>
 
         {/* Sticky Navigation Tabs */}
-        {!location.pathname.includes('update-portfolio') && !location.pathname.includes('live-market') && (
+        {!location.pathname.includes('update-portfolio') && !location.pathname.includes('live-market') && !location.pathname.includes('settings') && (
           <nav className="sticky top-16 z-20 dashboard-nav" style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="nav-tabs overflow-x-auto scrollbar-hide">
@@ -224,7 +224,7 @@ const DashboardLayout = () => {
 
         <main className="flex-1 overflow-y-auto dashboard" style={{ backgroundColor: 'var(--color-background)' }}> 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
-            {!location.pathname.includes('update-portfolio') && !location.pathname.includes('live-market') && !location.pathname.includes('portfolio') && (
+            {!location.pathname.includes('update-portfolio') && !location.pathname.includes('live-market') && !location.pathname.includes('portfolio') && !location.pathname.includes('settings') && (
               <h2 style={{ 
                 marginBottom: 'var(--space-24)', 
                 fontSize: 'var(--font-size-2xl)', 

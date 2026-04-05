@@ -45,6 +45,11 @@ from app.schemas.analysis import (
     PortfolioAnalysisResponse,
     HoldingSummary,
 )
+from app.schemas.mcp_api_key import (
+    MCPAPIKeyCreateRequest,
+    MCPAPIKeyInfo,
+    MCPAPIKeySecretResponse,
+)
 
 __all__ = [
     # User schemas
@@ -85,4 +90,8 @@ __all__ = [
     "PortfolioAnalysisQuery",
     "PortfolioAnalysisResponse",
     "HoldingSummary",
+    # MCP API key schemas
+    "MCPAPIKeyCreateRequest",
+    "MCPAPIKeyInfo",
+    "MCPAPIKeySecretResponse",
 ]

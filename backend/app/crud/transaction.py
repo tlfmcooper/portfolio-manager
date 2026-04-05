@@ -39,7 +39,7 @@ async def create_transaction(
 ) -> Transaction:
     """Create a new transaction."""
     db_obj = Transaction(
-        **obj_in.dict(),
+        **obj_in.model_dump(),
         portfolio_id=portfolio_id,
     )
     db.add(db_obj)
@@ -52,7 +52,7 @@ async def update_transaction(
     db: AsyncSession, *, db_obj: Transaction, obj_in: TransactionUpdate
 ) -> Transaction:
     """Update a transaction."""
-    update_data = obj_in.dict(exclude_unset=True)
+    update_data = obj_in.model_dump(exclude_unset=True)
     for field in update_data:
         setattr(db_obj, field, update_data[field])
     db.add(db_obj)

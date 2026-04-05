@@ -18,7 +18,7 @@ async def update_portfolio(db: AsyncSession, portfolio_id: int, portfolio_update
     if not db_portfolio:
         return None
     
-    update_data = portfolio_update.dict(exclude_unset=True)
+    update_data = portfolio_update.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
         setattr(db_portfolio, field, value)

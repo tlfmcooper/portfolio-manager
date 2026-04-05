@@ -317,15 +317,9 @@ async def onboard_asset(
             db.add(transaction)
             await db.flush()
 
-            # Debit cash balance for purchase (if cash management is enabled)
-            # This assumes users deposit cash before buying, or cash balance can go negative
-            from app.crud.portfolio_extended import update_portfolio_cash_balance
-            await update_portfolio_cash_balance(
-                db=db,
-                portfolio_id=portfolio.id,
-                amount=purchase_cost,
-                operation="subtract"
-            )
+            # Onboarding imports represent an existing position snapshot, not a new buy order.
+            # Do not mutate cash balance here or the portfolio summary will double-count the
+            # cost basis as both invested capital and negative cash.
 
             created_assets.append(
                 {

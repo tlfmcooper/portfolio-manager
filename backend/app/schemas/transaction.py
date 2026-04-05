@@ -1,7 +1,7 @@
 """
 Pydantic schemas for transactions.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -34,12 +34,10 @@ class TransactionUpdate(TransactionBase):
 
 class TransactionInDBBase(TransactionBase):
     """Base schema for a transaction in the database."""
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     portfolio_id: int
-
-    class Config:
-        from_attributes = True
 
 
 class Transaction(TransactionInDBBase):
@@ -59,9 +57,7 @@ class CashTransactionCreate(BaseModel):
 
 class TransactionWithAsset(TransactionInDBBase):
     """Transaction schema with asset details included."""
+    model_config = ConfigDict(from_attributes=True)
 
     asset_ticker: Optional[str] = None
     asset_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True

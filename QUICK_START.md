@@ -19,6 +19,17 @@ This will automatically start Redis. Then follow the on-screen instructions to s
 
 ## Manual Setup
 
+### 0. Python Environment
+
+If you already have a working project virtualenv, keep using it. This repo also includes a fallback bootstrap script for cases where an in-project `.venv` becomes slow in OneDrive or another synced folder:
+
+```bash
+chmod +x setup_local_venv.sh
+./setup_local_venv.sh
+```
+
+This creates `~/.venvs/portfolio-manager`.
+
 ### 1. Start Redis with Podman
 
 ```bash
@@ -47,6 +58,20 @@ uv sync
 
 # Run backend with uvicorn
 uv run uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+If you are using the local virtualenv bootstrap instead of `uv`, run:
+
+```bash
+cd backend
+~/.venvs/portfolio-manager/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+If your existing project env works, you can use that instead:
+
+```bash
+cd backend
+../.venv/bin/python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 3. Frontend Setup

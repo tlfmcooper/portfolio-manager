@@ -1,0 +1,86 @@
+server:
+  name: portfolio-manager-mcp
+  version: 1.0.0
+  instructions: >-
+    Use portfolio tools and resources before answering. Return UI metadata when the
+    client supports MCP Apps.
+
+tools:
+  - name: portfolio_get_summary
+    description: Get the current user's portfolio summary.
+    handler: tool_portfolio_get_summary
+    requiresAuth: true
+    permissions:
+      - portfolio:read
+    inputSchema:
+      type: object
+      properties:
+        currency:
+          type: string
+          enum: [USD, CAD]
+      additionalProperties: false
+    outputSchema:
+      type: object
+    meta:
+      apps:
+        ui: true
+
+  - name: holdings_open_create_form
+    description: Return a form schema for creating a holding.
+    handler: tool_holdings_open_create_form
+    requiresAuth: false
+    permissions: []
+    inputSchema:
+      type: object
+      properties:
+        ticker:
+          type: string
+      additionalProperties: false
+    outputSchema:
+      type: object
+    meta:
+      apps:
+        ui: true
+
+  - name: exchange_convert
+    description: Convert between supported currencies.
+    handler: tool_exchange_convert
+    requiresAuth: false
+    permissions:
+      - exchange:read
+    inputSchema:
+      type: object
+      properties:
+        amount:
+          type: number
+        from_currency:
+          type: string
+          enum: [USD, CAD]
+        to_currency:
+          type: string
+          enum: [USD, CAD]
+      required: [amount, from_currency, to_currency]
+      additionalProperties: false
+    outputSchema:
+      type: object
+
+resources:
+  - name: system.health
+    description: Read backend health.
+    handler: resource_system_health
+    mimeType: application/json
+    uri: system://health
+    requiresAuth: false
+    permissions: []
+
+prompts:
+  - name: portfolio.analysis.summary
+    description: Prompt template for portfolio analysis.
+    handler: prompt_portfolio_analysis_summary
+    arguments:
+      - name: question
+        description: User question to answer.
+        required: false
+      - name: currency
+        description: Preferred display currency.
+        required: false

@@ -3,7 +3,7 @@ User schemas for API request/response models.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 import re
 
 
@@ -14,7 +14,7 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100, description="User's full name")
     bio: Optional[str] = Field(None, max_length=500, description="User biography")
     
-    @validator("username")
+    @field_validator("username")
     def validate_username(cls, v):
         """Validate username format."""
         if not re.match(r"^[a-zA-Z0-9_-]+$", v):
@@ -26,7 +26,7 @@ class UserCreate(UserBase):
     """Schema for creating a new user."""
     password: str = Field(..., min_length=8, description="User password")
     
-    @validator("password")
+    @field_validator("password")
     def validate_password(cls, v):
         """Validate password strength."""
         if len(v) < 8:
@@ -53,7 +53,7 @@ class UserPasswordUpdate(BaseModel):
     current_password: str = Field(..., description="Current password")
     new_password: str = Field(..., min_length=8, description="New password")
     
-    @validator("new_password")
+    @field_validator("new_password")
     def validate_password(cls, v):
         """Validate password strength."""
         if len(v) < 8:
@@ -69,6 +69,8 @@ class UserPasswordUpdate(BaseModel):
 
 class UserInDB(UserBase):
     """Schema for user data stored in database."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     is_active: bool = True
     is_superuser: bool = False
@@ -77,12 +79,11 @@ class UserInDB(UserBase):
     updated_at: datetime
     last_login: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
-
 
 class UserPublic(BaseModel):
     """Schema for public user data (limited fields)."""
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     full_name: Optional[str] = None
@@ -90,13 +91,9 @@ class UserPublic(BaseModel):
     avatar_url: Optional[str] = None
     created_at: datetime
     
-    class Config:
-        from_attributes = True
-
 
 class UserProfile(UserInDB):
     """Schema for user profile with additional fields."""
+    model_config = ConfigDict(from_attributes=True)
+
     display_name: str
-    
-    class Config:
-        from_attributes = True

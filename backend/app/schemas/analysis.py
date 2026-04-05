@@ -3,11 +3,13 @@ Analysis schemas for portfolio and holding performance API responses.
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HoldingPerformance(BaseModel):
     """Performance metrics for a single holding."""
+    model_config = ConfigDict(from_attributes=True)
+
     ticker: str = Field(..., description="Asset ticker symbol")
     name: Optional[str] = Field(None, description="Asset name")
     asset_type: Optional[str] = Field(None, description="Type of asset (stock, mutual_fund, crypto)")
@@ -31,9 +33,6 @@ class HoldingPerformance(BaseModel):
     data_source: Optional[str] = Field(None, description="Source of price data (yfinance, barchart, etc.)")
     last_updated: Optional[datetime] = Field(None, description="When the data was last fetched")
     
-    class Config:
-        from_attributes = True
-
 
 class BatchHoldingPerformance(BaseModel):
     """Response for batch holding performance request."""

@@ -10,8 +10,8 @@ router = APIRouter()
 
 @router.get("/rate")
 async def get_exchange_rate(
-    from_currency: str = Query(..., description="Source currency code (e.g., USD)", regex="^[A-Z]{3}$"),
-    to_currency: str = Query(..., description="Target currency code (e.g., CAD)", regex="^[A-Z]{3}$"),
+    from_currency: str = Query(..., description="Source currency code (e.g., USD)", pattern="^[A-Z]{3}$"),
+    to_currency: str = Query(..., description="Target currency code (e.g., CAD)", pattern="^[A-Z]{3}$"),
     use_cache: bool = Query(True, description="Whether to use cached rates")
 ) -> Any:
     """
@@ -43,8 +43,8 @@ async def get_exchange_rate(
 @router.post("/convert")
 async def convert_amount(
     amount: float = Query(..., description="Amount to convert", gt=0),
-    from_currency: str = Query(..., description="Source currency code", regex="^[A-Z]{3}$"),
-    to_currency: str = Query(..., description="Target currency code", regex="^[A-Z]{3}$"),
+    from_currency: str = Query(..., description="Source currency code", pattern="^[A-Z]{3}$"),
+    to_currency: str = Query(..., description="Target currency code", pattern="^[A-Z]{3}$"),
     use_cache: bool = Query(True, description="Whether to use cached rates")
 ) -> Any:
     """
