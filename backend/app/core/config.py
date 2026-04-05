@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import List, Any, Optional
 
 
-def _load_env_file() -> None:
-    env_path = Path(__file__).resolve().parents[2] / ".env"
+_ORIGINAL_ENV_KEYS = set(os.environ)
+
+
+def _load_env_file(env_path: Path, *, allow_file_override: bool = False) -> None:
     if not env_path.exists():
         return
 
@@ -21,10 +23,16 @@ def _load_env_file() -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
+        if key in _ORIGINAL_ENV_KEYS:
+            continue
+        if not allow_file_override and key in os.environ:
+            continue
         os.environ[key] = value
 
 
-_load_env_file()
+_ENV_DIR = Path(__file__).resolve().parents[2]
+_load_env_file(_ENV_DIR / ".env")
+_load_env_file(_ENV_DIR / ".env.local", allow_file_override=True)
 
 
 def build_database_url() -> str:

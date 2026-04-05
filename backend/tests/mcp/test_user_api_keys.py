@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -10,6 +11,8 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import Base, get_db
+from app.crud.mcp_api_key import touch_mcp_api_key_last_used
+from app.models import MCPAPIKey
 from app.mcp.router import _iter_session_sse
 from app.mcp.session_store import session_store
 from main import create_application
@@ -525,6 +528,32 @@ async def test_user_managed_mcp_api_key_flow(test_client: httpx.AsyncClient) -> 
         json={"jsonrpc": "2.0", "id": 108, "method": "ping"},
     )
     assert missing_session_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_touch_mcp_api_key_last_used_handles_timezone_aware_datetimes() -> None:
+    class DummySession:
+        def __init__(self) -> None:
+            self.commit_count = 0
+
+        async def commit(self) -> None:
+            self.commit_count += 1
+
+    api_key = MCPAPIKey(
+        user_id=1,
+        name="Primary",
+        key_prefix="pmcp_deadbeef",
+        key_hash="hash",
+        permissions_json='["portfolio:read"]',
+        last_used_at=datetime.now(timezone.utc) - timedelta(minutes=10),
+    )
+    session = DummySession()
+
+    await touch_mcp_api_key_last_used(session, api_key)
+
+    assert session.commit_count == 1
+    assert api_key.last_used_at is not None
+    assert api_key.last_used_at.tzinfo is not None
 
 
 @pytest.mark.asyncio

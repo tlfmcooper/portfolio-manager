@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -13,6 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.constants import DEFAULT_USER_MCP_PERMISSIONS
 from app.models import MCPAPIKey, User
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _coerce_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _hash_api_key(raw_key: str) -> str:
@@ -71,7 +83,7 @@ async def create_user_mcp_api_key(
         key_prefix=key_prefix,
         key_hash=_hash_api_key(raw_key),
         permissions_json=_serialize_permissions(permissions or list(DEFAULT_USER_MCP_PERMISSIONS)),
-        expires_at=(datetime.utcnow() + timedelta(days=expires_in_days)) if expires_in_days else None,
+        expires_at=(_utc_now() + timedelta(days=expires_in_days)) if expires_in_days else None,
     )
     db.add(api_key)
     await db.commit()
@@ -91,8 +103,8 @@ async def rotate_user_mcp_api_key(
     api_key.revoked_at = None
     api_key.is_active = True
     if expires_in_days is not None:
-        api_key.expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-    api_key.updated_at = datetime.utcnow()
+        api_key.expires_at = _utc_now() + timedelta(days=expires_in_days)
+    api_key.updated_at = _utc_now()
     await db.commit()
     await db.refresh(api_key)
     return api_key, raw_key
@@ -100,8 +112,8 @@ async def rotate_user_mcp_api_key(
 
 async def revoke_user_mcp_api_key(db: AsyncSession, api_key: MCPAPIKey) -> MCPAPIKey:
     api_key.is_active = False
-    api_key.revoked_at = datetime.utcnow()
-    api_key.updated_at = datetime.utcnow()
+    api_key.revoked_at = _utc_now()
+    api_key.updated_at = _utc_now()
     await db.commit()
     await db.refresh(api_key)
     return api_key
@@ -119,15 +131,17 @@ async def authenticate_user_mcp_api_key(db: AsyncSession, raw_key: str) -> Optio
         return None
 
     api_key, user = row
-    if api_key.expires_at and api_key.expires_at <= datetime.utcnow():
+    expires_at = _coerce_utc(api_key.expires_at)
+    if expires_at and expires_at <= _utc_now():
         return None
 
     return user, api_key, _deserialize_permissions(api_key.permissions_json)
 
 
 async def touch_mcp_api_key_last_used(db: AsyncSession, api_key: MCPAPIKey) -> None:
-    now = datetime.utcnow()
-    if api_key.last_used_at and (now - api_key.last_used_at) < timedelta(minutes=5):
+    now = _utc_now()
+    last_used_at = _coerce_utc(api_key.last_used_at)
+    if last_used_at and (now - last_used_at) < timedelta(minutes=5):
         return
 
     api_key.last_used_at = now
