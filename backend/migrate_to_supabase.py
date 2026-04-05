@@ -571,9 +571,9 @@ async def main():
     print("Migration completed!")
     print("=" * 60)
     print("\nNext steps:")
-    print("1. Update Railway environment variables:")
+    print("1. Update your deployment environment variables:")
     print("   - Set DATABASE_URL to your Supabase connection string (Transaction mode)")
-    print("2. Deploy to Railway")
+    print("2. Roll out the updated backend deployment")
     print("3. Test the /health endpoint to verify database connection")
 
 

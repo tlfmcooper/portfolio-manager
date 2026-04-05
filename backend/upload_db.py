@@ -1,6 +1,5 @@
 """
-Upload local portfolio.db to production Railway instance.
-Run this script locally after adding persistent volume to Railway.
+Upload local portfolio.db to the deployed backend API.
 Requires superuser authentication.
 """
 
@@ -9,10 +8,10 @@ import requests
 import getpass
 from pathlib import Path
 
-# Your Railway backend URL (use env var if set so we always hit the API service)
+# Deployed backend API URL (override with BACKEND_URL if needed)
 BACKEND_URL = os.getenv(
     "BACKEND_URL",
-    "https://protective-playfulness-production.up.railway.app",
+    "https://api.portfolio.alikone.dev",
 )
 ADMIN_UPLOAD_TOKEN = os.getenv("ADMIN_UPLOAD_TOKEN")
 

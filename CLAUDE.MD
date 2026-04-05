@@ -300,12 +300,15 @@ alembic upgrade head
 
 ## Deployment
 
-### Railway Deployment (Current Setup)
+### Current Deployment (k3s on VPS)
 
-The project is configured for Railway deployment with:
-- `backend/railway.json` - Railway backend configuration
-- `frontend/railway.json` - Railway frontend configuration
-- Environment variables set in Railway dashboard
+The project is currently self-hosted on k3s and managed from the sibling GitOps repo at `../gitops-alikone`.
+
+- Argo CD application: `apps/portfolio.yaml`
+- Helm chart: `charts/portfolio`
+- Namespace: `portfolio`
+- Backend ingress: `https://api.portfolio.alikone.dev`
+- Frontend ingress: `https://portfolio.alikone.dev`
 
 ### Alternative Deployment Options
 

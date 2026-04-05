@@ -273,17 +273,22 @@ Complete dark mode implementation with:
 1. **Configure environment variables for production**
 2. **Set up reverse proxy (nginx/traefik)**
 3. **Configure SSL certificates**
-4. **Deploy using Docker Compose:**
+4. **Deploy the backend and frontend containers**
+
+### Current Hosted Setup
+
+This project is currently self-hosted on a VPS running k3s and managed from the separate gitops repository at `../gitops-alikone`.
+
+- Frontend host: `https://portfolio.alikone.dev`
+- Backend host: `https://api.portfolio.alikone.dev`
+- Argo CD application: `apps/portfolio.yaml`
+- Helm chart: `charts/portfolio`
+
+### Optional Docker Compose Deployment
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
-
-### Cloud Deployment Options
-- **AWS**: ECS/EKS with RDS for data persistence
-- **Google Cloud**: Cloud Run with Cloud SQL
-- **Azure**: Container Instances with Azure Database
-- **DigitalOcean**: App Platform with managed databases
 
 ## 🧪 Testing
 

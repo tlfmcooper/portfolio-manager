@@ -82,7 +82,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
 async def initialize_database():
     """
     Manually initialize database tables.
-    Useful for troubleshooting Railway deployments.
+    Useful for troubleshooting self-hosted deployments.
     """
     try:
         await create_tables()

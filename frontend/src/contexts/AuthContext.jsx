@@ -245,9 +245,9 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      // Use portfolio summary instead of analysis for onboarding check
-      // This is simpler and doesn't require heavy computation
-      // Wrap in retry logic to handle Railway cold starts
+      // Use portfolio summary instead of analysis for onboarding check.
+      // This is simpler and doesn't require heavy computation.
+      // Keep retry logic for transient backend startup or restart windows.
       const portfolio = await retryRequest(() => portfolioService.getPortfolio());
 
       markOnboarded(portfolio);
