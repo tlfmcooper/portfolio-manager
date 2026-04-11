@@ -5,7 +5,7 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '../utils/apiConfig';
-import { ChartSkeleton } from '../components/ui/Skeleton';
+import { ChartSkeleton, TableSkeleton } from '../components/ui/Skeleton';
 
 // Lazy load chart component
 const LiveStockChart = lazy(() => import('../components/LiveStockChart'));
@@ -24,6 +24,7 @@ const LiveMarket = () => {
   const [wsConnected, setWsConnected] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [ytdMap, setYtdMap] = useState({}) // ticker -> ytd_return (number|null)
   const { api } = useAuth();
   const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency();
   const { fetchWithCache, CACHE_TTL, invalidateCache } = useDataCache();
@@ -174,6 +175,21 @@ const LiveMarket = () => {
       console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
+
+      // Fire YTD fetch in parallel — don't await, don't block UI
+      api.get('/market/ytd', { params: { currency } })
+        .then(res => {
+          const map = {}
+          ;(res.data.ytd_data || []).forEach(({ ticker, ytd_return }) => {
+            map[ticker] = ytd_return
+          })
+          setYtdMap(map)
+        })
+        .catch(err => {
+          console.warn('YTD fetch failed:', err)
+          // Non-fatal — table shows N/A for all
+        })
+
       setCashBalance(response.data.cash_balance || 0);
       setLastUpdate(new Date());
 
@@ -338,6 +354,10 @@ const LiveMarket = () => {
             aVal = calculateUnrealizedGainLossPercentage(a);
             bVal = calculateUnrealizedGainLossPercentage(b);
             break;
+          case 'ytd':
+            aVal = ytdMap[a.ticker] ?? -Infinity
+            bVal = ytdMap[b.ticker] ?? -Infinity
+            break;
           default:
             return 0;
         }
@@ -354,7 +374,7 @@ const LiveMarket = () => {
       });
     }
     return sortable;
-  }, [filteredHoldings, sortConfig]);
+  }, [filteredHoldings, sortConfig, ytdMap]);
 
   const handleSort = (key) => {
     setSortConfig(prev => ({
@@ -365,10 +385,10 @@ const LiveMarket = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: 'var(--color-primary)' }}></div>
+      <div className="space-y-6">
+        <TableSkeleton rows={8} columns={8} />
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -615,6 +635,18 @@ const LiveMarket = () => {
                     )}
                   </div>
                 </th>
+                <th
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-700"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onClick={() => handleSort('ytd')}
+                >
+                  <div className="flex items-center justify-end">
+                    YTD
+                    {sortConfig.key === 'ytd' && (
+                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>
                   Unrealized Gain/Loss
                 </th>
@@ -667,6 +699,19 @@ const LiveMarket = () => {
                     <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(dayChange)}`}>
                       {formatPercentage(dayChange)}
                     </td>
+                    {(() => {
+                      const ytd = ytdMap[holding.ticker]
+                      if (ytd == null) return (
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          N/A
+                        </td>
+                      )
+                      return (
+                        <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(ytd)}`}>
+                          {formatPercentage(ytd)}
+                        </td>
+                      )
+                    })()}
                     <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(unrealizedGainLoss)}`}>
                       {formatCurrency(unrealizedGainLoss)}
                     </td>
@@ -689,6 +734,9 @@ const LiveMarket = () => {
                 </td>
                 <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${getColorClass(portfolioDailyReturn)}`}>
                   {formatPercentage(portfolioDailyReturn)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  —
                 </td>
                 <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${getColorClass(totalGainLoss)}`}>
                   {formatCurrency(totalGainLoss)}
@@ -744,6 +792,15 @@ const LiveMarket = () => {
                     <div className="flex justify-between">
                       <span style={{ color: 'var(--color-text-secondary)' }}>Day:</span>
                       <span className={getColorClass(dayChange)}>{formatPercentage(dayChange)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: 'var(--color-text-secondary)' }}>YTD:</span>
+                      {(() => {
+                        const ytd = ytdMap[holding.ticker]
+                        return ytd != null
+                          ? <span className={getColorClass(ytd)}>{formatPercentage(ytd)}</span>
+                          : <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+                      })()}
                     </div>
                     <div className="flex justify-between">
                       <span style={{ color: 'var(--color-text-secondary)' }}>Gain/Loss:</span>
