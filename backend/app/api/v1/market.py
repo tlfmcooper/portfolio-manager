@@ -268,7 +268,7 @@ async def get_live_market_data(
         for symbol, quote in fresh_data.items():
             market_data[symbol] = quote
             cache_key = f"stock:quote:{symbol}"
-            await redis_client.set(cache_key, quote, ttl=300)  # 5 minute cache
+            await redis_client.set(cache_key, quote, ttl=900)  # 15 minute cache
 
     # Enrich holdings with live market data
     enriched_holdings = []

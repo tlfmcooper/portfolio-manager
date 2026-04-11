@@ -130,10 +130,10 @@ async def get_holdings(
         "limit": limit
     }
 
-    # Cache the result for 5 minutes (only for non-paginated requests)
+    # Cache the result for 10 minutes (only for non-paginated requests)
     if use_cache:
         try:
-            await redis_client.set(cache_key, json.dumps(response), ttl=300)
+            await redis_client.set(cache_key, json.dumps(response), ttl=600)
         except Exception:
             pass  # Continue without caching if Redis fails
 
