@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
-import { Skeleton, MiniCardSkeleton, ChartSkeleton } from './ui/Skeleton'
+import { MiniCardSkeleton, ChartSkeleton } from './ui/Skeleton'
 
 const CPPISection = () => {
   const [data, setData] = useState(null)
@@ -181,10 +181,12 @@ const CPPISection = () => {
                 Understanding CPPI Strategy
               </h4>
               <p className="text-blue-800 dark:text-blue-200">
-                CPPI (Constant Proportion Portfolio Insurance) is a dynamic strategy that adjusts risk exposure 
-                to provide downside protection while maintaining upside participation. The strategy uses a multiplier 
-                of {multiplier}x and maintains a floor protection at {formatPercentage(floor)} of initial investment. 
-                The strategy {outperformance >= 0 ? 'outperformed' : 'underperformed'} buy-and-hold by {formatPercentage(Math.abs(outperformance))}.
+                CPPI (Constant Proportion Portfolio Insurance) is a dynamic strategy that adjusts risk exposure
+                to provide downside protection while maintaining upside participation. The strategy uses a multiplier
+                of {multiplier}x and maintains a floor protection at {formatPercentage(floor)} of initial investment.
+                {outperformance != null
+                  ? `The strategy ${outperformance >= 0 ? 'outperformed' : 'underperformed'} buy-and-hold by ${formatPercentage(Math.abs(outperformance))}.`
+                  : 'The strategy performance versus buy-and-hold is being calculated.'}
               </p>
             </div>
           </div>
