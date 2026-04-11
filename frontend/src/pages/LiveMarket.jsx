@@ -176,6 +176,8 @@ const LiveMarket = () => {
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
 
+      // Clear stale YTD values before issuing new fetch (currency may have changed)
+      setYtdMap({})
       // Fire YTD fetch in parallel — don't await, don't block UI
       api.get('/market/ytd', { params: { currency } })
         .then(res => {
@@ -311,6 +313,18 @@ const LiveMarket = () => {
   const getBackgroundColor = (value) => {
     return value >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)';
   };
+
+  const renderYtdCell = (ticker, isMobile = false) => {
+    const ytd = ytdMap[ticker]
+    if (ytd == null) {
+      return isMobile
+        ? <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+        : <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text-secondary)' }}>N/A</td>
+    }
+    return isMobile
+      ? <span className={getColorClass(ytd)}>{formatPercentage(ytd)}</span>
+      : <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(ytd)}`}>{formatPercentage(ytd)}</td>
+  }
 
   // Filter holdings
   const filteredHoldings = holdings.filter(holding =>
@@ -699,19 +713,7 @@ const LiveMarket = () => {
                     <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(dayChange)}`}>
                       {formatPercentage(dayChange)}
                     </td>
-                    {(() => {
-                      const ytd = ytdMap[holding.ticker]
-                      if (ytd == null) return (
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                          N/A
-                        </td>
-                      )
-                      return (
-                        <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(ytd)}`}>
-                          {formatPercentage(ytd)}
-                        </td>
-                      )
-                    })()}
+                    {renderYtdCell(holding.ticker)}
                     <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${getColorClass(unrealizedGainLoss)}`}>
                       {formatCurrency(unrealizedGainLoss)}
                     </td>
@@ -795,12 +797,7 @@ const LiveMarket = () => {
                     </div>
                     <div className="flex justify-between">
                       <span style={{ color: 'var(--color-text-secondary)' }}>YTD:</span>
-                      {(() => {
-                        const ytd = ytdMap[holding.ticker]
-                        return ytd != null
-                          ? <span className={getColorClass(ytd)}>{formatPercentage(ytd)}</span>
-                          : <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
-                      })()}
+                      {renderYtdCell(holding.ticker, true)}
                     </div>
                     <div className="flex justify-between">
                       <span style={{ color: 'var(--color-text-secondary)' }}>Gain/Loss:</span>
