@@ -565,7 +565,7 @@ class AdvancedPortfolioAnalytics:
         portfolio = await self._build_portfolio()
         if not portfolio or not portfolio.assets:
             print("[ERROR] CPPI: No portfolio or assets")
-            return {}
+            return {"error": True, "reason": "No holdings found in portfolio", "multiplier": multiplier, "floor": floor}
 
         portfolio_returns = portfolio.get_portfolio_returns()
         print(f"CPPI: portfolio_returns shape: {portfolio_returns.shape}")
@@ -574,7 +574,7 @@ class AdvancedPortfolioAnalytics:
         
         if portfolio_returns.empty:
             print("[ERROR] CPPI: Portfolio returns are empty")
-            return {}
+            return {"error": True, "reason": "No historical price data available for your holdings", "multiplier": multiplier, "floor": floor}
         
         # Clean the returns data - remove NaN values like in the demo
         initial_length = len(portfolio_returns)
@@ -586,7 +586,7 @@ class AdvancedPortfolioAnalytics:
         
         if len(portfolio_returns) < 50:  # Need minimum data for meaningful CPPI
             print(f"[ERROR] CPPI: Insufficient clean data ({len(portfolio_returns)} days)")
-            return {}
+            return {"error": True, "reason": f"Insufficient data: only {len(portfolio_returns)} trading days available (need 50+)", "multiplier": multiplier, "floor": floor}
         
         print(f"CPPI: Clean returns count: {len(portfolio_returns)}")
         print(f"CPPI: Returns sample (first 5): {portfolio_returns.head()}")
@@ -614,13 +614,15 @@ class AdvancedPortfolioAnalytics:
             # Data for charts
             performance_data = []
             for i in range(len(cppi_results["Wealth"])):
+                floor_series = cppi_results["floor"]
+                floor_val = floor_series.iloc[i] if isinstance(floor_series, pd.Series) else floor_series.iloc[i, 0]
                 performance_data.append({
                     "day": i,
-                    "cppi_wealth": cppi_results["Wealth"].iloc[i, 0],
-                    "buyhold_wealth": cppi_results["Risky Wealth"].iloc[i, 0],
-                    "floor_value": cppi_results["floor"].iloc[i, 0],
-                    "risky_allocation": cppi_results["Risky Allocation"].iloc[i, 0] * 100,
-                    "risk_budget": cppi_results["Risk Budget"].iloc[i, 0] * 100,
+                    "cppi_wealth": float(cppi_results["Wealth"].iloc[i, 0]),
+                    "buyhold_wealth": float(cppi_results["Risky Wealth"].iloc[i, 0]),
+                    "floor_value": float(floor_val),
+                    "risky_allocation": float(cppi_results["Risky Allocation"].iloc[i, 0]) * 100,
+                    "risk_budget": float(cppi_results["Risk Budget"].iloc[i, 0]) * 100,
                 })
 
             drawdown_cppi = drawdown(cppi_results["Wealth"].iloc[:, 0])
@@ -662,7 +664,7 @@ class AdvancedPortfolioAnalytics:
             print(f"[ERROR] CPPI simulation failed: {e}")
             import traceback
             traceback.print_exc()
-            return {}
+            return {"error": True, "reason": f"Simulation error: {str(e)}", "multiplier": multiplier, "floor": floor}
 
     async def sector_analysis(self, display_currency: Optional[str] = None) -> Dict:
         """Analyze portfolio by sector with currency conversion, including cash balance."""
