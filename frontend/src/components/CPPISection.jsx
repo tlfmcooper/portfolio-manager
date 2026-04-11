@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
+import { Skeleton, MiniCardSkeleton, ChartSkeleton } from './ui/Skeleton'
 
 const CPPISection = () => {
   const [data, setData] = useState(null)
@@ -44,20 +45,35 @@ const CPPISection = () => {
     fetchData()
   }, [api, portfolioId, currency, cppiParams])
 
-  if (loading) return <div>Loading...</div>
+  if (loading) return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {[1,2,3,4].map(i => <MiniCardSkeleton key={i} />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {[1,2,3,4].map(i => <ChartSkeleton key={i} height={320} />)}
+      </div>
+    </div>
+  )
   if (error) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
   const cppiAnalysis = data || {}
+
+  // Check for backend error or empty data
+  const hasError = cppiAnalysis.error === true ||
+    (!cppiAnalysis.performance_data || cppiAnalysis.performance_data.length === 0)
+
   const {
     multiplier = 3,
     floor = 0.8,
-    initial_value = 1000,
-    final_cppi_value = 1180,
-    final_buyhold_value = 1125,
-    outperformance = 0.049,
+    initial_value = null,
+    final_cppi_value = null,
+    final_buyhold_value = null,
+    outperformance = null,
     performance_data = [],
-    drawdown_data = []
+    drawdown_data = [],
+    reason = null,
   } = cppiAnalysis
 
   const formatCurrency = (value) => {
@@ -69,25 +85,46 @@ const CPPISection = () => {
     return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
   }
 
+  if (hasError) {
+    return (
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
+        <div className="flex items-start">
+          <Info className="h-6 w-6 text-yellow-600 dark:text-yellow-400 mt-1 mr-3 flex-shrink-0" />
+          <div>
+            <h4 className="text-lg font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
+              CPPI Simulation Unavailable
+            </h4>
+            <p className="text-yellow-800 dark:text-yellow-200 mb-3">
+              {reason || "Could not calculate CPPI strategy for your portfolio."}
+            </p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Strategy parameters: Multiplier {multiplier}x · Floor {(floor * 100).toFixed(0)}%
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Strategy metrics
   const strategyMetrics = [
     {
       label: 'CPPI Final Value',
-      value: formatCurrency(final_cppi_value),
+      value: final_cppi_value != null ? formatCurrency(final_cppi_value) : 'N/A',
       description: 'Dynamic Strategy',
       type: 'positive'
     },
     {
       label: 'Buy & Hold Value',
-      value: formatCurrency(final_buyhold_value),
+      value: final_buyhold_value != null ? formatCurrency(final_buyhold_value) : 'N/A',
       description: 'Static Strategy',
       type: 'neutral'
     },
     {
       label: 'Outperformance',
-      value: formatPercentage(outperformance),
+      value: outperformance != null ? formatPercentage(outperformance) : 'N/A',
       description: 'CPPI Advantage',
-      type: outperformance > 0 ? 'positive' : 'negative'
+      type: outperformance != null && outperformance > 0 ? 'positive' : 'negative'
     },
     {
       label: 'Multiplier',
