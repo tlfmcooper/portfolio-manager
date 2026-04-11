@@ -148,7 +148,10 @@ async def run_cppi_simulation(
         multiplier=multiplier, floor=floor, time_horizon=time_horizon
     )
 
-    # Cache for 10 minutes
-    await redis_client.set(cache_key, simulation_data, ttl=600)
+    # Don't cache error responses
+    if simulation_data.get("error"):
+        return simulation_data
 
+    # Cache for 10 minutes (only successful results)
+    await redis_client.set(cache_key, simulation_data, ttl=600)
     return simulation_data

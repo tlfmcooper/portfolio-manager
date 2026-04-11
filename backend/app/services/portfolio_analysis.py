@@ -614,8 +614,7 @@ class AdvancedPortfolioAnalytics:
             # Data for charts
             performance_data = []
             for i in range(len(cppi_results["Wealth"])):
-                floor_series = cppi_results["floor"]
-                floor_val = floor_series.iloc[i] if isinstance(floor_series, pd.Series) else floor_series.iloc[i, 0]
+                floor_val = float(cppi_results["floor"].iloc[i].squeeze())
                 performance_data.append({
                     "day": i,
                     "cppi_wealth": float(cppi_results["Wealth"].iloc[i, 0]),
