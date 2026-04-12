@@ -357,7 +357,7 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd"
+    cache_key = f"portfolio:{portfolio.id}:ytd:v2"
     redis_client = await get_redis_client()
 
     # Try cache first (24h TTL — YTD only changes meaningfully once a day)
@@ -426,28 +426,28 @@ async def get_ytd_data(
             for h in other_holdings:
                 ytd_map[h.ticker] = None
 
-    # ── Mutual funds: thread-pool so blocking requests don't stall event loop ──
+    # ── Mutual funds: run sequentially in one thread ─────────────────────────
+    # The Barchart XSRF fetch uses a shared module-level requests.Session, so
+    # parallel threads would clobber each other's cookies. Sequential is safe
+    # and still non-blocking for the main event loop.
     if mutual_fund_holdings:
-        def sync_mf_ytd(holding):
+        def sync_all_mf_ytd():
             import asyncio as _aio
-            try:
-                return _aio.run(FinanceService.calculate_ticker_performance(
-                    holding.ticker, "mutual_fund", ["ytd"]
-                ))
-            except Exception:
-                return {"ytd_return": None}
+            results: Dict[str, Optional[float]] = {}
+            for h in mutual_fund_holdings:
+                try:
+                    perf = _aio.run(FinanceService.calculate_ticker_performance(
+                        h.ticker, "mutual_fund", ["ytd"]
+                    ))
+                    results[h.ticker] = perf.get("ytd_return")
+                except Exception as e:
+                    logger.warning(f"Mutual fund YTD failed for {h.ticker}: {e}")
+                    results[h.ticker] = None
+            return results
 
         loop = asyncio.get_event_loop()
-        mf_tasks = [
-            loop.run_in_executor(None, sync_mf_ytd, h)
-            for h in mutual_fund_holdings
-        ]
-        mf_results = await asyncio.gather(*mf_tasks, return_exceptions=True)
-        for holding, res in zip(mutual_fund_holdings, mf_results):
-            if isinstance(res, Exception) or res is None:
-                ytd_map[holding.ticker] = None
-            else:
-                ytd_map[holding.ticker] = res.get("ytd_return")
+        mf_map = await loop.run_in_executor(None, sync_all_mf_ytd)
+        ytd_map.update(mf_map)
 
     ytd_data = [{"ticker": h.ticker, "ytd_return": ytd_map.get(h.ticker)} for h in valid_holdings]
     result = {"ytd_data": ytd_data}
