@@ -356,7 +356,7 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd:{display_currency}"
+    cache_key = f"portfolio:{portfolio.id}:ytd"
     redis_client = await get_redis_client()
 
     # Try cache first (24h TTL — YTD only changes meaningfully once a day)

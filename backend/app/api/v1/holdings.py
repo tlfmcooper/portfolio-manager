@@ -157,6 +157,14 @@ async def create_user_holding(
         )
     
     holding = await create_holding(db, portfolio.id, holding_create)
+
+    # Invalidate returns cache so CPPI/Monte Carlo use fresh data
+    try:
+        redis_client = await get_redis_client()
+        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+    except Exception:
+        pass
+
     return holding
 
 
@@ -225,7 +233,14 @@ async def update_user_holding(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update holding"
         )
-    
+
+    # Invalidate returns cache so CPPI/Monte Carlo use fresh data
+    try:
+        redis_client = await get_redis_client()
+        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+    except Exception:
+        pass
+
     return updated_holding
 
 
@@ -259,7 +274,14 @@ async def delete_user_holding(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete holding"
         )
-    
+
+    # Invalidate returns cache so CPPI/Monte Carlo use fresh data
+    try:
+        redis_client = await get_redis_client()
+        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+    except Exception:
+        pass
+
     return {"message": "Holding deleted successfully"}
 
 
@@ -289,6 +311,14 @@ async def edit_holding_details(
     
     await db.commit()
     await db.refresh(holding)
+
+    # Invalidate returns cache so CPPI/Monte Carlo use fresh data
+    try:
+        redis_client = await get_redis_client()
+        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+    except Exception:
+        pass
+
     return holding
 
 
@@ -378,6 +408,13 @@ async def sell_asset(
     )
 
     await db.commit()
+
+    # Invalidate returns cache so CPPI/Monte Carlo use fresh data
+    try:
+        redis_client = await get_redis_client()
+        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+    except Exception:
+        pass
 
     return {
         "message": "Asset sold successfully",
