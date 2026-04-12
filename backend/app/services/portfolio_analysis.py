@@ -278,7 +278,8 @@ class AdvancedPortfolioAnalytics:
         if cached is None:
             return None, None
         try:
-            returns = pd.Series(cached["values"], dtype=float)
+            index = pd.to_datetime(cached["index"]) if "index" in cached else None
+            returns = pd.Series(cached["values"], index=index, dtype=float)
             total_value = float(cached["total_value"])
             print(f"[INFO] Returns cache hit: {len(returns)} days, value=${total_value:.2f}")
             return returns, total_value
@@ -294,7 +295,11 @@ class AdvancedPortfolioAnalytics:
         try:
             await redis_client.set(
                 cache_key,
-                {"values": returns.tolist(), "total_value": total_value},
+                {
+                    "values": returns.tolist(),
+                    "index": [str(i) for i in returns.index],
+                    "total_value": total_value,
+                },
                 ttl=600
             )
             print(f"[INFO] Cached {len(returns)} days of returns to Redis")
