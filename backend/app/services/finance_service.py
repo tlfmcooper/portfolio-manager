@@ -495,10 +495,19 @@ class FinanceService:
             try:
                 history = await FinanceService._get_mutual_fund_history(ticker)
                 if history:
-                    latest_row = history[-1].get("raw") or {}
-                    latest_price = latest_row.get("lastPrice")
+                    # Mutual fund NAV is only published at market close (4pm).
+                    # Scan from the end of history to find the most recent row that
+                    # has a non-None lastPrice — this is often yesterday's closing NAV
+                    # during trading hours.
+                    latest_price = None
+                    for row in reversed(history):
+                        raw_data = row.get("raw") or {}
+                        price = raw_data.get("lastPrice")
+                        if price is not None:
+                            latest_price = float(price)
+                            break
                     if latest_price is not None:
-                        result["current_price"] = float(latest_price)
+                        result["current_price"] = latest_price
 
                     result["historical_data_available"] = True
                     today = datetime.now().date()

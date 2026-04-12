@@ -264,6 +264,31 @@ class AdvancedPortfolioAnalytics:
         # Cache the built portfolio to avoid redundant yfinance calls
         self._cached_portfolio = portfolio if portfolio.assets else None
 
+        # Pre-populate analytics cache so all tabs share one yfinance build
+        if self._cached_portfolio:
+            try:
+                raw_returns = portfolio.get_portfolio_returns()
+                clean_returns = raw_returns.dropna().copy()
+                if not clean_returns.empty:
+                    # Collect per-asset returns
+                    asset_returns_map: Dict[str, pd.Series] = {}
+                    for sym, asset_obj in portfolio.assets.items():
+                        try:
+                            ar = asset_obj.get_returns()
+                            if not ar.empty:
+                                asset_returns_map[sym] = ar
+                        except Exception:
+                            pass
+                    await self._cache_returns(clean_returns, self._cached_portfolio_value)
+                    await self._set_analytics_cache(
+                        clean_returns,
+                        asset_returns_map,
+                        dict(portfolio.weights),
+                        self._cached_portfolio_value,
+                    )
+            except Exception as e:
+                print(f"[WARN] Failed to pre-populate analytics cache: {e}")
+
         return self._cached_portfolio
 
     async def _get_cached_returns(self):
@@ -288,7 +313,7 @@ class AdvancedPortfolioAnalytics:
             return None, None
 
     async def _cache_returns(self, returns: pd.Series, total_value: float) -> None:
-        """Store portfolio returns + value in Redis for 10 minutes."""
+        """Store portfolio returns + value in Redis for 15 minutes."""
         from app.core.redis_client import get_redis_client
         cache_key = f"portfolio:{self.portfolio_id}:returns_cache"
         redis_client = await get_redis_client()
@@ -300,11 +325,71 @@ class AdvancedPortfolioAnalytics:
                     "index": [str(i) for i in returns.index],
                     "total_value": total_value,
                 },
-                ttl=600
+                ttl=900
             )
             print(f"[INFO] Cached {len(returns)} days of returns to Redis")
         except Exception as e:
             print(f"[WARN] Failed to cache returns: {e}")
+
+    async def _get_analytics_cache(self):
+        """
+        Retrieve full analytics cache: (portfolio_returns, asset_returns_dict, weights, total_value).
+        Returns a 4-tuple on hit, None on miss.
+        """
+        from app.core.redis_client import get_redis_client
+        cache_key = f"portfolio:{self.portfolio_id}:analytics_cache"
+        redis_client = await get_redis_client()
+        cached = await redis_client.get(cache_key)
+        if cached is None:
+            return None
+        try:
+            idx = pd.to_datetime(cached["portfolio_returns"]["index"])
+            portfolio_returns = pd.Series(cached["portfolio_returns"]["values"], index=idx, dtype=float)
+
+            asset_returns: Dict[str, pd.Series] = {}
+            for ticker, data in cached.get("asset_returns", {}).items():
+                a_idx = pd.to_datetime(data["index"])
+                asset_returns[ticker] = pd.Series(data["values"], index=a_idx, dtype=float)
+
+            weights = cached.get("weights", {})
+            total_value = float(cached["total_value"])
+            print(f"[INFO] Analytics cache hit: {len(asset_returns)} assets, value=${total_value:.2f}")
+            return portfolio_returns, asset_returns, weights, total_value
+        except Exception as e:
+            print(f"[WARN] Failed to deserialize analytics cache: {e}")
+            return None
+
+    async def _set_analytics_cache(
+        self,
+        portfolio_returns: pd.Series,
+        asset_returns: Dict[str, pd.Series],
+        weights: Dict[str, float],
+        total_value: float,
+    ) -> None:
+        """Store full analytics dataset in Redis for 15 minutes."""
+        from app.core.redis_client import get_redis_client
+        cache_key = f"portfolio:{self.portfolio_id}:analytics_cache"
+        redis_client = await get_redis_client()
+        try:
+            payload = {
+                "portfolio_returns": {
+                    "values": portfolio_returns.tolist(),
+                    "index": [str(i) for i in portfolio_returns.index],
+                },
+                "asset_returns": {
+                    ticker: {
+                        "values": series.tolist(),
+                        "index": [str(i) for i in series.index],
+                    }
+                    for ticker, series in asset_returns.items()
+                },
+                "weights": weights,
+                "total_value": total_value,
+            }
+            await redis_client.set(cache_key, payload, ttl=900)
+            print(f"[INFO] Analytics cache populated: {len(asset_returns)} assets")
+        except Exception as e:
+            print(f"[WARN] Failed to set analytics cache: {e}")
 
     async def get_current_portfolio_value(self) -> float:
         """Get the current market value of the portfolio."""
@@ -312,149 +397,146 @@ class AdvancedPortfolioAnalytics:
             await self._build_portfolio()
         return self._cached_portfolio_value or 0.0
 
-    async def calculate_portfolio_metrics(self) -> Dict:
-        """Calculate comprehensive portfolio metrics using the portfolio_manager package."""
-        portfolio = await self._build_portfolio()
-        if not portfolio or not portfolio.assets:
-            return {}
-
-        perf_analytics = PerformanceAnalytics(portfolio)
-        risk_analytics = RiskAnalytics(portfolio)
-
-        portfolio_returns = portfolio.get_portfolio_returns()
-        
-        print(f"Metrics: portfolio_returns shape: {portfolio_returns.shape}")
-        print(f"Metrics: portfolio_returns has NaN before cleaning: {portfolio_returns.isnull().any()}")
-
-        if portfolio_returns.empty:
-            print("[ERROR] Metrics: Portfolio returns are empty")
-            return {}
-        
-        # Clean the returns data - remove NaN values (like in the demo)
-        initial_length = len(portfolio_returns)
-        portfolio_returns = portfolio_returns.dropna()
-        final_length = len(portfolio_returns)
-        
-        if initial_length != final_length:
-            print(f"[WARNING] Metrics: Dropped {initial_length - final_length} NaN values from returns")
-        
-        if len(portfolio_returns) < 50:
-            print(f"[ERROR] Metrics: Insufficient clean data ({len(portfolio_returns)} days)")
-            return {}
-        
-        print(f"Metrics: Clean returns count: {len(portfolio_returns)}")
+    def _compute_metrics_from_returns(
+        self,
+        portfolio_returns: pd.Series,
+        asset_returns_dict: Dict[str, pd.Series],
+        weights: Dict[str, float],
+        total_value: float,
+    ) -> Dict:
+        """Compute all portfolio metrics from pre-built returns data (no Portfolio object needed)."""
+        def clean_value(value):
+            if isinstance(value, (float, np.float64)):
+                if np.isnan(value) or np.isinf(value):
+                    return None
+            return value
 
         try:
-            # Using portfolio_manager functions
-            annual_return = perf_analytics.annualized_return()
-            annual_vol = perf_analytics.volatility()
-            sharpe = perf_analytics.sharpe_ratio(risk_free_rate=self.risk_free_rate)
-            sortino = perf_analytics.sortino_ratio(risk_free_rate=self.risk_free_rate)
-            max_dd_info = perf_analytics.max_drawdown()
-            calmar = perf_analytics.calmar_ratio()
-            
-            # Use clean portfolio_returns for VaR calculations
-            hist_var_95 = var_historic(portfolio_returns, level=5)
-            hist_var_99 = var_historic(portfolio_returns, level=1)
-            hist_cvar_95 = cvar_historic(portfolio_returns, level=5)
-            semi_dev = semideviation(portfolio_returns)
+            # Portfolio-level metrics (all use portfolio_returns directly)
+            annual_return = float(annualize_rets(portfolio_returns, 252))
+            annual_vol = float(annualize_vol(portfolio_returns, 252))
+            sharp = float(sharpe_ratio(portfolio_returns, self.risk_free_rate, 252))
+
+            # Sortino ratio
+            daily_rf = (1 + self.risk_free_rate) ** (1 / 252) - 1
+            downside_returns = portfolio_returns[portfolio_returns < daily_rf]
+            if len(downside_returns) > 0:
+                downside_std = float(downside_returns.std() * np.sqrt(252))
+                sortino = (annual_return - self.risk_free_rate) / downside_std if downside_std > 0 else np.inf
+            else:
+                sortino = np.inf if annual_return > self.risk_free_rate else 0.0
+
+            # Max drawdown + Calmar
+            dd_df = drawdown(portfolio_returns)
+            max_dd_val = float(dd_df["Drawdown"].min())
+            calmar = annual_return / abs(max_dd_val) if abs(max_dd_val) > 1e-9 else np.inf
+
+            # Risk metrics
+            hist_var_95 = float(var_historic(portfolio_returns, level=5))
+            hist_var_99 = float(var_historic(portfolio_returns, level=1))
+            hist_cvar_95 = float(cvar_historic(portfolio_returns, level=5))
+            semi_dev = float(semideviation(portfolio_returns))
 
             # Individual asset performance
             individual_performance = {}
-            asset_returns = {}
-            for symbol, asset in portfolio.assets.items():
-                try:
-                    returns = asset.get_returns()
-                    if not returns.empty:
-                        asset_returns[symbol] = returns
-                except Exception as e:
-                    continue
-                    
-            if not asset_returns:
-                print("[WARNING] Metrics: No asset returns available")
-            else:
-                returns_df = pd.DataFrame(asset_returns).dropna()  # Clean asset returns too
-                
+            if asset_returns_dict:
+                returns_df = pd.DataFrame(asset_returns_dict).dropna()
                 if not returns_df.empty:
                     for symbol in returns_df.columns:
-                        if symbol in portfolio.assets:
-                            asset_return_series = returns_df[symbol]
-                            if not asset_return_series.empty:
-                                individual_performance[symbol] = {
-                                    "return": annualize_rets(asset_return_series, 252),
-                                    "volatility": annualize_vol(asset_return_series, 252),
-                                }
+                        s = returns_df[symbol]
+                        if not s.empty:
+                            individual_performance[symbol] = {
+                                "return": float(annualize_rets(s, 252)),
+                                "volatility": float(annualize_vol(s, 252)),
+                            }
 
-            total_value = self._cached_portfolio_value or portfolio.get_total_value()
-            print(f"[INFO] Using portfolio value: ${total_value:.2f}")
-
-            # Handle potential NaN or inf values before returning
-            def clean_value(value):
-                if isinstance(value, (float, np.float64)):
-                    if np.isnan(value) or np.isinf(value):
-                        return None
-                return value
+            concentration_risk = max(weights.values()) if weights else 0.0
 
             result = {
                 "portfolio_return_annualized": clean_value(annual_return),
                 "portfolio_volatility_annualized": clean_value(annual_vol),
-                "sharpe_ratio": clean_value(sharpe),
+                "sharpe_ratio": clean_value(sharp),
                 "sortino_ratio": clean_value(sortino),
                 "value_at_risk_95": clean_value(hist_var_95),
                 "value_at_risk_99": clean_value(hist_var_99),
                 "cvar": clean_value(hist_cvar_95),
                 "semideviation": clean_value(semi_dev),
-                "max_drawdown": clean_value(max_dd_info['max_drawdown']),
+                "max_drawdown": clean_value(max_dd_val),
                 "calmar_ratio": clean_value(calmar),
                 "total_portfolio_value": clean_value(total_value),
-                "number_of_positions": len(portfolio.assets),
-                "concentration_risk": clean_value(max(portfolio.weights.values()) if portfolio.weights else 0),
+                "number_of_positions": len(asset_returns_dict),
+                "concentration_risk": clean_value(concentration_risk),
                 "individual_performance": {
-                    symbol: {k: clean_value(v) for k, v in metrics.items()}
-                    for symbol, metrics in individual_performance.items()
+                    sym: {k: clean_value(v) for k, v in m.items()}
+                    for sym, m in individual_performance.items()
                 },
             }
-            
-            print(f"[SUCCESS] Metrics calculated: Return={annual_return:.2%}, Sharpe={sharpe:.3f}, VaR95={hist_var_95:.2%}")
+            print(f"[SUCCESS] Metrics: Return={annual_return:.2%}, Sharpe={sharp:.3f}, VaR95={hist_var_95:.2%}")
             return result
-            
         except Exception as e:
-            print(f"[ERROR] Metrics calculation failed: {e}")
+            print(f"[ERROR] Metrics computation failed: {e}")
             import traceback
             traceback.print_exc()
             return {}
 
-    async def generate_efficient_frontier(self) -> Dict:
-        """Generate the efficient frontier for the portfolio."""
+    async def calculate_portfolio_metrics(self) -> Dict:
+        """Calculate comprehensive portfolio metrics, using analytics cache when available."""
+        # Fast path: use analytics cache (populated by any prior analytics call this session)
+        cache_result = await self._get_analytics_cache()
+        if cache_result is not None:
+            portfolio_returns, asset_returns_dict, weights, total_value = cache_result
+            portfolio_returns = portfolio_returns.dropna().copy()
+            if len(portfolio_returns) >= 50:
+                print(f"[INFO] Metrics: using analytics cache ({len(portfolio_returns)} days)")
+                return self._compute_metrics_from_returns(
+                    portfolio_returns, asset_returns_dict, weights, total_value
+                )
+
+        # Slow path: build portfolio from yfinance (populates cache as side effect)
         portfolio = await self._build_portfolio()
-        if not portfolio or len(portfolio.assets) < 2:
-            print(f"[ERROR] Efficient Frontier: Need at least 2 assets, have {len(portfolio.assets) if portfolio else 0}")
+        if not portfolio or not portfolio.assets:
             return {}
 
-        # Collect asset returns
-        asset_returns = {}
+        portfolio_returns = portfolio.get_portfolio_returns()
+        print(f"Metrics: portfolio_returns shape: {portfolio_returns.shape}")
+
+        if portfolio_returns.empty:
+            return {}
+
+        portfolio_returns = portfolio_returns.dropna().copy()
+        if len(portfolio_returns) < 50:
+            print(f"[ERROR] Metrics: insufficient data ({len(portfolio_returns)} days)")
+            return {}
+
+        asset_returns_dict = {}
         for symbol, asset in portfolio.assets.items():
             try:
-                returns = asset.get_returns()
-                if not returns.empty:
-                    asset_returns[symbol] = returns
-            except Exception as e:
-                print(f"[WARNING] Efficient Frontier: Could not get returns for {symbol}: {e}")
-                continue
-                
-        if len(asset_returns) < 2:
-            print(f"[ERROR] Efficient Frontier: Need at least 2 assets with returns, have {len(asset_returns)}")
-            return {}
-            
-        # Clean returns data (like in the demo)
-        returns_df = pd.DataFrame(asset_returns).dropna()
-        
-        if returns_df.empty or len(returns_df) < 50:
-            print(f"[ERROR] Efficient Frontier: Insufficient clean data ({len(returns_df)} days)")
-            return {}
-        
-        print(f"Efficient Frontier: Using {len(returns_df)} days of clean returns for {len(returns_df.columns)} assets")
+                r = asset.get_returns()
+                if not r.empty:
+                    asset_returns_dict[symbol] = r
+            except Exception:
+                pass
 
+        total_value = self._cached_portfolio_value or portfolio.get_total_value()
+        weights = dict(portfolio.weights)
+        return self._compute_metrics_from_returns(portfolio_returns, asset_returns_dict, weights, total_value)
+
+    async def _compute_efficient_frontier(
+        self,
+        asset_returns_dict: Dict[str, pd.Series],
+        weights_map: Dict[str, float],
+    ) -> Dict:
+        """Compute efficient frontier from per-asset returns (no Portfolio object needed)."""
+        if len(asset_returns_dict) < 2:
+            print(f"[ERROR] Efficient Frontier: Need at least 2 assets, have {len(asset_returns_dict)}")
+            return {}
+
+        returns_df = pd.DataFrame(asset_returns_dict).dropna()
+        if returns_df.empty or len(returns_df) < 50:
+            print(f"[ERROR] Efficient Frontier: Insufficient data ({len(returns_df)} days)")
+            return {}
+
+        print(f"Efficient Frontier: {len(returns_df)} days, {len(returns_df.columns)} assets")
         try:
             expected_returns = annualize_rets(returns_df, 252)
             cov_matrix = returns_df.cov() * 252
@@ -463,44 +545,75 @@ class AdvancedPortfolioAnalytics:
             weights_list = optimal_weights(n_points, expected_returns.values, cov_matrix.values)
 
             frontier_points = []
-            for weights in weights_list:
-                port_ret = portfolio_return(weights, expected_returns.values)
-                port_vol = portfolio_vol(weights, cov_matrix.values)
-                frontier_points.append({"risk": port_vol, "return": port_ret})
+            for w in weights_list:
+                frontier_points.append({
+                    "risk": portfolio_vol(w, cov_matrix.values),
+                    "return": portfolio_return(w, expected_returns.values),
+                })
 
-            # Get special portfolios
-            msr_weights = msr(self.risk_free_rate, expected_returns.values, cov_matrix.values)
-            gmv_weights = gmv(cov_matrix.values)
+            msr_w = msr(self.risk_free_rate, expected_returns.values, cov_matrix.values)
+            gmv_w = gmv(cov_matrix.values)
 
-            msr_return = portfolio_return(msr_weights, expected_returns.values)
-            msr_vol = portfolio_vol(msr_weights, cov_matrix.values)
-
-            gmv_return = portfolio_return(gmv_weights, expected_returns.values)
-            gmv_vol = portfolio_vol(gmv_weights, cov_matrix.values)
-            
-            current_weights = np.array(list(portfolio.weights.values()))
-            current_return = portfolio_return(current_weights, expected_returns.values)
-            current_risk = portfolio_vol(current_weights, cov_matrix.values)
+            # Current portfolio point — use only assets present in the frontier
+            ef_symbols = list(returns_df.columns)
+            if weights_map and all(s in weights_map for s in ef_symbols):
+                total_w = sum(weights_map[s] for s in ef_symbols)
+                cur_weights = np.array([weights_map[s] / total_w for s in ef_symbols])
+            else:
+                cur_weights = np.ones(len(ef_symbols)) / len(ef_symbols)
 
             special_portfolios = {
-                "current": {"name": "Current Portfolio", "risk": current_risk, "return": current_return},
-                "msr": {"name": "Max Sharpe Ratio", "risk": msr_vol, "return": msr_return},
-                "gmv": {"name": "Global Minimum Volatility", "risk": gmv_vol, "return": gmv_return},
+                "current": {
+                    "name": "Current Portfolio",
+                    "risk": portfolio_vol(cur_weights, cov_matrix.values),
+                    "return": portfolio_return(cur_weights, expected_returns.values),
+                },
+                "msr": {
+                    "name": "Max Sharpe Ratio",
+                    "risk": portfolio_vol(msr_w, cov_matrix.values),
+                    "return": portfolio_return(msr_w, expected_returns.values),
+                },
+                "gmv": {
+                    "name": "Global Minimum Volatility",
+                    "risk": portfolio_vol(gmv_w, cov_matrix.values),
+                    "return": portfolio_return(gmv_w, expected_returns.values),
+                },
             }
 
-            result = {
-                "frontier_points": frontier_points,
-                "special_portfolios": special_portfolios,
-            }
-            
-            print(f"[SUCCESS] Efficient frontier generated with {len(frontier_points)} points")
-            return result
-            
+            print(f"[SUCCESS] Efficient frontier: {len(frontier_points)} points")
+            return {"frontier_points": frontier_points, "special_portfolios": special_portfolios}
+
         except Exception as e:
-            print(f"[ERROR] Efficient frontier generation failed: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[ERROR] Efficient frontier failed: {e}")
+            import traceback; traceback.print_exc()
             return {}
+
+    async def generate_efficient_frontier(self) -> Dict:
+        """Generate the efficient frontier, using analytics cache when available."""
+        # Fast path: use analytics cache
+        cache_result = await self._get_analytics_cache()
+        if cache_result is not None:
+            _, asset_returns_dict, weights, _ = cache_result
+            if len(asset_returns_dict) >= 2:
+                print("[INFO] Efficient Frontier: using analytics cache")
+                return await self._compute_efficient_frontier(asset_returns_dict, weights)
+
+        # Slow path: build portfolio
+        portfolio = await self._build_portfolio()
+        if not portfolio or len(portfolio.assets) < 2:
+            print(f"[ERROR] Efficient Frontier: Need at least 2 assets")
+            return {}
+
+        asset_returns_dict = {}
+        for symbol, asset in portfolio.assets.items():
+            try:
+                r = asset.get_returns()
+                if not r.empty:
+                    asset_returns_dict[symbol] = r
+            except Exception as e:
+                print(f"[WARNING] Efficient Frontier: no returns for {symbol}: {e}")
+
+        return await self._compute_efficient_frontier(asset_returns_dict, dict(portfolio.weights))
 
     async def run_monte_carlo_simulation(self, scenarios: int = 1000, time_horizon: int = 252) -> Dict:
         """Run a Monte Carlo simulation for the portfolio."""
@@ -522,10 +635,11 @@ class AdvancedPortfolioAnalytics:
             return {}
         
         # Clean the returns data - remove NaN values (like in the demo)
+        # .copy() prevents "assignment destination is read-only" in downstream numpy ops.
         initial_length = len(portfolio_returns)
-        portfolio_returns = portfolio_returns.dropna()
+        portfolio_returns = portfolio_returns.dropna().copy()
         final_length = len(portfolio_returns)
-        
+
         if initial_length != final_length:
             print(f"[WARNING] Monte Carlo: Dropped {initial_length - final_length} NaN values from returns")
         
@@ -627,13 +741,15 @@ class AdvancedPortfolioAnalytics:
             return {"error": True, "reason": "No historical price data available for your holdings", "multiplier": multiplier, "floor": floor}
         
         # Clean the returns data - remove NaN values like in the demo
+        # .copy() is required: dropna() can return a read-only numpy view which
+        # causes "assignment destination is read-only" inside run_cppi().
         initial_length = len(portfolio_returns)
-        portfolio_returns = portfolio_returns.dropna()
+        portfolio_returns = portfolio_returns.dropna().copy()
         final_length = len(portfolio_returns)
-        
+
         if initial_length != final_length:
             print(f"[WARNING] CPPI: Dropped {initial_length - final_length} NaN values from returns")
-        
+
         if len(portfolio_returns) < 50:  # Need minimum data for meaningful CPPI
             print(f"[ERROR] CPPI: Insufficient clean data ({len(portfolio_returns)} days)")
             return {"error": True, "reason": f"Insufficient data: only {len(portfolio_returns)} trading days available (need 50+)", "multiplier": multiplier, "floor": floor}

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
+import asyncio
 import logging
 
 from app.core.database import get_db
@@ -366,24 +367,89 @@ async def get_ytd_data(
         return cached
 
     holdings = await get_portfolio_holdings(db, portfolio.id)
+    valid_holdings = [h for h in holdings if h.ticker]
 
-    ytd_data = []
-    for holding in holdings:
-        if not holding.ticker:
-            continue
-        asset_type = holding.asset.asset_type if holding.asset else "stock"
+    # Separate by data source
+    mutual_fund_holdings = [h for h in valid_holdings if h.asset and h.asset.asset_type == "mutual_fund"]
+    other_holdings = [h for h in valid_holdings if h not in mutual_fund_holdings]
+
+    ytd_map: Dict[str, Optional[float]] = {}
+
+    # ── Stocks / ETFs / Crypto: single batch yfinance download ──────────────
+    if other_holdings:
+        import yfinance as yf
+        from datetime import datetime as dt
+
+        year_start = dt(dt.now().year, 1, 1)
+        # Crypto tickers need "-USD" suffix for yfinance
+        def yf_symbol(holding):
+            t = holding.ticker
+            if holding.asset and holding.asset.asset_type == "crypto" and "-USD" not in t.upper():
+                return f"{t.upper()}-USD"
+            return t
+
+        symbol_map = {yf_symbol(h): h.ticker for h in other_holdings}
+        symbols = list(symbol_map.keys())
+
         try:
-            perf = await FinanceService.calculate_ticker_performance(
-                holding.ticker, asset_type, ["ytd"]
+            loop = asyncio.get_event_loop()
+            # yfinance download is blocking — run in thread pool
+            hist = await loop.run_in_executor(
+                None,
+                lambda: yf.download(symbols, start=year_start, progress=False, auto_adjust=True, threads=True)
             )
-            ytd_data.append({
-                "ticker": holding.ticker,
-                "ytd_return": perf.get("ytd_return"),
-            })
-        except Exception as e:
-            logger.warning(f"YTD fetch failed for {holding.ticker}: {e}")
-            ytd_data.append({"ticker": holding.ticker, "ytd_return": None})
 
+            if hist is not None and not hist.empty:
+                # Multi-ticker download wraps Close in an extra level
+                close = hist["Close"] if "Close" in hist.columns else hist
+
+                for yf_sym, orig_ticker in symbol_map.items():
+                    try:
+                        col = yf_sym if yf_sym in close.columns else (
+                            orig_ticker if orig_ticker in close.columns else None
+                        )
+                        if col is None:
+                            ytd_map[orig_ticker] = None
+                            continue
+                        series = close[col].dropna()
+                        if len(series) >= 2:
+                            ytd_map[orig_ticker] = round(
+                                (float(series.iloc[-1]) - float(series.iloc[0])) / float(series.iloc[0]) * 100, 2
+                            )
+                        else:
+                            ytd_map[orig_ticker] = None
+                    except Exception as e:
+                        logger.warning(f"YTD parse failed for {orig_ticker}: {e}")
+                        ytd_map[orig_ticker] = None
+        except Exception as e:
+            logger.warning(f"Batch yfinance YTD download failed: {e}")
+            for h in other_holdings:
+                ytd_map[h.ticker] = None
+
+    # ── Mutual funds: thread-pool so blocking requests don't stall event loop ──
+    if mutual_fund_holdings:
+        def sync_mf_ytd(holding):
+            import asyncio as _aio
+            try:
+                return _aio.run(FinanceService.calculate_ticker_performance(
+                    holding.ticker, "mutual_fund", ["ytd"]
+                ))
+            except Exception:
+                return {"ytd_return": None}
+
+        loop = asyncio.get_event_loop()
+        mf_tasks = [
+            loop.run_in_executor(None, sync_mf_ytd, h)
+            for h in mutual_fund_holdings
+        ]
+        mf_results = await asyncio.gather(*mf_tasks, return_exceptions=True)
+        for holding, res in zip(mutual_fund_holdings, mf_results):
+            if isinstance(res, Exception) or res is None:
+                ytd_map[holding.ticker] = None
+            else:
+                ytd_map[holding.ticker] = res.get("ytd_return")
+
+    ytd_data = [{"ticker": h.ticker, "ytd_return": ytd_map.get(h.ticker)} for h in valid_holdings]
     result = {"ytd_data": ytd_data}
     await redis_client.set(cache_key, result, ttl=86400)
     return result

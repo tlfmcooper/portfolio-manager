@@ -162,6 +162,7 @@ async def create_user_holding(
     try:
         redis_client = await get_redis_client()
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
     except Exception:
         pass
 
@@ -238,6 +239,7 @@ async def update_user_holding(
     try:
         redis_client = await get_redis_client()
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
     except Exception:
         pass
 
@@ -279,6 +281,7 @@ async def delete_user_holding(
     try:
         redis_client = await get_redis_client()
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
     except Exception:
         pass
 
@@ -316,6 +319,7 @@ async def edit_holding_details(
     try:
         redis_client = await get_redis_client()
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
     except Exception:
         pass
 
@@ -413,6 +417,7 @@ async def sell_asset(
     try:
         redis_client = await get_redis_client()
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
     except Exception:
         pass
 
