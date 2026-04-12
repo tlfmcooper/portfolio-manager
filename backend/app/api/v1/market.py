@@ -122,12 +122,26 @@ async def get_live_market_data(
 
     # ── Helpers: cached wrappers for slow asset-info calls ───────────────────
     async def get_cached_asset_info(ticker: str, asset_type: str):
-        """Return cached asset info or fetch + cache with 15-min TTL."""
+        """Return cached asset info or fetch + cache with 15-min TTL.
+
+        Mutual fund fetches use a shared Barchart XSRF session and must NOT
+        be called from multiple threads simultaneously. All other asset types
+        are safe to run in a thread-pool executor for true parallelism.
+        """
         ck = f"asset_info:{ticker}:{asset_type}"
         cached = await redis_client.get(ck)
         if cached:
             return cached
-        data = await FinanceService.get_asset_info(ticker, asset_type)
+        if asset_type == 'mutual_fund':
+            # Keep on event-loop thread — shared session, XSRF-token safety
+            data = await FinanceService.get_asset_info(ticker, asset_type)
+        else:
+            # yfinance / etc. are blocking; run in thread pool so gather() parallelises
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                None,
+                lambda t=ticker, at=asset_type: asyncio.run(FinanceService.get_asset_info(t, at))
+            )
         if data:
             await redis_client.set(ck, data, ttl=900)
         return data
@@ -138,7 +152,11 @@ async def get_live_market_data(
         cached = await redis_client.get(ck)
         if cached:
             return cached
-        data = await FinanceService.get_ohlc_data(ticker)
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(
+            None,
+            lambda t=ticker: asyncio.run(FinanceService.get_ohlc_data(t))
+        )
         if data:
             await redis_client.set(ck, data, ttl=900)
         return data
@@ -199,9 +217,12 @@ async def get_live_market_data(
             holding._temp_change_percent = 0
             holding._temp_change = 0
 
-    # Run all three types in parallel
+    # Mutual funds must run sequentially — shared Barchart XSRF session
+    for h in mutual_fund_holdings:
+        await fetch_mf(h)
+
+    # Crypto and OHLC: truly parallel via thread-pool executors inside helpers
     await asyncio.gather(
-        *[fetch_mf(h) for h in mutual_fund_holdings],
         *[fetch_crypto(h) for h in crypto_holdings],
         *[fetch_ohlc(h) for h in unsupported_stock_holdings],
     )
@@ -488,7 +509,10 @@ async def get_ytd_data(
 
     ytd_data = [{"ticker": h.ticker, "ytd_return": ytd_map.get(h.ticker)} for h in valid_holdings]
     result = {"ytd_data": ytd_data}
-    await redis_client.set(cache_key, result, ttl=86400)
+    # Only use 24h TTL when we actually got data — a transient failure (e.g. network error
+    # on first cold start) would otherwise poison the cache for a full day.
+    has_data = any(d.get("ytd_return") is not None for d in ytd_data)
+    await redis_client.set(cache_key, result, ttl=86400 if has_data else 60)
     return result
 
 
