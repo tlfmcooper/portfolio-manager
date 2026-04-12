@@ -268,7 +268,7 @@ async def get_live_market_data(
         for symbol, quote in fresh_data.items():
             market_data[symbol] = quote
             cache_key = f"stock:quote:{symbol}"
-            await redis_client.set(cache_key, quote, ttl=300)  # 5 minute cache
+            await redis_client.set(cache_key, quote, ttl=900)  # 15 minute cache
 
     # Enrich holdings with live market data
     enriched_holdings = []
@@ -337,6 +337,56 @@ async def get_live_market_data(
         "display_currency": display_currency,
         "updated_at": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/ytd")
+async def get_ytd_data(
+    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Get YTD return for each holding. Cached for 24h since YTD is a daily metric.
+    """
+    portfolio = await get_user_portfolio(db, current_user.id)
+    if not portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio not found"
+        )
+
+    display_currency = (currency or portfolio.currency or "USD").upper()
+    cache_key = f"portfolio:{portfolio.id}:ytd"
+    redis_client = await get_redis_client()
+
+    # Try cache first (24h TTL — YTD only changes meaningfully once a day)
+    cached = await redis_client.get(cache_key)
+    if cached:
+        logger.info(f"Cache hit for portfolio {portfolio.id} YTD data")
+        return cached
+
+    holdings = await get_portfolio_holdings(db, portfolio.id)
+
+    ytd_data = []
+    for holding in holdings:
+        if not holding.ticker:
+            continue
+        asset_type = holding.asset.asset_type if holding.asset else "stock"
+        try:
+            perf = await FinanceService.calculate_ticker_performance(
+                holding.ticker, asset_type, ["ytd"]
+            )
+            ytd_data.append({
+                "ticker": holding.ticker,
+                "ytd_return": perf.get("ytd_return"),
+            })
+        except Exception as e:
+            logger.warning(f"YTD fetch failed for {holding.ticker}: {e}")
+            ytd_data.append({"ticker": holding.ticker, "ytd_return": None})
+
+    result = {"ytd_data": ytd_data}
+    await redis_client.set(cache_key, result, ttl=86400)
+    return result
 
 
 @router.websocket("/ws")

@@ -266,6 +266,46 @@ class AdvancedPortfolioAnalytics:
 
         return self._cached_portfolio
 
+    async def _get_cached_returns(self):
+        """
+        Retrieve cached (returns, total_value) from Redis.
+        Returns (pd.Series, float) on hit, (None, None) on miss.
+        """
+        from app.core.redis_client import get_redis_client
+        cache_key = f"portfolio:{self.portfolio_id}:returns_cache"
+        redis_client = await get_redis_client()
+        cached = await redis_client.get(cache_key)
+        if cached is None:
+            return None, None
+        try:
+            index = pd.to_datetime(cached["index"]) if "index" in cached else None
+            returns = pd.Series(cached["values"], index=index, dtype=float)
+            total_value = float(cached["total_value"])
+            print(f"[INFO] Returns cache hit: {len(returns)} days, value=${total_value:.2f}")
+            return returns, total_value
+        except Exception as e:
+            print(f"[WARN] Failed to deserialize returns cache: {e}")
+            return None, None
+
+    async def _cache_returns(self, returns: pd.Series, total_value: float) -> None:
+        """Store portfolio returns + value in Redis for 10 minutes."""
+        from app.core.redis_client import get_redis_client
+        cache_key = f"portfolio:{self.portfolio_id}:returns_cache"
+        redis_client = await get_redis_client()
+        try:
+            await redis_client.set(
+                cache_key,
+                {
+                    "values": returns.tolist(),
+                    "index": [str(i) for i in returns.index],
+                    "total_value": total_value,
+                },
+                ttl=600
+            )
+            print(f"[INFO] Cached {len(returns)} days of returns to Redis")
+        except Exception as e:
+            print(f"[WARN] Failed to cache returns: {e}")
+
     async def get_current_portfolio_value(self) -> float:
         """Get the current market value of the portfolio."""
         if self._cached_portfolio_value is None:
@@ -464,13 +504,19 @@ class AdvancedPortfolioAnalytics:
 
     async def run_monte_carlo_simulation(self, scenarios: int = 1000, time_horizon: int = 252) -> Dict:
         """Run a Monte Carlo simulation for the portfolio."""
-        portfolio = await self._build_portfolio()
-        if not portfolio or not portfolio.assets:
-            print("[ERROR] Monte Carlo: No portfolio or assets")
-            return {}
+        # Try cached returns first
+        portfolio_returns, total_value = await self._get_cached_returns()
 
-        portfolio_returns = portfolio.get_portfolio_returns()
-        
+        if portfolio_returns is None:
+            portfolio = await self._build_portfolio()
+            if not portfolio or not portfolio.assets:
+                return {}
+            portfolio_returns = portfolio.get_portfolio_returns()
+            total_value = self._cached_portfolio_value or portfolio.get_total_value()
+            await self._cache_returns(portfolio_returns, total_value)
+        else:
+            print(f"[INFO] Monte Carlo: Using cached returns ({len(portfolio_returns)} days)")
+
         if portfolio_returns.empty:
             print("[ERROR] Monte Carlo: Portfolio returns are empty")
             return {}
@@ -492,9 +538,6 @@ class AdvancedPortfolioAnalytics:
         try:
             annual_ret = annualize_rets(portfolio_returns, 252)
             annual_vol_sim = annualize_vol(portfolio_returns, 252)
-            
-            # Use the actual calculated portfolio value, not portfolio.get_total_value()
-            total_value = self._cached_portfolio_value or portfolio.get_total_value()
             print(f"[INFO] Monte Carlo using portfolio value: ${total_value:.2f}")
 
             mc_results = gbm(
@@ -562,19 +605,26 @@ class AdvancedPortfolioAnalytics:
 
     async def run_cppi_simulation(self, multiplier: int = 3, floor: float = 0.8, time_horizon: int = 252) -> Dict:
         """Run a CPPI simulation for the portfolio."""
-        portfolio = await self._build_portfolio()
-        if not portfolio or not portfolio.assets:
-            print("[ERROR] CPPI: No portfolio or assets")
-            return {}
+        # Try cached returns to skip expensive yfinance re-fetch
+        portfolio_returns, total_value = await self._get_cached_returns()
 
-        portfolio_returns = portfolio.get_portfolio_returns()
+        if portfolio_returns is None:
+            portfolio = await self._build_portfolio()
+            if not portfolio or not portfolio.assets:
+                print("[ERROR] CPPI: No portfolio or assets")
+                return {"error": True, "reason": "No holdings found in portfolio", "multiplier": multiplier, "floor": floor}
+            portfolio_returns = portfolio.get_portfolio_returns()
+            total_value = self._cached_portfolio_value or portfolio.get_total_value()
+            await self._cache_returns(portfolio_returns, total_value)
+        else:
+            print(f"[INFO] CPPI: Using cached returns ({len(portfolio_returns)} days)")
         print(f"CPPI: portfolio_returns shape: {portfolio_returns.shape}")
         print(f"CPPI: portfolio_returns empty: {portfolio_returns.empty}")
         print(f"CPPI: portfolio_returns has NaN: {portfolio_returns.isnull().any()}")
         
         if portfolio_returns.empty:
             print("[ERROR] CPPI: Portfolio returns are empty")
-            return {}
+            return {"error": True, "reason": "No historical price data available for your holdings", "multiplier": multiplier, "floor": floor}
         
         # Clean the returns data - remove NaN values like in the demo
         initial_length = len(portfolio_returns)
@@ -586,13 +636,10 @@ class AdvancedPortfolioAnalytics:
         
         if len(portfolio_returns) < 50:  # Need minimum data for meaningful CPPI
             print(f"[ERROR] CPPI: Insufficient clean data ({len(portfolio_returns)} days)")
-            return {}
+            return {"error": True, "reason": f"Insufficient data: only {len(portfolio_returns)} trading days available (need 50+)", "multiplier": multiplier, "floor": floor}
         
         print(f"CPPI: Clean returns count: {len(portfolio_returns)}")
         print(f"CPPI: Returns sample (first 5): {portfolio_returns.head()}")
-        
-        # Use the actual calculated portfolio value, not portfolio.get_total_value()
-        total_value = self._cached_portfolio_value or portfolio.get_total_value()
         print(f"CPPI: Using actual portfolio value: ${total_value:.2f}")
 
         try:
@@ -614,13 +661,14 @@ class AdvancedPortfolioAnalytics:
             # Data for charts
             performance_data = []
             for i in range(len(cppi_results["Wealth"])):
+                floor_val = float(cppi_results["floor"].iloc[i].squeeze())
                 performance_data.append({
                     "day": i,
-                    "cppi_wealth": cppi_results["Wealth"].iloc[i, 0],
-                    "buyhold_wealth": cppi_results["Risky Wealth"].iloc[i, 0],
-                    "floor_value": cppi_results["floor"].iloc[i, 0],
-                    "risky_allocation": cppi_results["Risky Allocation"].iloc[i, 0] * 100,
-                    "risk_budget": cppi_results["Risk Budget"].iloc[i, 0] * 100,
+                    "cppi_wealth": float(cppi_results["Wealth"].iloc[i, 0]),
+                    "buyhold_wealth": float(cppi_results["Risky Wealth"].iloc[i, 0]),
+                    "floor_value": float(floor_val),
+                    "risky_allocation": float(cppi_results["Risky Allocation"].iloc[i, 0]) * 100,
+                    "risk_budget": float(cppi_results["Risk Budget"].iloc[i, 0]) * 100,
                 })
 
             drawdown_cppi = drawdown(cppi_results["Wealth"].iloc[:, 0])
@@ -662,7 +710,7 @@ class AdvancedPortfolioAnalytics:
             print(f"[ERROR] CPPI simulation failed: {e}")
             import traceback
             traceback.print_exc()
-            return {}
+            return {"error": True, "reason": f"Simulation error: {str(e)}", "multiplier": multiplier, "floor": floor}
 
     async def sector_analysis(self, display_currency: Optional[str] = None) -> Dict:
         """Analyze portfolio by sector with currency conversion, including cash balance."""
