@@ -54,6 +54,15 @@ async def get_live_market_data(
 
     # Determine display currency
     display_currency = (currency or portfolio.currency or "USD").upper()
+
+    # ── Full-response cache (5 min TTL) ──────────────────────────────────────
+    redis_client = await get_redis_client()
+    live_cache_key = f"portfolio:{portfolio.id}:live_market:{display_currency}"
+    cached_response = await redis_client.get(live_cache_key)
+    if cached_response:
+        logger.info(f"[MARKET_LIVE] Full cache hit for portfolio {portfolio.id}")
+        return cached_response
+
     exchange_service = get_exchange_rate_service()
 
     # Pre-fetch exchange rates
@@ -111,20 +120,39 @@ async def get_live_market_data(
     # Remove duplicates
     stock_symbols = list(set(stock_symbols))
 
-    # Fetch mutual fund data
-    for holding in mutual_fund_holdings:
-        try:
-            mf_data = await FinanceService.get_asset_info(holding.ticker, 'mutual_fund')
-            if mf_data and 'current_price' in mf_data:
-                # Update holding's current price
-                holding.current_price = mf_data['current_price']
-                # Store change_percent and change temporarily (we'll use them below)
-                holding._temp_change_percent = mf_data.get('change_percent', 0)
-                holding._temp_change = mf_data.get('change', 0)
+    # ── Helpers: cached wrappers for slow asset-info calls ───────────────────
+    async def get_cached_asset_info(ticker: str, asset_type: str):
+        """Return cached asset info or fetch + cache with 15-min TTL."""
+        ck = f"asset_info:{ticker}:{asset_type}"
+        cached = await redis_client.get(ck)
+        if cached:
+            return cached
+        data = await FinanceService.get_asset_info(ticker, asset_type)
+        if data:
+            await redis_client.set(ck, data, ttl=900)
+        return data
 
-                # Update asset's current price in database
+    async def get_cached_ohlc(ticker: str):
+        """Return cached OHLC data or fetch + cache with 15-min TTL."""
+        ck = f"ohlc:{ticker}"
+        cached = await redis_client.get(ck)
+        if cached:
+            return cached
+        data = await FinanceService.get_ohlc_data(ticker)
+        if data:
+            await redis_client.set(ck, data, ttl=900)
+        return data
+
+    # ── Fetch mutual fund / crypto / OHLC data in parallel ───────────────────
+    async def fetch_mf(holding):
+        try:
+            data = await get_cached_asset_info(holding.ticker, 'mutual_fund')
+            if data and 'current_price' in data:
+                holding.current_price = data['current_price']
+                holding._temp_change_percent = data.get('change_percent', 0)
+                holding._temp_change = data.get('change', 0)
                 if holding.asset:
-                    holding.asset.current_price = mf_data['current_price']
+                    holding.asset.current_price = data['current_price']
                     holding.asset.last_price_update = datetime.utcnow()
             else:
                 holding._temp_change_percent = 0
@@ -134,23 +162,18 @@ async def get_live_market_data(
             holding._temp_change_percent = 0
             holding._temp_change = 0
 
-    # Fetch crypto data
-    for holding in crypto_holdings:
+    async def fetch_crypto(holding):
         try:
-            crypto_data = await FinanceService.get_asset_info(holding.ticker, 'crypto')
-            if crypto_data and 'current_price' in crypto_data:
-                holding.current_price = crypto_data['current_price']
-                # Calculate change percent if available
+            data = await get_cached_asset_info(holding.ticker, 'crypto')
+            if data and 'current_price' in data:
+                holding.current_price = data['current_price']
                 if holding.asset and holding.asset.current_price:
                     old_price = holding.asset.current_price
-                    new_price = crypto_data['current_price']
-                    holding._temp_change_percent = ((new_price - old_price) / old_price) * 100
+                    holding._temp_change_percent = ((data['current_price'] - old_price) / old_price) * 100
                 else:
                     holding._temp_change_percent = 0
-
-                # Update asset's current price in database
                 if holding.asset:
-                    holding.asset.current_price = crypto_data['current_price']
+                    holding.asset.current_price = data['current_price']
                     holding.asset.last_price_update = datetime.utcnow()
             else:
                 holding._temp_change_percent = 0
@@ -158,18 +181,15 @@ async def get_live_market_data(
             logger.error(f"Error fetching crypto data for {holding.ticker}: {e}")
             holding._temp_change_percent = 0
 
-    # Fetch data for unsupported stocks using Yahoo Finance OHLC
-    for holding in unsupported_stock_holdings:
+    async def fetch_ohlc(holding):
         try:
-            ohlc_data = await FinanceService.get_ohlc_data(holding.ticker)
-            if ohlc_data and 'current_price' in ohlc_data:
-                holding.current_price = ohlc_data['current_price']
-                holding._temp_change_percent = ohlc_data.get('change_percent', 0)
-                holding._temp_change = ohlc_data.get('change', 0)
-
-                # Update asset's current price in database
+            data = await get_cached_ohlc(holding.ticker)
+            if data and 'current_price' in data:
+                holding.current_price = data['current_price']
+                holding._temp_change_percent = data.get('change_percent', 0)
+                holding._temp_change = data.get('change', 0)
                 if holding.asset:
-                    holding.asset.current_price = ohlc_data['current_price']
+                    holding.asset.current_price = data['current_price']
                     holding.asset.last_price_update = datetime.utcnow()
             else:
                 holding._temp_change_percent = 0
@@ -178,6 +198,13 @@ async def get_live_market_data(
             logger.error(f"Error fetching OHLC data for {holding.ticker}: {e}")
             holding._temp_change_percent = 0
             holding._temp_change = 0
+
+    # Run all three types in parallel
+    await asyncio.gather(
+        *[fetch_mf(h) for h in mutual_fund_holdings],
+        *[fetch_crypto(h) for h in crypto_holdings],
+        *[fetch_ohlc(h) for h in unsupported_stock_holdings],
+    )
 
     # Commit database updates for prices
     await db.commit()
@@ -231,7 +258,7 @@ async def get_live_market_data(
 
             enriched_holdings.append(holding_dict)
 
-        return {
+        early_response = {
             "holdings": enriched_holdings,
             "market_data": {},
             "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, exchange_rates),
@@ -239,6 +266,8 @@ async def get_live_market_data(
             "display_currency": display_currency,
             "updated_at": datetime.utcnow().isoformat()
         }
+        await redis_client.set(live_cache_key, early_response, ttl=300)
+        return early_response
 
     # Update active symbols for WebSocket background task (only for stocks)
     if stock_symbols:
@@ -246,7 +275,6 @@ async def get_live_market_data(
         await ws_manager.update_active_symbols(stock_symbols)
 
     # Try to get cached data first for faster response
-    redis_client = await get_redis_client()
     market_data = {}
     uncached_symbols = []
 
@@ -330,7 +358,7 @@ async def get_live_market_data(
 
         enriched_holdings.append(holding_dict)
 
-    return {
+    response = {
         "holdings": enriched_holdings,
         "market_data": market_data,
         "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, exchange_rates),
@@ -338,6 +366,9 @@ async def get_live_market_data(
         "display_currency": display_currency,
         "updated_at": datetime.utcnow().isoformat()
     }
+    # Cache full response for 5 minutes
+    await redis_client.set(live_cache_key, response, ttl=300)
+    return response
 
 
 @router.get("/ytd")
@@ -400,8 +431,14 @@ async def get_ytd_data(
             )
 
             if hist is not None and not hist.empty:
-                # Multi-ticker download wraps Close in an extra level
-                close = hist["Close"] if "Close" in hist.columns else hist
+                import pandas as _pd
+                # yfinance multi-ticker download → MultiIndex columns ('Close','AAPL')
+                # Single-ticker download (older yfinance) → flat columns 'Close', 'Open'
+                if isinstance(hist.columns, _pd.MultiIndex):
+                    close = hist["Close"]   # DataFrame with ticker symbols as columns
+                else:
+                    # Flat: rename Close → ticker so the lookup below works uniformly
+                    close = hist[["Close"]].rename(columns={"Close": symbols[0]}) if len(symbols) == 1 else hist
 
                 for yf_sym, orig_ticker in symbol_map.items():
                     try:
