@@ -85,4 +85,4 @@ SUMMARY.md
 THEME_USAGE_GUIDE.md
 portfolio.db.bak
 backend/portfolio.db.backup_migrate_asset_id
-test_deposit.py
+test_deposit.py.mcp.json
