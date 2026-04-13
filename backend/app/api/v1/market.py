@@ -26,6 +26,12 @@ router = APIRouter()
 UNSUPPORTED_TICKERS = ["MAU.TO"]
 
 
+def _is_mutual_fund_holding(holding) -> bool:
+    asset_type = (holding.asset.asset_type if getattr(holding, "asset", None) else None) or ""
+    ticker = str(getattr(holding, "ticker", "") or "").upper()
+    return asset_type == "mutual_fund" or ticker.endswith(".CF")
+
+
 def convert_price(price: float, from_currency: str, to_currency: str, exchange_rates: Dict[str, float]) -> float:
     """Convert price from one currency to another using exchange rates."""
     if from_currency == to_currency:
@@ -422,7 +428,7 @@ async def get_ytd_data(
     valid_holdings = [h for h in holdings if h.ticker]
 
     # Separate by data source
-    mutual_fund_holdings = [h for h in valid_holdings if h.asset and h.asset.asset_type == "mutual_fund"]
+    mutual_fund_holdings = [h for h in valid_holdings if _is_mutual_fund_holding(h)]
     other_holdings = [h for h in valid_holdings if h not in mutual_fund_holdings]
 
     ytd_map: Dict[str, Optional[float]] = {}
@@ -506,6 +512,24 @@ async def get_ytd_data(
         loop = asyncio.get_event_loop()
         mf_map = await loop.run_in_executor(None, sync_all_mf_ytd)
         ytd_map.update(mf_map)
+
+    missing_holdings = [h for h in valid_holdings if ytd_map.get(h.ticker) is None]
+    for holding in missing_holdings:
+        inferred_asset_type = (
+            "mutual_fund"
+            if _is_mutual_fund_holding(holding)
+            else (holding.asset.asset_type if holding.asset else None)
+        )
+        try:
+            perf = await FinanceService.calculate_ticker_performance(
+                holding.ticker,
+                inferred_asset_type,
+                ["ytd"],
+            )
+            ytd_map[holding.ticker] = perf.get("ytd_return")
+        except Exception as e:
+            logger.warning(f"Fallback YTD fetch failed for {holding.ticker}: {e}")
+            ytd_map[holding.ticker] = None
 
     ytd_data = [{"ticker": h.ticker, "ytd_return": ytd_map.get(h.ticker)} for h in valid_holdings]
     result = {"ytd_data": ytd_data}
