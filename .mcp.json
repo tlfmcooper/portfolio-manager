@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "portfolio": {
+      "type": "http",
+      "url": "https://api.portfolio.alikone.dev/mcp",
+      "headers": {
+        "x-mcp-api-key": "pmcp_4fb049a9.xWL24u5ZcxyIcY3MdzalPKAI0zq9yrCkqcEEML4QYZ4"
+      }
+    }
+  }
+}

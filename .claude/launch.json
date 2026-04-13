@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (FastAPI)",
+      "runtimeExecutable": "/Users/alikone/Library/CloudStorage/OneDrive-Personal/ALKHAF/projects/portfolio-manager/.venv/bin/uvicorn",
+      "runtimeArgs": ["main:app", "--reload", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["/Users/alikone/Library/CloudStorage/OneDrive-Personal/ALKHAF/projects/portfolio-manager/frontend/node_modules/.bin/vite", "--port", "5173"],
+      "port": 5173
+    }
+  ]
+}
