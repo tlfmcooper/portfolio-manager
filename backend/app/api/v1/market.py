@@ -415,10 +415,11 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd:v2"
+    cache_key = f"portfolio:{portfolio.id}:ytd:v3"
+    backup_key = f"portfolio:{portfolio.id}:ytd:v3:backup"
     redis_client = await get_redis_client()
 
-    # Try cache first (24h TTL — YTD only changes meaningfully once a day)
+    # Try primary cache first (24h TTL)
     cached = await redis_client.get(cache_key)
     if cached:
         logger.info(f"Cache hit for portfolio {portfolio.id} YTD data")
@@ -518,10 +519,26 @@ async def get_ytd_data(
 
     ytd_data = [{"ticker": h.ticker, "ytd_return": ytd_map.get(h.ticker)} for h in valid_holdings]
     result = {"ytd_data": ytd_data}
-    # Only use 24h TTL when we actually got data — a transient failure (e.g. network error
-    # on first cold start) would otherwise poison the cache for a full day.
     has_data = any(d.get("ytd_return") is not None for d in ytd_data)
-    await redis_client.set(cache_key, result, ttl=86400 if has_data else 60)
+
+    if has_data:
+        await redis_client.set(cache_key, result, ttl=86400)    # 24 h primary
+        await redis_client.set(backup_key, result, ttl=259200)  # 72 h backup
+        return result
+
+    # Compute yielded no data — return backup to avoid erasing good cached results
+    backup = await redis_client.get(backup_key)
+    if backup:
+        logger.warning(
+            f"YTD compute yielded no data for portfolio {portfolio.id}; serving backup cache"
+        )
+        await redis_client.set(cache_key, backup, ttl=300)  # 5-min retry window
+        return backup
+
+    logger.warning(
+        f"YTD compute yielded no data for portfolio {portfolio.id}; no backup available"
+    )
+    await redis_client.set(cache_key, result, ttl=60)
     return result
 
 
