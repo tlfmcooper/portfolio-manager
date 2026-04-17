@@ -529,57 +529,77 @@ class FinanceService:
         if asset_type == "mutual_fund":
             result["data_source"] = "barchart"
 
+            # ── Primary: quote page (no XSRF needed) ────────────────────────
             try:
-                history = await FinanceService._get_mutual_fund_history(ticker)
-                if history:
-                    # Mutual fund NAV is only published at market close (4pm).
-                    # Scan from the end of history to find the most recent row that
-                    # has a non-None lastPrice — this is often yesterday's closing NAV
-                    # during trading hours.
-                    latest_price = None
-                    for row in reversed(history):
-                        raw_data = row.get("raw") or {}
-                        price = raw_data.get("lastPrice")
-                        if price is not None:
-                            latest_price = float(price)
-                            break
-                    if latest_price is not None:
-                        result["current_price"] = latest_price
-
-                    result["historical_data_available"] = True
-                    today = datetime.now().date()
-
-                    if "ytd" in periods:
-                        start_price = FinanceService._get_history_start_price(history, date(today.year, 1, 1))
-                        if start_price and result["current_price"]:
-                            result["ytd_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
-
-                    if "1m" in periods:
-                        start_price = FinanceService._get_history_start_price(history, today - timedelta(days=31))
-                        if start_price and result["current_price"]:
-                            result["one_month_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
-
-                    if "3m" in periods:
-                        start_price = FinanceService._get_history_start_price(history, today - timedelta(days=90))
-                        if start_price and result["current_price"]:
-                            result["three_month_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
-
-                    if "1y" in periods:
-                        start_price = FinanceService._get_history_start_price(history, today - timedelta(days=365))
-                        if start_price and result["current_price"]:
-                            result["one_year_return"] = round(((result["current_price"] - start_price) / start_price) * 100, 2)
-                else:
-                    result["historical_data_available"] = False
-            except Exception as e:
-                logger.warning(f"Failed to get mutual fund history for {ticker}: {e}")
-
-            if result["current_price"] is None:
-                try:
-                    mf_info = await FinanceService._get_mutual_fund_info(ticker)
-                    if mf_info and "current_price" in mf_info:
+                mf_info = await FinanceService._get_mutual_fund_info(ticker)
+                if mf_info:
+                    if mf_info.get("current_price") is not None:
                         result["current_price"] = mf_info["current_price"]
+                    if "ytd" in periods and mf_info.get("ytd_return") is not None:
+                        result["ytd_return"] = mf_info["ytd_return"]
+                        result["historical_data_available"] = True
+            except Exception as e:
+                logger.warning(f"Failed to get MF quote page info for {ticker}: {e}")
+
+            # ── Fallback: history API for remaining periods or missing YTD ───
+            needs_history = any(p in periods for p in ["1m", "3m", "1y"]) or (
+                "ytd" in periods and result["ytd_return"] is None
+            )
+            if needs_history:
+                try:
+                    history = await FinanceService._get_mutual_fund_history(ticker)
+                    if history:
+                        if result["current_price"] is None:
+                            for row in reversed(history):
+                                raw = row.get("raw") or {}
+                                price = raw.get("lastPrice")
+                                if price is not None:
+                                    result["current_price"] = float(price)
+                                    break
+
+                        result["historical_data_available"] = True
+                        today = datetime.now().date()
+
+                        if "ytd" in periods and result["ytd_return"] is None:
+                            start_price = FinanceService._get_history_start_price(
+                                history, date(today.year, 1, 1)
+                            )
+                            if start_price and result["current_price"]:
+                                result["ytd_return"] = round(
+                                    (result["current_price"] - start_price) / start_price * 100, 2
+                                )
+
+                        if "1m" in periods:
+                            start_price = FinanceService._get_history_start_price(
+                                history, today - timedelta(days=31)
+                            )
+                            if start_price and result["current_price"]:
+                                result["one_month_return"] = round(
+                                    (result["current_price"] - start_price) / start_price * 100, 2
+                                )
+
+                        if "3m" in periods:
+                            start_price = FinanceService._get_history_start_price(
+                                history, today - timedelta(days=90)
+                            )
+                            if start_price and result["current_price"]:
+                                result["three_month_return"] = round(
+                                    (result["current_price"] - start_price) / start_price * 100, 2
+                                )
+
+                        if "1y" in periods:
+                            start_price = FinanceService._get_history_start_price(
+                                history, today - timedelta(days=365)
+                            )
+                            if start_price and result["current_price"]:
+                                result["one_year_return"] = round(
+                                    (result["current_price"] - start_price) / start_price * 100, 2
+                                )
+                    else:
+                        if result["ytd_return"] is None:
+                            result["historical_data_available"] = False
                 except Exception as e:
-                    logger.warning(f"Failed to get mutual fund price for {ticker}: {e}")
+                    logger.warning(f"Failed to get mutual fund history for {ticker}: {e}")
 
             return result
         

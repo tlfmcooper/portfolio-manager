@@ -176,6 +176,98 @@ async def test_get_mutual_fund_info_ytd_return_is_none_when_no_ytd_fields(monkey
 
 
 @pytest.mark.asyncio
+async def test_calculate_ticker_performance_uses_quote_page_ytd_without_calling_history_api(
+    monkeypatch,
+):
+    history_calls = []
+
+    async def fake_get_mutual_fund_info(ticker):
+        return {"current_price": 45.03, "ytd_return": 5.25}
+
+    async def fake_get_mutual_fund_history(ticker, limit=400):
+        history_calls.append(ticker)
+        return None
+
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_info", fake_get_mutual_fund_info)
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_history", fake_get_mutual_fund_history)
+
+    result = await FinanceService.calculate_ticker_performance(
+        "PHN9756.CF", asset_type="mutual_fund", periods=["ytd"]
+    )
+
+    assert result["ytd_return"] == 5.25
+    assert result["current_price"] == 45.03
+    assert result["historical_data_available"] is True
+    assert history_calls == [], "history API must not be called when quote page has YTD"
+
+
+@pytest.mark.asyncio
+async def test_calculate_ticker_performance_falls_back_to_history_when_quote_page_lacks_ytd(
+    monkeypatch,
+):
+    fixed_now = datetime(2026, 4, 5)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz is None else fixed_now.astimezone(tz)
+
+    async def fake_get_mutual_fund_info(ticker):
+        return {"current_price": None, "ytd_return": None}
+
+    async def fake_get_mutual_fund_history(ticker, limit=400):
+        return [
+            {"raw": {"tradeTime": "2026-01-02", "lastPrice": 100.0}},
+            {"raw": {"tradeTime": "2026-04-02", "lastPrice": 120.0}},
+        ]
+
+    monkeypatch.setattr(finance_service, "datetime", _FixedDatetime)
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_info", fake_get_mutual_fund_info)
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_history", fake_get_mutual_fund_history)
+
+    result = await FinanceService.calculate_ticker_performance(
+        "PHN9756.CF", asset_type="mutual_fund", periods=["ytd"]
+    )
+
+    assert result["ytd_return"] == 20.0
+    assert result["current_price"] == 120.0
+
+
+@pytest.mark.asyncio
+async def test_calculate_ticker_performance_uses_history_for_non_ytd_periods_even_when_quote_has_ytd(
+    monkeypatch,
+):
+    fixed_now = datetime(2026, 4, 5)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz is None else fixed_now.astimezone(tz)
+
+    async def fake_get_mutual_fund_info(ticker):
+        return {"current_price": 120.0, "ytd_return": 20.0}
+
+    async def fake_get_mutual_fund_history(ticker, limit=400):
+        return [
+            {"raw": {"tradeTime": "2026-01-02", "lastPrice": 100.0}},
+            {"raw": {"tradeTime": "2026-03-05", "lastPrice": 110.0}},
+            {"raw": {"tradeTime": "2026-04-02", "lastPrice": 120.0}},
+        ]
+
+    monkeypatch.setattr(finance_service, "datetime", _FixedDatetime)
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_info", fake_get_mutual_fund_info)
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_history", fake_get_mutual_fund_history)
+
+    result = await FinanceService.calculate_ticker_performance(
+        "PHN9756.CF", asset_type="mutual_fund", periods=["ytd", "1m", "3m"]
+    )
+
+    assert result["ytd_return"] == 20.0
+    assert result["one_month_return"] is not None
+    assert result["three_month_return"] is not None
+
+
+@pytest.mark.asyncio
 async def test_calculate_ticker_performance_uses_barchart_history_for_mutual_funds(monkeypatch) -> None:
     fixed_now = datetime(2026, 4, 5)
 
@@ -196,7 +288,11 @@ async def test_calculate_ticker_performance_uses_barchart_history_for_mutual_fun
             {"raw": {"tradeTime": "2026-04-02", "lastPrice": 120.0}},
         ]
 
+    async def fake_get_mutual_fund_info(_ticker):
+        return {"current_price": None, "ytd_return": None}
+
     monkeypatch.setattr(finance_service, "datetime", _FixedDateTime)
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_info", fake_get_mutual_fund_info)
     monkeypatch.setattr(FinanceService, "_get_mutual_fund_history", fake_history)
 
     result = await FinanceService.calculate_ticker_performance(
