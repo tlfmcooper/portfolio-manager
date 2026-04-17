@@ -110,6 +110,33 @@ class FinanceService:
             return None
 
     @staticmethod
+    def _extract_ytd_from_raw_data(raw_data: dict, last_price: float) -> Optional[float]:
+        """Extract YTD return % from a Barchart quote-page raw data dict.
+
+        Tries direct YTD percentage fields first, then falls back to computing
+        from a year-start price field. Returns None if neither is present.
+        """
+        for field in ("ytdPercentChange", "percentChangeYtd", "ytdReturn", "ytdChangePercent"):
+            val = raw_data.get(field)
+            if val is not None:
+                try:
+                    return round(float(val), 2)
+                except (ValueError, TypeError):
+                    pass
+
+        for field in ("previousYearClose", "startOfYearPrice", "yearStartPrice", "prevYearClose"):
+            val = raw_data.get(field)
+            if val is not None:
+                try:
+                    year_start = float(val)
+                    if year_start > 0:
+                        return round((last_price - year_start) / year_start * 100, 2)
+                except (ValueError, TypeError):
+                    pass
+
+        return None
+
+    @staticmethod
     async def _get_mutual_fund_info(ticker: str) -> Optional[Dict[str, Any]]:
         """Fetch mutual fund information from Barchart with retry logic."""
         max_retries = 3
@@ -174,6 +201,15 @@ class FinanceService:
                     except (ValueError, ZeroDivisionError):
                         pass
 
+                ytd_return = None
+                if last_price is not None:
+                    ytd_return = FinanceService._extract_ytd_from_raw_data(
+                        raw_data, float(last_price)
+                    )
+                logger.debug(
+                    f"Barchart quote page raw keys for {ticker}: {sorted(raw_data.keys())}"
+                )
+
                 # Asset data contains fields that map to Asset model + display fields
                 asset_data = {
                     'ticker': ticker.upper(),
@@ -185,7 +221,8 @@ class FinanceService:
                     # Additional fields for display (not stored in Asset model, filtered out before saving)
                     'change_percent': change_percent,
                     'change': change,
-                    'previous_close': float(previous_price) if previous_price else None
+                    'previous_close': float(previous_price) if previous_price else None,
+                    'ytd_return': ytd_return,
                 }
 
                 logger.info(f"Successfully fetched mutual fund data for {ticker}: price={last_price}, prev={previous_price}, change={change_percent:.2f}%")

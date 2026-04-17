@@ -70,6 +70,111 @@ async def test_get_mutual_fund_history_uses_barchart_proxy_with_xsrf(monkeypatch
     assert fake_session.calls[1]["params"]["orderDir"] == "asc"
 
 
+# ── _extract_ytd_from_raw_data ──────────────────────────────────────────────
+
+
+def test_extract_ytd_uses_ytd_percent_change_field():
+    raw = {"lastPrice": 45.03, "ytdPercentChange": 5.25}
+    result = FinanceService._extract_ytd_from_raw_data(raw, 45.03)
+    assert result == 5.25
+
+
+def test_extract_ytd_uses_previous_year_close_when_percent_absent():
+    raw = {"lastPrice": 45.03, "previousYearClose": 42.0}
+    result = FinanceService._extract_ytd_from_raw_data(raw, 45.03)
+    assert result == round((45.03 - 42.0) / 42.0 * 100, 2)
+
+
+def test_extract_ytd_returns_none_when_no_ytd_fields():
+    raw = {"lastPrice": 45.03, "previousPrice": 44.80}
+    result = FinanceService._extract_ytd_from_raw_data(raw, 45.03)
+    assert result is None
+
+
+# ── _get_mutual_fund_info with ytd_return ────────────────────────────────────
+
+
+def _make_barchart_quote_html(raw_fields: dict) -> str:
+    """Build minimal Barchart quote HTML the existing parser can handle.
+
+    The parser does:
+      re.findall(r"{.*}", str(div))  →  ast.literal_eval  →  result[2]['raw']
+    A single-line tuple expression satisfies all three steps.
+    """
+    raw_repr = repr(raw_fields)
+    content = f"{{'meta': 'a'}}, {{'other': 'b'}}, {{'raw': {raw_repr}}}"
+    return (
+        '<html><body>'
+        '<div class="bc-quote-overview row">'
+        f'{content}'
+        '</div></body></html>'
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_mutual_fund_info_returns_ytd_from_ytd_percent_change(monkeypatch):
+    html = _make_barchart_quote_html(
+        {"lastPrice": 45.03, "previousPrice": 44.80, "ytdPercentChange": 5.25}
+    )
+
+    class _Resp:
+        text = html
+        def raise_for_status(self): pass
+
+    class _Sess:
+        cookies = type("C", (), {"get": staticmethod(lambda k: None)})()
+        def get(self, url, **kw): return _Resp()
+
+    monkeypatch.setattr(finance_service, "session", _Sess())
+    result = await FinanceService._get_mutual_fund_info("PHN9756.CF")
+
+    assert result is not None
+    assert result["current_price"] == 45.03
+    assert result["ytd_return"] == 5.25
+
+
+@pytest.mark.asyncio
+async def test_get_mutual_fund_info_returns_ytd_from_previous_year_close(monkeypatch):
+    html = _make_barchart_quote_html(
+        {"lastPrice": 45.03, "previousPrice": 44.80, "previousYearClose": 42.0}
+    )
+
+    class _Resp:
+        text = html
+        def raise_for_status(self): pass
+
+    class _Sess:
+        cookies = type("C", (), {"get": staticmethod(lambda k: None)})()
+        def get(self, url, **kw): return _Resp()
+
+    monkeypatch.setattr(finance_service, "session", _Sess())
+    result = await FinanceService._get_mutual_fund_info("PHN9756.CF")
+
+    assert result is not None
+    assert result["ytd_return"] == round((45.03 - 42.0) / 42.0 * 100, 2)
+
+
+@pytest.mark.asyncio
+async def test_get_mutual_fund_info_ytd_return_is_none_when_no_ytd_fields(monkeypatch):
+    html = _make_barchart_quote_html(
+        {"lastPrice": 45.03, "previousPrice": 44.80}
+    )
+
+    class _Resp:
+        text = html
+        def raise_for_status(self): pass
+
+    class _Sess:
+        cookies = type("C", (), {"get": staticmethod(lambda k: None)})()
+        def get(self, url, **kw): return _Resp()
+
+    monkeypatch.setattr(finance_service, "session", _Sess())
+    result = await FinanceService._get_mutual_fund_info("PHN9756.CF")
+
+    assert result is not None
+    assert result.get("ytd_return") is None
+
+
 @pytest.mark.asyncio
 async def test_calculate_ticker_performance_uses_barchart_history_for_mutual_funds(monkeypatch) -> None:
     fixed_now = datetime(2026, 4, 5)
