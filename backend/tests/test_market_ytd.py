@@ -63,3 +63,55 @@ async def test_get_ytd_data_falls_back_to_mutual_fund_fetch_for_cf_tickers(monke
     assert result["ytd_data"] == [{"ticker": "PHN9756.CF", "ytd_return": 12.34}]
     assert fake_redis.saved is not None
     assert fake_redis.saved[1] == 86400
+
+
+@pytest.mark.asyncio
+async def test_get_ytd_data_isolates_per_ticker_failure(monkeypatch) -> None:
+    """One failing ticker must not nullify the others."""
+    import pandas as pd
+
+    portfolio = SimpleNamespace(id=8, currency="USD")
+    holdings = [
+        SimpleNamespace(ticker="AAPL", asset=SimpleNamespace(asset_type="stock")),
+        SimpleNamespace(ticker="BROKEN", asset=SimpleNamespace(asset_type="stock")),
+        SimpleNamespace(ticker="GOOG", asset=SimpleNamespace(asset_type="stock")),
+    ]
+
+    class _FakeRedis:
+        async def get(self, _k): return None
+        async def set(self, _k, v, ttl=None): pass
+
+    async def fake_portfolio(_db, _uid): return portfolio
+    async def fake_holdings(_db, _pid): return holdings
+    async def fake_redis(): return _FakeRedis()
+
+    class _FakeTicker:
+        def __init__(self, symbol):
+            self._symbol = symbol
+
+        def history(self, **kwargs):
+            if "BROKEN" in self._symbol:
+                raise RuntimeError("simulated network failure")
+            return pd.DataFrame({"Close": [100.0, 110.0]})
+
+        @property
+        def info(self):
+            raise RuntimeError("no info in test")
+
+    monkeypatch.setattr(market, "get_user_portfolio", fake_portfolio)
+    monkeypatch.setattr(market, "get_portfolio_holdings", fake_holdings)
+    monkeypatch.setattr(market, "get_redis_client", fake_redis)
+
+    import yfinance as _yf
+    monkeypatch.setattr(_yf, "Ticker", _FakeTicker)
+
+    result = await market.get_ytd_data(
+        currency=None,
+        current_user=SimpleNamespace(id=1),
+        db=object(),
+    )
+
+    ytd = {d["ticker"]: d["ytd_return"] for d in result["ytd_data"]}
+    assert ytd["AAPL"] == round((110.0 - 100.0) / 100.0 * 100, 2)
+    assert ytd["GOOG"] == round((110.0 - 100.0) / 100.0 * 100, 2)
+    assert ytd["BROKEN"] is None

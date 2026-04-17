@@ -433,13 +433,14 @@ async def get_ytd_data(
 
     ytd_map: Dict[str, Optional[float]] = {}
 
-    # ── Stocks / ETFs / Crypto: single batch yfinance download ──────────────
+    # ── Stocks / ETFs / Crypto: per-ticker parallel history(end=yesterday) ────
     if other_holdings:
         import yfinance as yf
-        from datetime import datetime as dt
+        from datetime import datetime as _dt, date as _date, timedelta as _td
 
-        year_start = dt(dt.now().year, 1, 1)
-        # Crypto tickers need "-USD" suffix for yfinance
+        year_start = _dt(_dt.now().year, 1, 1)
+        yesterday = (_date.today() - _td(days=1)).strftime("%Y-%m-%d")
+
         def yf_symbol(holding):
             t = holding.ticker
             if holding.asset and holding.asset.asset_type == "crypto" and "-USD" not in t.upper():
@@ -447,48 +448,32 @@ async def get_ytd_data(
             return t
 
         symbol_map = {yf_symbol(h): h.ticker for h in other_holdings}
-        symbols = list(symbol_map.keys())
 
-        try:
-            loop = asyncio.get_event_loop()
-            # yfinance download is blocking — run in thread pool
-            hist = await loop.run_in_executor(
-                None,
-                lambda: yf.download(symbols, start=year_start, progress=False, auto_adjust=True, threads=True)
-            )
+        def _fetch_one_ytd(yf_sym: str) -> Optional[float]:
+            """Fetch YTD return for one ticker using previous-day close. Runs in thread pool."""
+            try:
+                hist = yf.Ticker(yf_sym).history(start=year_start, end=yesterday)
+                if hist.empty:
+                    return None
+                series = hist["Close"].dropna()
+                if len(series) < 2:
+                    return None
+                return round(
+                    (float(series.iloc[-1]) - float(series.iloc[0])) / float(series.iloc[0]) * 100, 2
+                )
+            except Exception as e:
+                logger.warning(f"Per-ticker YTD fetch failed for {yf_sym}: {e}")
+                return None
 
-            if hist is not None and not hist.empty:
-                import pandas as _pd
-                # yfinance multi-ticker download → MultiIndex columns ('Close','AAPL')
-                # Single-ticker download (older yfinance) → flat columns 'Close', 'Open'
-                if isinstance(hist.columns, _pd.MultiIndex):
-                    close = hist["Close"]   # DataFrame with ticker symbols as columns
-                else:
-                    # Flat: rename Close → ticker so the lookup below works uniformly
-                    close = hist[["Close"]].rename(columns={"Close": symbols[0]}) if len(symbols) == 1 else hist
+        async def _fetch_one_async(orig_ticker: str, yf_sym: str):
+            val = await loop.run_in_executor(None, lambda: _fetch_one_ytd(yf_sym))
+            return orig_ticker, val
 
-                for yf_sym, orig_ticker in symbol_map.items():
-                    try:
-                        col = yf_sym if yf_sym in close.columns else (
-                            orig_ticker if orig_ticker in close.columns else None
-                        )
-                        if col is None:
-                            ytd_map[orig_ticker] = None
-                            continue
-                        series = close[col].dropna()
-                        if len(series) >= 2:
-                            ytd_map[orig_ticker] = round(
-                                (float(series.iloc[-1]) - float(series.iloc[0])) / float(series.iloc[0]) * 100, 2
-                            )
-                        else:
-                            ytd_map[orig_ticker] = None
-                    except Exception as e:
-                        logger.warning(f"YTD parse failed for {orig_ticker}: {e}")
-                        ytd_map[orig_ticker] = None
-        except Exception as e:
-            logger.warning(f"Batch yfinance YTD download failed: {e}")
-            for h in other_holdings:
-                ytd_map[h.ticker] = None
+        loop = asyncio.get_event_loop()
+        pairs = await asyncio.gather(
+            *[_fetch_one_async(orig, yf_sym) for yf_sym, orig in symbol_map.items()]
+        )
+        ytd_map.update(dict(pairs))
 
     # ── Mutual funds: run sequentially in one thread ─────────────────────────
     # The Barchart XSRF fetch uses a shared module-level requests.Session, so
