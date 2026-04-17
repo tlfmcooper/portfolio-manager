@@ -3,7 +3,6 @@ Finance service for fetching asset data from Yahoo Finance and other sources.
 """
 import yfinance as yf
 import logging
-import requests
 import ast
 import re
 import time
@@ -14,15 +13,16 @@ from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 
-# Session with connection pooling for better performance
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(
-    pool_connections=10,
-    pool_maxsize=20,
-    max_retries=0  # We'll handle retries manually
-)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# Use curl_cffi to impersonate Chrome at the TLS level, bypassing Cloudflare/bot
+# protection on Barchart and similar data providers that block datacenter IPs.
+try:
+    from curl_cffi import requests
+    session = requests.Session(impersonate="chrome")
+    logger.info("Barchart session using curl_cffi (Chrome impersonation)")
+except ImportError:
+    import requests
+    session = requests.Session()
+    logger.warning("curl_cffi not available; Barchart may be blocked on VPS IPs")
 
 
 class FinanceService:

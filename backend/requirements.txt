@@ -29,6 +29,7 @@ seaborn>=0.12.0
 
 # Finance & HTTP
 yfinance>=0.2.0
+curl_cffi>=0.7.0
 httpx>=0.25.0
 jsonschema>=4.23.0
 PyYAML>=6.0.2
