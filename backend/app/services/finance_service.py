@@ -235,15 +235,16 @@ class FinanceService:
                     return None
                 # Continue to next retry attempt
 
-            except requests.exceptions.RequestException as e:
+            except Exception as e:
+                # 4xx errors (IP block, 403) are permanent — don't retry.
+                status = getattr(getattr(e, 'response', None), 'status_code', None)
+                if status and 400 <= status < 500:
+                    logger.warning(f"Permanent {status} from Barchart for {ticker}; skipping retries")
+                    return None
                 logger.error(f"Request error fetching mutual fund data for {ticker}: {str(e)}")
                 if attempt == max_retries - 1:
                     return None
                 # Continue to next retry attempt
-
-            except Exception as e:
-                logger.error(f"Error fetching mutual fund data for {ticker}: {str(e)}")
-                return None
 
         return None
 
@@ -324,21 +325,15 @@ class FinanceService:
                 logger.info(f"Successfully fetched {len(rows)} historical mutual fund rows for {ticker}")
                 return rows
 
-            except requests.exceptions.Timeout as e:
-                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries} for mutual fund history {ticker}: {str(e)}")
-                if attempt == max_retries - 1:
-                    logger.error(f"Failed to fetch mutual fund history for {ticker} after {max_retries} attempts")
-                    return None
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request error fetching mutual fund history for {ticker}: {str(e)}")
-                if attempt == max_retries - 1:
-                    return None
-            except ValueError as e:
-                logger.error(f"Invalid JSON fetching mutual fund history for {ticker}: {str(e)}")
-                return None
             except Exception as e:
+                # 4xx errors are permanent — don't retry.
+                status = getattr(getattr(e, 'response', None), 'status_code', None)
+                if status and 400 <= status < 500:
+                    logger.warning(f"Permanent {status} from Barchart history for {ticker}; skipping retries")
+                    return None
                 logger.error(f"Error fetching mutual fund history for {ticker}: {str(e)}")
-                return None
+                if attempt == max_retries - 1:
+                    return None
 
         return None
 
