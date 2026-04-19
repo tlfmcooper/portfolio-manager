@@ -167,6 +167,7 @@ class Settings:
     MCP_ENABLE_SSE: bool = True
     MCP_SSE_HEARTBEAT_INTERVAL: int = 10
     MCP_API_KEYS_JSON: str = ""
+    BARCHART_PROXY_URL: Optional[str] = None
 
     def __post_init__(self) -> None:
         self.PROJECT_NAME = os.getenv("PROJECT_NAME", self.PROJECT_NAME)
@@ -206,6 +207,7 @@ class Settings:
         self.MCP_ENABLE_SSE = _parse_bool(os.getenv("MCP_ENABLE_SSE"), self.MCP_ENABLE_SSE)
         self.MCP_SSE_HEARTBEAT_INTERVAL = _parse_int(os.getenv("MCP_SSE_HEARTBEAT_INTERVAL"), self.MCP_SSE_HEARTBEAT_INTERVAL)
         self.MCP_API_KEYS_JSON = os.getenv("MCP_API_KEYS_JSON", self.MCP_API_KEYS_JSON)
+        self.BARCHART_PROXY_URL = os.getenv("BARCHART_PROXY_URL") or None
 
 
 # Create settings instance

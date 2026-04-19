@@ -15,10 +15,18 @@ logger = logging.getLogger(__name__)
 
 # Use curl_cffi to impersonate Chrome at the TLS level, bypassing Cloudflare/bot
 # protection on Barchart and similar data providers that block datacenter IPs.
+# When BARCHART_PROXY_URL is set (e.g. socks5://localhost:1055 via Tailscale sidecar),
+# all Barchart requests exit through the configured proxy (residential IP on NAS).
 try:
     from curl_cffi import requests
-    session = requests.Session(impersonate="chrome")
-    logger.info("Barchart session using curl_cffi (Chrome impersonation)")
+    from app.core.config import settings as _settings
+    _proxy = _settings.BARCHART_PROXY_URL
+    _proxies = {"http": _proxy, "https": _proxy} if _proxy else {}
+    session = requests.Session(impersonate="chrome", proxies=_proxies)
+    logger.info(
+        "Barchart session using curl_cffi (Chrome impersonation)%s",
+        f" + proxy {_proxy}" if _proxy else "",
+    )
 except ImportError:
     import requests
     session = requests.Session()
