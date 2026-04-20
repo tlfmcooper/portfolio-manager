@@ -415,8 +415,8 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd:v3"
-    backup_key = f"portfolio:{portfolio.id}:ytd:v3:backup"
+    cache_key = f"portfolio:{portfolio.id}:ytd:v4"
+    backup_key = f"portfolio:{portfolio.id}:ytd:v4:backup"
     redis_client = await get_redis_client()
 
     # Try primary cache first (24h TTL)
@@ -476,28 +476,17 @@ async def get_ytd_data(
         )
         ytd_map.update(dict(pairs))
 
-    # ── Mutual funds: run sequentially in one thread ─────────────────────────
-    # The Barchart XSRF fetch uses a shared module-level requests.Session, so
-    # parallel threads would clobber each other's cookies. Sequential is safe
-    # and still non-blocking for the main event loop.
+    # ── Mutual funds: call directly in async context ─────────────────────────
     if mutual_fund_holdings:
-        def sync_all_mf_ytd():
-            import asyncio as _aio
-            results: Dict[str, Optional[float]] = {}
-            for h in mutual_fund_holdings:
-                try:
-                    perf = _aio.run(FinanceService.calculate_ticker_performance(
-                        h.ticker, "mutual_fund", ["ytd"]
-                    ))
-                    results[h.ticker] = perf.get("ytd_return")
-                except Exception as e:
-                    logger.warning(f"Mutual fund YTD failed for {h.ticker}: {e}")
-                    results[h.ticker] = None
-            return results
-
-        loop = asyncio.get_event_loop()
-        mf_map = await loop.run_in_executor(None, sync_all_mf_ytd)
-        ytd_map.update(mf_map)
+        for h in mutual_fund_holdings:
+            try:
+                perf = await FinanceService.calculate_ticker_performance(
+                    h.ticker, "mutual_fund", ["ytd"]
+                )
+                ytd_map[h.ticker] = perf.get("ytd_return")
+            except Exception as e:
+                logger.warning(f"Mutual fund YTD failed for {h.ticker}: {e}")
+                ytd_map[h.ticker] = None
 
     missing_holdings = [h for h in valid_holdings if ytd_map.get(h.ticker) is None]
     for holding in missing_holdings:
