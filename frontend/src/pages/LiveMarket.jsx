@@ -737,8 +737,20 @@ const LiveMarket = () => {
                 <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${getColorClass(portfolioDailyReturn)}`}>
                   {formatPercentage(portfolioDailyReturn)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  —
+                <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium ${
+                  (() => {
+                    const coveredMv = holdings.reduce((s, h) => ytdMap[h.ticker] != null ? s + h.market_value : s, 0);
+                    if (coveredMv === 0) return '';
+                    const wYtd = holdings.reduce((s, h) => ytdMap[h.ticker] != null ? s + ytdMap[h.ticker] * h.market_value : s, 0) / coveredMv;
+                    return getColorClass(wYtd);
+                  })()
+                }`}>
+                  {(() => {
+                    const coveredMv = holdings.reduce((s, h) => ytdMap[h.ticker] != null ? s + h.market_value : s, 0);
+                    if (coveredMv === 0) return <span style={{ color: 'var(--color-text-secondary)' }}>—</span>;
+                    const wYtd = holdings.reduce((s, h) => ytdMap[h.ticker] != null ? s + ytdMap[h.ticker] * h.market_value : s, 0) / coveredMv;
+                    return formatPercentage(wYtd);
+                  })()}
                 </td>
                 <td className={`px-6 py-4 whitespace-nowrap text-right text-sm ${getColorClass(totalGainLoss)}`}>
                   {formatCurrency(totalGainLoss)}
