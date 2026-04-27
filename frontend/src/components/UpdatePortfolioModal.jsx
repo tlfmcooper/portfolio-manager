@@ -3,9 +3,11 @@ import { X } from 'lucide-react';
 import BuyAssetForm from './forms/BuyAssetForm';
 import SellAssetForm from './forms/SellAssetForm';
 import EditAssetForm from './forms/EditAssetForm';
+import { useDataCache } from '../contexts/DataCacheContext';
 
 const UpdatePortfolioModal = ({ isOpen, onClose, onPortfolioUpdated }) => {
   const [activeTab, setActiveTab] = useState('buy');
+  const { invalidateCache } = useDataCache();
 
   if (!isOpen) {
     return null;
@@ -13,6 +15,12 @@ const UpdatePortfolioModal = ({ isOpen, onClose, onPortfolioUpdated }) => {
 
   const handleAssetUpdated = () => {
     // Callback to refresh portfolio data after any operation
+    invalidateCache([
+      'dashboard_overview',
+      'portfolio_metrics',
+      'holdings',
+      'allocation'
+    ]);
     if (onPortfolioUpdated) {
       onPortfolioUpdated();
     }

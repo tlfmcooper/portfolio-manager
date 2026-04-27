@@ -3,12 +3,20 @@ import BuyAssetForm from '../components/forms/BuyAssetForm';
 import SellAssetForm from '../components/forms/SellAssetForm';
 import EditAssetForm from '../components/forms/EditAssetForm';
 import AddCashFormInline from '../components/forms/AddCashFormInline';
+import { useDataCache } from '../contexts/DataCacheContext';
 
 const UpdatePortfolio = () => {
   const [activeTab, setActiveTab] = useState('buy');
+  const { invalidateCache } = useDataCache();
 
   const handleAssetUpdated = () => {
     // Callback to refresh portfolio data after any operation
+    invalidateCache([
+      'dashboard_overview',
+      'portfolio_metrics',
+      'holdings',
+      'allocation'
+    ]);
     console.log('Portfolio updated successfully');
     // Could add toast notification here
   };

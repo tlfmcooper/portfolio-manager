@@ -2,14 +2,15 @@
 API endpoints for asset onboarding (ticker, quantity, unit cost).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.models.asset import Asset
 from app.models.holding import Holding
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionType
+from app.schemas.holding_extended import AssetSellRequest
 from app.services.finance_service import FinanceService
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Tuple
@@ -26,6 +27,40 @@ from app.schemas import PortfolioCreate # Import schema for creating portfolio
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def invalidate_portfolio_transaction_caches(portfolio_id: int):
+    """Invalidate cached portfolio data after buy/sell cash mutations."""
+    try:
+        from app.core.redis_client import get_redis_client
+
+        redis_client = await get_redis_client()
+        for currency in ["USD", "CAD"]:
+            await redis_client.delete(f"dashboard:overview:{portfolio_id}:{currency}")
+            await redis_client.delete(f"portfolio:{portfolio_id}:holdings:{currency}")
+        await redis_client.delete(f"portfolio:{portfolio_id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio_id}:analytics_cache")
+    except Exception as e:
+        logger.warning(f"Failed to invalidate portfolio caches for {portfolio_id}: {e}")
+
+
+async def convert_amount_to_portfolio_currency(
+    amount: float,
+    amount_currency: str,
+    portfolio_currency: str
+) -> Tuple[float, float]:
+    """Convert an amount into the portfolio currency."""
+    source_currency = (amount_currency or portfolio_currency or "USD").upper()
+    target_currency = (portfolio_currency or "USD").upper()
+
+    if source_currency == target_currency:
+        return amount, 1.0
+
+    from app.services.exchange_rate_service import get_exchange_rate_service
+
+    exchange_service = get_exchange_rate_service()
+    exchange_rate = await exchange_service.get_exchange_rate(source_currency, target_currency)
+    return amount * exchange_rate, exchange_rate
 
 
 class AssetOnboardingRequest(BaseModel):
@@ -139,6 +174,7 @@ async def batch_fetch_asset_data(
 @router.post("/onboard", status_code=201, response_model=dict)
 async def onboard_asset(
     request: Request,
+    affect_cash: bool = Query(False, description="When true, treat this as a real buy and debit portfolio cash."),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -299,17 +335,11 @@ async def onboard_asset(
             # Calculate purchase cost
             purchase_cost = item.quantity * item.average_cost
 
-            # Check if portfolio has sufficient cash (optional validation)
-            # Uncomment if you want to enforce cash balance checks on buy
-            # if portfolio.cash_balance < purchase_cost:
-            #     errors.append(f"Insufficient cash to buy {item.quantity} shares of {ticker}. Required: {purchase_cost}, Available: {portfolio.cash_balance}")
-            #     continue
-
             # Create transaction (buy)
             transaction = Transaction(
                 portfolio_id=holding_to_use.portfolio_id,
                 asset_id=asset_obj.id,
-                transaction_type="BUY",
+                transaction_type=TransactionType.BUY,
                 quantity=item.quantity,
                 price=item.average_cost,
                 transaction_date=datetime.utcnow(),
@@ -317,9 +347,16 @@ async def onboard_asset(
             db.add(transaction)
             await db.flush()
 
-            # Onboarding imports represent an existing position snapshot, not a new buy order.
-            # Do not mutate cash balance here or the portfolio summary will double-count the
-            # cost basis as both invested capital and negative cash.
+            purchase_cost_portfolio_currency = purchase_cost
+            exchange_rate = 1.0
+            if affect_cash:
+                purchase_cost_portfolio_currency, exchange_rate = await convert_amount_to_portfolio_currency(
+                    purchase_cost,
+                    item.currency,
+                    portfolio.currency
+                )
+                portfolio.cash_balance -= purchase_cost_portfolio_currency
+                portfolio.updated_at = datetime.utcnow()
 
             created_assets.append(
                 {
@@ -328,6 +365,11 @@ async def onboard_asset(
                     "quantity": item.quantity, # This quantity is for the current transaction
                     "average_cost": item.average_cost,
                     "purchase_cost": purchase_cost,
+                    "purchase_cost_portfolio_currency": purchase_cost_portfolio_currency,
+                    "purchase_cost_currency": portfolio.currency,
+                    "cash_affected": affect_cash,
+                    "exchange_rate": exchange_rate,
+                    "new_cash_balance": portfolio.cash_balance if affect_cash else None,
                     "current_price": asset_obj.current_price,
                     "market_value": holding_to_use.market_value,
                     "asset_id": asset_obj.id,
@@ -343,28 +385,60 @@ async def onboard_asset(
             errors.append(f"Error processing {item.ticker}: {str(e)}")
     if created_assets:
         await db.commit()
+        if affect_cash:
+            await invalidate_portfolio_transaction_caches(portfolio_id)
     return {"assets": created_assets, "errors": errors}
 
 
 @router.post("/sell", status_code=201, response_model=dict)
-async def sell_asset(data: AssetOnboardingRequest, db: AsyncSession = Depends(get_db)):
+async def sell_asset(
+    data: AssetSellRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
-    Sell (delete) asset from holdings and create a sell transaction.
+    Sell an asset from the authenticated user's portfolio and credit cash.
     """
     try:
         ticker = data.ticker.upper().strip()
+        portfolio = await get_user_portfolio(db, current_user.id)
+        if not portfolio:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
         # Find holding
         stmt = select(Holding).where(
-            Holding.ticker == ticker, Holding.portfolio_id == 1
+            Holding.ticker == ticker,
+            Holding.portfolio_id == portfolio.id
         )
         result = await db.execute(stmt)
         holding = result.scalar_one_or_none()
         if not holding or holding.quantity < data.quantity:
             raise HTTPException(status_code=400, detail="Not enough quantity to sell")
+
+        asset_obj = await db.get(Asset, holding.asset_id)
+
+        from app.crud.transaction import calculate_realized_gain_loss_fifo
+
+        realized_gain_loss = await calculate_realized_gain_loss_fifo(
+            db=db,
+            portfolio_id=portfolio.id,
+            asset_id=holding.asset_id,
+            sell_quantity=data.quantity,
+            sell_price=data.price
+        )
+
+        sale_proceeds_original = data.quantity * data.price
+        asset_currency = asset_obj.currency if asset_obj and asset_obj.currency else "USD"
+        sale_proceeds, exchange_rate = await convert_amount_to_portfolio_currency(
+            sale_proceeds_original,
+            asset_currency,
+            portfolio.currency
+        )
+
         # Update holding
         holding.quantity -= data.quantity
         holding.market_value = holding.quantity * (
-            holding.current_price or data.average_cost
+            holding.current_price or data.price
         )
         holding.cost_basis = holding.quantity * holding.average_cost
 
@@ -376,18 +450,36 @@ async def sell_asset(data: AssetOnboardingRequest, db: AsyncSession = Depends(ge
         transaction = Transaction(
             portfolio_id=holding.portfolio_id,
             asset_id=holding.asset_id, # Use asset_id instead of ticker
-            transaction_type="SELL",
+            transaction_type=TransactionType.SELL,
             quantity=data.quantity,
-            price=data.average_cost,
+            price=data.price,
             transaction_date=datetime.utcnow(),
+            realized_gain_loss=realized_gain_loss,
         )
         db.add(transaction)
+
+        portfolio.cash_balance += sale_proceeds
+        portfolio.updated_at = datetime.utcnow()
+
         await db.commit()
+        await invalidate_portfolio_transaction_caches(portfolio.id)
+
         return {
             "success": True,
             "message": f"Sold {data.quantity} of {ticker}",
             "transaction_id": transaction.id,
+            "quantity_sold": data.quantity,
+            "sale_price": data.price,
+            "sale_proceeds_original": sale_proceeds_original,
+            "sale_proceeds_original_currency": asset_currency,
+            "sale_proceeds": sale_proceeds,
+            "sale_proceeds_currency": portfolio.currency,
+            "exchange_rate": exchange_rate,
+            "realized_gain_loss": realized_gain_loss,
+            "new_cash_balance": portfolio.cash_balance,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error selling {data.ticker}: {str(e)}")
         raise HTTPException(

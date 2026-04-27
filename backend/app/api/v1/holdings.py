@@ -24,12 +24,26 @@ from app.schemas.transaction import TransactionCreate
 from app.utils.dependencies import get_current_active_user
 from app.models import User
 from app.models.holding import Holding as HoldingModel
+from app.models.asset import Asset
 from app.services.exchange_rate_service import get_exchange_rate_service
 from app.services.finance_service import FinanceService
 from app.core.redis_client import get_redis_client
 import json
 
 router = APIRouter()
+
+
+async def invalidate_portfolio_transaction_caches(portfolio_id: int):
+    """Invalidate cached portfolio data after buy/sell cash mutations."""
+    try:
+        redis_client = await get_redis_client()
+        for currency_code in ["USD", "CAD"]:
+            await redis_client.delete(f"dashboard:overview:{portfolio_id}:{currency_code}")
+            await redis_client.delete(f"portfolio:{portfolio_id}:holdings:{currency_code}")
+        await redis_client.delete(f"portfolio:{portfolio_id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio_id}:analytics_cache")
+    except Exception:
+        pass
 
 
 @router.get("/")
@@ -367,11 +381,13 @@ async def sell_asset(
         sell_price=sell_request.price
     )
 
+    asset = await db.get(Asset, holding.asset_id)
+
     # Calculate sale proceeds in asset's currency
     sale_proceeds_original = sell_request.quantity * sell_request.price
 
     # Get asset currency and portfolio currency for conversion
-    asset_currency = holding.asset.currency if holding.asset else "USD"
+    asset_currency = asset.currency if asset and asset.currency else "USD"
     portfolio_currency = portfolio.currency or "USD"
 
     # Convert sale proceeds to portfolio currency if different
@@ -404,7 +420,7 @@ async def sell_asset(
 
     # Credit cash balance with sale proceeds (converted to portfolio currency)
     from app.crud.portfolio_extended import update_portfolio_cash_balance
-    await update_portfolio_cash_balance(
+    updated_portfolio = await update_portfolio_cash_balance(
         db=db,
         portfolio_id=portfolio.id,
         amount=sale_proceeds,
@@ -412,6 +428,7 @@ async def sell_asset(
     )
 
     await db.commit()
+    await invalidate_portfolio_transaction_caches(portfolio.id)
 
     # Invalidate returns cache so CPPI/Monte Carlo use fresh data
     try:
@@ -430,7 +447,7 @@ async def sell_asset(
         "sale_proceeds": sale_proceeds,
         "sale_proceeds_currency": portfolio_currency,
         "realized_gain_loss": realized_gain_loss,
-        "new_cash_balance": portfolio.cash_balance + sale_proceeds
+        "new_cash_balance": updated_portfolio.cash_balance if updated_portfolio else portfolio.cash_balance
     }
 
 

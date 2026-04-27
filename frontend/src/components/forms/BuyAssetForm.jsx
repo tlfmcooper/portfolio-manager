@@ -34,7 +34,9 @@ const BuyAssetForm = ({ onAssetAdded }) => {
         currency: formData.currency
       }];
 
-      const { data } = await api.post('/assets/onboard', payload);
+      const { data } = await api.post('/assets/onboard', payload, {
+        params: { affect_cash: true }
+      });
 
       if (data.assets && data.assets.length > 0) {
         toast.success(`Successfully bought ${formData.quantity} shares of ${formData.ticker.toUpperCase()}`);

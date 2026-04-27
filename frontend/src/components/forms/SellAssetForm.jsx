@@ -68,7 +68,7 @@ const SellAssetForm = ({ onAssetSold }) => {
       const { data } = await api.post('/assets/sell', {
         ticker: holding.ticker,
         quantity: sellQuantity,
-        average_cost: parseFloat(formData.unit_cost)
+        price: parseFloat(formData.unit_cost)
       });
 
       toast.success(`Successfully sold ${sellQuantity} shares of ${holding.ticker}`);

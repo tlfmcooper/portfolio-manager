@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, Search } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
+import { useDataCache } from '../contexts/DataCacheContext'
 
 const HoldingsView = () => {
   const [data, setData] = useState(null)
@@ -11,22 +12,23 @@ const HoldingsView = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const { api } = useAuth()
   const { currency, formatCurrency } = useCurrency()
+  const { invalidateCache } = useDataCache()
+
+  const fetchData = async () => {
+    try {
+      const response = await api.get('/holdings/', {
+        params: { currency }
+      })
+      setData(response.data?.items || response.data || [])
+    } catch (err) {
+      setError('Failed to fetch holdings data')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await api.get('/holdings/', {
-          params: { currency }
-        })
-        setData(response.data)
-      } catch (err) {
-        setError('Failed to fetch holdings data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchData()
   }, [api, currency])
 
@@ -123,13 +125,19 @@ const HoldingsView = () => {
       const response = await api.post('/assets/sell', {
         ticker: selectedHolding.ticker,
         quantity: parseFloat(sellQuantity),
-        unit_cost: parseFloat(sellUnitCost),
+        price: parseFloat(sellUnitCost),
       })
       if (!response.data.success) {
         throw new Error(response.data.message || 'Failed to sell asset')
       }
       setShowSellModal(false)
-      // Optionally refresh holdings here
+      invalidateCache([
+        'dashboard_overview',
+        'portfolio_metrics',
+        'holdings',
+        'allocation'
+      ])
+      await fetchData()
     } catch (err) {
       setSellError(err.message || 'Failed to sell asset')
     } finally {
@@ -316,7 +324,7 @@ const HoldingsView = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Unit Cost</label>
+                  <label className="block text-sm font-medium text-gray-700">Sell Price</label>
                   <input
                     type="number"
                     value={sellUnitCost}
