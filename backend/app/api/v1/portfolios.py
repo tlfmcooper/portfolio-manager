@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, List, Literal
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
@@ -524,3 +524,105 @@ async def analyze_portfolio(
         holdings_count=len(active_holdings),
         message=message
     )
+
+
+@router.post("/recalculate-cash-from-buys")
+async def recalculate_cash_from_buys(
+    since: Optional[str] = Query(None, description="ISO date YYYY-MM-DD. Defaults to today UTC."),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Retroactively debit cash for BUY transactions that were recorded without
+    affecting cash (before affect_cash was deployed). Call once per date range.
+    """
+    from app.models.transaction import TransactionType
+    from app.models.asset import Asset
+
+    portfolio = await get_user_portfolio(db, current_user.id)
+    if not portfolio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+
+    if since:
+        since_dt = datetime.fromisoformat(since).replace(tzinfo=timezone.utc)
+    else:
+        today = datetime.now(timezone.utc)
+        since_dt = today.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    stmt = (
+        select(Transaction)
+        .where(
+            and_(
+                Transaction.portfolio_id == portfolio.id,
+                Transaction.transaction_type == TransactionType.BUY,
+                Transaction.transaction_date >= since_dt,
+            )
+        )
+        .options(selectinload(Transaction.asset))
+    )
+    result = await db.execute(stmt)
+    buy_transactions = result.scalars().all()
+
+    cash_before = portfolio.cash_balance or 0.0
+
+    if not buy_transactions:
+        return {
+            "adjusted": False,
+            "message": f"No BUY transactions found since {since_dt.date().isoformat()}",
+            "transactions_found": 0,
+            "total_deducted": 0.0,
+            "currency": portfolio.currency,
+            "cash_balance_before": cash_before,
+            "cash_balance_after": cash_before,
+        }
+
+    exchange_service = get_exchange_rate_service()
+    portfolio_currency = portfolio.currency or "USD"
+    total_cost = 0.0
+    breakdown = []
+
+    for txn in buy_transactions:
+        asset_currency = (txn.asset.currency if txn.asset and txn.asset.currency else "USD")
+        cost_original = (txn.quantity or 0.0) * txn.price
+
+        if asset_currency != portfolio_currency:
+            rate = await exchange_service.get_exchange_rate(asset_currency, portfolio_currency)
+            cost_converted = cost_original * rate
+        else:
+            rate = 1.0
+            cost_converted = cost_original
+
+        total_cost += cost_converted
+        breakdown.append({
+            "transaction_id": txn.id,
+            "asset_currency": asset_currency,
+            "cost_original": round(cost_original, 4),
+            "exchange_rate": rate,
+            "cost_portfolio_currency": round(cost_converted, 4),
+        })
+
+    portfolio.cash_balance = cash_before - total_cost
+    portfolio.updated_at = datetime.utcnow()
+    await db.commit()
+
+    try:
+        from app.core.redis_client import get_redis_client
+        redis_client = await get_redis_client()
+        for currency in ["USD", "CAD"]:
+            await redis_client.delete(f"dashboard:overview:{portfolio.id}:{currency}")
+            await redis_client.delete(f"portfolio:{portfolio.id}:holdings:{currency}")
+        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+    except Exception as e:
+        logger.warning(f"Cache invalidation failed: {e}")
+
+    return {
+        "adjusted": True,
+        "since": since_dt.date().isoformat(),
+        "transactions_found": len(buy_transactions),
+        "total_deducted": round(total_cost, 2),
+        "currency": portfolio_currency,
+        "cash_balance_before": round(cash_before, 2),
+        "cash_balance_after": round(portfolio.cash_balance, 2),
+        "breakdown": breakdown,
+    }
