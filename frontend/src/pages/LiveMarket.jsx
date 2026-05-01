@@ -259,17 +259,29 @@ const LiveMarket = () => {
   };
 
   const calculateUnrealizedGainLoss = (holding) => {
-    // CRITICAL FIX: Always calculate from quantity and prices, don't trust cached cost_basis
-    const costBasis = holding.quantity * holding.average_cost;
-    const currentValue = holding.quantity * holding.current_price;
+    if (typeof holding.unrealized_gain_loss === 'number') {
+      return holding.unrealized_gain_loss;
+    }
+
+    const costBasis = typeof holding.cost_basis === 'number'
+      ? holding.cost_basis
+      : holding.quantity * holding.average_cost;
+    const currentValue = typeof holding.market_value === 'number'
+      ? holding.market_value
+      : holding.quantity * holding.current_price;
     return currentValue - costBasis;
   };
 
   const calculateUnrealizedGainLossPercentage = (holding) => {
-    // CRITICAL FIX: Calculate return % directly from prices
-    const costBasis = holding.quantity * holding.average_cost;
+    if (typeof holding.unrealized_gain_loss_percentage === 'number') {
+      return holding.unrealized_gain_loss_percentage;
+    }
+
+    const costBasis = typeof holding.cost_basis === 'number'
+      ? holding.cost_basis
+      : holding.quantity * holding.average_cost;
     const gainLoss = calculateUnrealizedGainLoss(holding);
-    return (gainLoss / costBasis) * 100;
+    return costBasis > 0 ? (gainLoss / costBasis) * 100 : 0;
   };
 
   const getTotalUnrealizedGainLoss = () => {
@@ -279,8 +291,12 @@ const LiveMarket = () => {
   };
 
   const getTotalUnrealizedGainLossPercentage = () => {
-    // CRITICAL FIX: Calculate total cost basis from quantity * average_cost
-    const totalCostBasis = holdings.reduce((sum, h) => sum + (h.quantity * h.average_cost), 0);
+    const totalCostBasis = holdings.reduce((sum, h) => {
+      const costBasis = typeof h.cost_basis === 'number'
+        ? h.cost_basis
+        : h.quantity * h.average_cost;
+      return sum + costBasis;
+    }, 0);
     const totalGainLoss = getTotalUnrealizedGainLoss();
     return totalCostBasis > 0 ? (totalGainLoss / totalCostBasis) * 100 : 0;
   };

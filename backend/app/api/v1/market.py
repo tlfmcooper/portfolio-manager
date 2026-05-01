@@ -41,6 +41,18 @@ def convert_price(price: float, from_currency: str, to_currency: str, exchange_r
     return price
 
 
+def add_unrealized_gain_loss(holding_dict: Dict[str, Any]) -> None:
+    """Add unrealized gain/loss fields from the converted value fields."""
+    cost_basis = holding_dict.get("cost_basis") or 0
+    market_value = holding_dict.get("market_value") or 0
+    unrealized_gain_loss = market_value - cost_basis
+
+    holding_dict["unrealized_gain_loss"] = unrealized_gain_loss
+    holding_dict["unrealized_gain_loss_percentage"] = (
+        (unrealized_gain_loss / cost_basis) * 100 if cost_basis > 0 else 0
+    )
+
+
 @router.get("/live")
 async def get_live_market_data(
     currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
@@ -63,7 +75,7 @@ async def get_live_market_data(
 
     # ── Full-response cache (5 min TTL) ──────────────────────────────────────
     redis_client = await get_redis_client()
-    live_cache_key = f"portfolio:{portfolio.id}:live_market:{display_currency}"
+    live_cache_key = f"portfolio:{portfolio.id}:live_market:v2:{display_currency}"
     cached_response = await redis_client.get(live_cache_key)
     if cached_response:
         logger.info(f"[MARKET_LIVE] Full cache hit for portfolio {portfolio.id}")
@@ -283,6 +295,7 @@ async def get_live_market_data(
                 holding_dict["change_percent"] = 0
                 holding_dict["change"] = 0
 
+            add_unrealized_gain_loss(holding_dict)
             enriched_holdings.append(holding_dict)
 
         early_response = {
@@ -383,6 +396,7 @@ async def get_live_market_data(
                 holding_dict["change_percent"] = 0
                 holding_dict["change"] = 0
 
+        add_unrealized_gain_loss(holding_dict)
         enriched_holdings.append(holding_dict)
 
     response = {

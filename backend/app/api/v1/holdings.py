@@ -40,6 +40,8 @@ async def invalidate_portfolio_transaction_caches(portfolio_id: int):
         for currency_code in ["USD", "CAD"]:
             await redis_client.delete(f"dashboard:overview:{portfolio_id}:{currency_code}")
             await redis_client.delete(f"portfolio:{portfolio_id}:holdings:{currency_code}")
+            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:{currency_code}")
+            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:v2:{currency_code}")
         await redis_client.delete(f"portfolio:{portfolio_id}:returns_cache")
         await redis_client.delete(f"portfolio:{portfolio_id}:analytics_cache")
     except Exception:

@@ -611,6 +611,8 @@ async def recalculate_cash_from_buys(
         for currency in ["USD", "CAD"]:
             await redis_client.delete(f"dashboard:overview:{portfolio.id}:{currency}")
             await redis_client.delete(f"portfolio:{portfolio.id}:holdings:{currency}")
+            await redis_client.delete(f"portfolio:{portfolio.id}:live_market:{currency}")
+            await redis_client.delete(f"portfolio:{portfolio.id}:live_market:v2:{currency}")
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
         await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
     except Exception as e:
