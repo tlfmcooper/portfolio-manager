@@ -615,6 +615,8 @@ async def recalculate_cash_from_buys(
             await redis_client.delete(f"portfolio:{portfolio.id}:live_market:v2:{currency}")
         await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
         await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+        await redis_client.delete(f"portfolio:{portfolio.id}:ytd:v5")
+        await redis_client.delete(f"portfolio:{portfolio.id}:ytd:v5:backup")
     except Exception as e:
         logger.warning(f"Cache invalidation failed: {e}")
 

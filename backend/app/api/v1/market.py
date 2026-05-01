@@ -3,6 +3,7 @@ Market data API routes for live stock prices.
 """
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 import asyncio
@@ -11,7 +12,8 @@ import logging
 from app.core.database import get_db
 from app.crud import get_user_portfolio, get_portfolio_holdings
 from app.utils.dependencies import get_current_active_user
-from app.models import User
+from app.models import Transaction, User
+from app.models.transaction import TransactionType
 from app.services.finnhub_service import get_finnhub_service
 from app.services.market_websocket import get_ws_manager
 from app.services.finance_service import FinanceService
@@ -51,6 +53,56 @@ def add_unrealized_gain_loss(holding_dict: Dict[str, Any]) -> None:
     holding_dict["unrealized_gain_loss_percentage"] = (
         (unrealized_gain_loss / cost_basis) * 100 if cost_basis > 0 else 0
     )
+
+
+def _row_date(row_index) -> Any:
+    """Return a date from a yfinance row index value."""
+    if hasattr(row_index, "date"):
+        return row_index.date()
+    return row_index
+
+
+def _valid_price(value) -> Optional[float]:
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        return None
+    if price != price or price <= 0:
+        return None
+    return price
+
+
+def _calculate_ytd_from_history(hist, baseline_date=None) -> Optional[float]:
+    """Calculate return from calendar year start, or from a new-position baseline."""
+    if hist.empty:
+        return None
+
+    rows = hist.dropna(subset=["Close"])
+    if rows.empty:
+        return None
+
+    end_price = _valid_price(rows["Close"].iloc[-1])
+    if end_price is None:
+        return None
+
+    if baseline_date is None:
+        if len(rows["Close"]) < 2:
+            return None
+        start_price = _valid_price(rows["Close"].iloc[0])
+    else:
+        previous_rows = rows[[_row_date(idx) < baseline_date for idx in rows.index]]
+        if not previous_rows.empty:
+            start_price = _valid_price(previous_rows["Close"].iloc[-1])
+        else:
+            current_or_later = rows[[_row_date(idx) >= baseline_date for idx in rows.index]]
+            if current_or_later.empty:
+                return None
+            first_row = current_or_later.iloc[0]
+            start_price = _valid_price(first_row.get("Open")) or _valid_price(first_row.get("Close"))
+
+    if start_price is None:
+        return None
+    return round((end_price - start_price) / start_price * 100, 2)
 
 
 @router.get("/live")
@@ -429,8 +481,8 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd:v4"
-    backup_key = f"portfolio:{portfolio.id}:ytd:v4:backup"
+    cache_key = f"portfolio:{portfolio.id}:ytd:v5"
+    backup_key = f"portfolio:{portfolio.id}:ytd:v5:backup"
     redis_client = await get_redis_client()
 
     # Try primary cache first (24h TTL)
@@ -441,6 +493,25 @@ async def get_ytd_data(
 
     holdings = await get_portfolio_holdings(db, portfolio.id)
     valid_holdings = [h for h in holdings if h.ticker]
+    asset_ids = [h.asset_id for h in valid_holdings if getattr(h, "asset_id", None)]
+    first_buy_dates: Dict[int, datetime] = {}
+    if asset_ids:
+        try:
+            first_buy_stmt = (
+                select(Transaction.asset_id, func.min(Transaction.transaction_date))
+                .where(Transaction.portfolio_id == portfolio.id)
+                .where(Transaction.asset_id.in_(asset_ids))
+                .where(Transaction.transaction_type == TransactionType.BUY)
+                .group_by(Transaction.asset_id)
+            )
+            first_buy_result = await db.execute(first_buy_stmt)
+            first_buy_dates = {
+                asset_id: first_buy_date
+                for asset_id, first_buy_date in first_buy_result.all()
+                if asset_id is not None and first_buy_date is not None
+            }
+        except Exception as e:
+            logger.warning(f"Could not load first buy dates for YTD baseline: {e}")
 
     # Separate by data source
     mutual_fund_holdings = [h for h in valid_holdings if _is_mutual_fund_holding(h)]
@@ -454,7 +525,8 @@ async def get_ytd_data(
         from datetime import datetime as _dt, date as _date, timedelta as _td
 
         year_start = _dt(_dt.now().year, 1, 1)
-        yesterday = (_date.today() - _td(days=1)).strftime("%Y-%m-%d")
+        today = _date.today()
+        tomorrow = (today + _td(days=1)).strftime("%Y-%m-%d")
 
         def yf_symbol(holding):
             t = holding.ticker
@@ -462,31 +534,32 @@ async def get_ytd_data(
                 return f"{t.upper()}-USD"
             return t
 
-        symbol_map = {yf_symbol(h): h.ticker for h in other_holdings}
+        symbol_map = {yf_symbol(h): h for h in other_holdings}
 
-        def _fetch_one_ytd(yf_sym: str) -> Optional[float]:
+        def _fetch_one_ytd(yf_sym: str, holding) -> Optional[float]:
             """Fetch YTD return for one ticker using previous-day close. Runs in thread pool."""
             try:
-                hist = yf.Ticker(yf_sym).history(start=year_start, end=yesterday)
-                if hist.empty:
-                    return None
-                series = hist["Close"].dropna()
-                if len(series) < 2:
-                    return None
-                return round(
-                    (float(series.iloc[-1]) - float(series.iloc[0])) / float(series.iloc[0]) * 100, 2
-                )
+                first_buy = first_buy_dates.get(getattr(holding, "asset_id", None))
+                baseline_date = None
+                start = year_start
+                if first_buy and first_buy.date() >= year_start.date():
+                    baseline_date = first_buy.date()
+                    start = _dt.combine(baseline_date - _td(days=7), _dt.min.time())
+
+                hist = yf.Ticker(yf_sym).history(start=start, end=tomorrow)
+                return _calculate_ytd_from_history(hist, baseline_date=baseline_date)
             except Exception as e:
                 logger.warning(f"Per-ticker YTD fetch failed for {yf_sym}: {e}")
                 return None
 
-        async def _fetch_one_async(orig_ticker: str, yf_sym: str):
-            val = await loop.run_in_executor(None, lambda: _fetch_one_ytd(yf_sym))
+        async def _fetch_one_async(holding, yf_sym: str):
+            val = await loop.run_in_executor(None, lambda: _fetch_one_ytd(yf_sym, holding))
+            orig_ticker = holding.ticker
             return orig_ticker, val
 
         loop = asyncio.get_event_loop()
         pairs = await asyncio.gather(
-            *[_fetch_one_async(orig, yf_sym) for yf_sym, orig in symbol_map.items()]
+            *[_fetch_one_async(holding, yf_sym) for yf_sym, holding in symbol_map.items()]
         )
         ytd_map.update(dict(pairs))
 

@@ -44,6 +44,8 @@ async def invalidate_portfolio_transaction_caches(portfolio_id: int):
             await redis_client.delete(f"portfolio:{portfolio_id}:live_market:v2:{currency_code}")
         await redis_client.delete(f"portfolio:{portfolio_id}:returns_cache")
         await redis_client.delete(f"portfolio:{portfolio_id}:analytics_cache")
+        await redis_client.delete(f"portfolio:{portfolio_id}:ytd:v5")
+        await redis_client.delete(f"portfolio:{portfolio_id}:ytd:v5:backup")
     except Exception:
         pass
 
