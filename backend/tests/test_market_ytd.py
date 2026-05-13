@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -63,7 +64,7 @@ async def test_get_ytd_data_falls_back_to_mutual_fund_fetch_for_cf_tickers(monke
     assert result["ytd_data"] == [{"ticker": "PHN9756.CF", "ytd_return": 12.34}]
     assert any(ttl == 86400 for _, _, ttl in fake_redis.writes), "primary key must use 24h TTL"
     assert any("backup" in key for key, _, _ in fake_redis.writes), "backup key must be written"
-    assert any("v5" in key for key, _, _ in fake_redis.writes), "cache key must be v5"
+    assert any("v6" in key for key, _, _ in fake_redis.writes), "cache key must be v6"
 
 
 @pytest.mark.asyncio
@@ -148,9 +149,9 @@ async def test_get_ytd_data_writes_backup_key_on_success(monkeypatch) -> None:
 
     await market.get_ytd_data(currency=None, current_user=SimpleNamespace(id=1), db=object())
 
-    primary = f"portfolio:{portfolio.id}:ytd:v5"
-    backup = f"portfolio:{portfolio.id}:ytd:v5:backup"
-    assert primary in written, "primary v5 key must be written"
+    primary = f"portfolio:{portfolio.id}:ytd:v6"
+    backup = f"portfolio:{portfolio.id}:ytd:v6:backup"
+    assert primary in written, "primary v6 key must be written"
     assert backup in written, "backup key must be written on success"
     assert written[primary][1] == 86400
     assert written[backup][1] == 259200
@@ -192,8 +193,185 @@ async def test_get_ytd_data_serves_backup_when_compute_yields_no_data(monkeypatc
     )
 
     assert result == backup_payload
-    primary = f"portfolio:{portfolio.id}:ytd:v5"
+    primary = f"portfolio:{portfolio.id}:ytd:v6"
     assert written.get(primary, (None, None))[1] == 300
+
+
+@pytest.mark.asyncio
+async def test_get_ytd_data_uses_cost_basis_for_position_first_bought_this_year(monkeypatch) -> None:
+    portfolio = SimpleNamespace(id=11, currency="USD")
+    holding = SimpleNamespace(
+        ticker="BE",
+        asset_id=101,
+        quantity=10,
+        average_cost=100.0,
+        current_price=120.0,
+        asset=SimpleNamespace(asset_type="stock"),
+    )
+
+    class _FakeRedis:
+        async def get(self, _k): return None
+        async def set(self, _k, _v, ttl=None): pass
+
+    class _FakeResult:
+        def all(self):
+            return [(101, datetime(2026, 2, 1))]
+
+    class _FakeDb:
+        async def execute(self, _stmt):
+            return _FakeResult()
+
+    async def fake_portfolio(_db, _uid): return portfolio
+    async def fake_holdings(_db, _pid): return [holding]
+    async def fake_redis(): return _FakeRedis()
+
+    monkeypatch.setattr(market, "get_user_portfolio", fake_portfolio)
+    monkeypatch.setattr(market, "get_portfolio_holdings", fake_holdings)
+    monkeypatch.setattr(market, "get_redis_client", fake_redis)
+
+    result = await market.get_ytd_data(
+        currency=None,
+        current_user=SimpleNamespace(id=1),
+        db=_FakeDb(),
+    )
+
+    assert result["ytd_data"] == [{"ticker": "BE", "ytd_return": 20.0}]
+
+
+@pytest.mark.asyncio
+async def test_get_ytd_data_prefers_live_market_values_for_same_year_positions(monkeypatch) -> None:
+    portfolio = SimpleNamespace(id=14, currency="USD")
+    holding = SimpleNamespace(
+        ticker="BE",
+        asset_id=104,
+        quantity=10,
+        average_cost=100.0,
+        current_price=110.0,
+        asset=SimpleNamespace(asset_type="stock"),
+    )
+
+    class _FakeRedis:
+        async def get(self, key):
+            if "live_market" in key:
+                return {"holdings": [{"ticker": "BE", "cost_basis": 1000.0, "market_value": 1250.0}]}
+            return None
+        async def set(self, _k, _v, ttl=None): pass
+
+    class _FakeResult:
+        def all(self):
+            return [(104, datetime(2026, 3, 1))]
+
+    class _FakeDb:
+        async def execute(self, _stmt):
+            return _FakeResult()
+
+    async def fake_portfolio(_db, _uid): return portfolio
+    async def fake_holdings(_db, _pid): return [holding]
+    async def fake_redis(): return _FakeRedis()
+
+    monkeypatch.setattr(market, "get_user_portfolio", fake_portfolio)
+    monkeypatch.setattr(market, "get_portfolio_holdings", fake_holdings)
+    monkeypatch.setattr(market, "get_redis_client", fake_redis)
+
+    result = await market.get_ytd_data(
+        currency=None,
+        current_user=SimpleNamespace(id=1),
+        db=_FakeDb(),
+    )
+
+    assert result["ytd_data"] == [{"ticker": "BE", "ytd_return": 25.0}]
+
+
+@pytest.mark.asyncio
+async def test_get_ytd_data_uses_weighted_cost_basis_for_multiple_same_year_buys(monkeypatch) -> None:
+    portfolio = SimpleNamespace(id=12, currency="USD")
+    holding = SimpleNamespace(
+        ticker="BE",
+        asset_id=102,
+        quantity=8,
+        average_cost=125.0,
+        current_price=150.0,
+        asset=SimpleNamespace(asset_type="stock"),
+    )
+
+    class _FakeRedis:
+        async def get(self, _k): return None
+        async def set(self, _k, _v, ttl=None): pass
+
+    class _FakeResult:
+        def all(self):
+            return [(102, datetime(2026, 1, 20))]
+
+    class _FakeDb:
+        async def execute(self, _stmt):
+            return _FakeResult()
+
+    async def fake_portfolio(_db, _uid): return portfolio
+    async def fake_holdings(_db, _pid): return [holding]
+    async def fake_redis(): return _FakeRedis()
+
+    monkeypatch.setattr(market, "get_user_portfolio", fake_portfolio)
+    monkeypatch.setattr(market, "get_portfolio_holdings", fake_holdings)
+    monkeypatch.setattr(market, "get_redis_client", fake_redis)
+
+    result = await market.get_ytd_data(
+        currency=None,
+        current_user=SimpleNamespace(id=1),
+        db=_FakeDb(),
+    )
+
+    assert result["ytd_data"] == [{"ticker": "BE", "ytd_return": 20.0}]
+
+
+@pytest.mark.asyncio
+async def test_get_ytd_data_keeps_history_path_for_positions_bought_before_this_year(monkeypatch) -> None:
+    import pandas as pd
+
+    portfolio = SimpleNamespace(id=13, currency="USD")
+    holding = SimpleNamespace(
+        ticker="AAPL",
+        asset_id=103,
+        quantity=10,
+        average_cost=100.0,
+        current_price=120.0,
+        asset=SimpleNamespace(asset_type="stock"),
+    )
+
+    class _FakeRedis:
+        async def get(self, _k): return None
+        async def set(self, _k, _v, ttl=None): pass
+
+    class _FakeResult:
+        def all(self):
+            return [(103, datetime(2025, 12, 15))]
+
+    class _FakeDb:
+        async def execute(self, _stmt):
+            return _FakeResult()
+
+    class _FakeTicker:
+        def __init__(self, _sym): pass
+        def history(self, **_kw): return pd.DataFrame({"Close": [100.0, 110.0]})
+        @property
+        def info(self): raise RuntimeError("no info")
+
+    async def fake_portfolio(_db, _uid): return portfolio
+    async def fake_holdings(_db, _pid): return [holding]
+    async def fake_redis(): return _FakeRedis()
+
+    monkeypatch.setattr(market, "get_user_portfolio", fake_portfolio)
+    monkeypatch.setattr(market, "get_portfolio_holdings", fake_holdings)
+    monkeypatch.setattr(market, "get_redis_client", fake_redis)
+    import yfinance as _yf
+    monkeypatch.setattr(_yf, "Ticker", _FakeTicker)
+
+    result = await market.get_ytd_data(
+        currency=None,
+        current_user=SimpleNamespace(id=1),
+        db=_FakeDb(),
+    )
+
+    assert result["ytd_data"] == [{"ticker": "AAPL", "ytd_return": 10.0}]
 
 
 def test_calculate_ytd_from_history_uses_previous_close_for_new_position() -> None:

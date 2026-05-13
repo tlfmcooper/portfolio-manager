@@ -25,17 +25,37 @@ const OverviewSection = () => {
 
       try {
         // Use cache to prevent redundant API calls
-        const response = await fetchWithCache(
-          'portfolio_metrics',
-          async () => {
-            const res = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
-              params: { currency }
-            });
-            return res.data;
-          },
-          CACHE_TTL.PORTFOLIO_METRICS,
-          currency
-        );
+        const [metricsResponse, summaryResponse] = await Promise.all([
+          fetchWithCache(
+            'portfolio_metrics',
+            async () => {
+              const res = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
+                params: { currency }
+              });
+              return res.data;
+            },
+            CACHE_TTL.PORTFOLIO_METRICS,
+            currency
+          ),
+          fetchWithCache(
+            'portfolio_summary',
+            async () => {
+              const res = await api.get('/portfolios/summary', {
+                params: { currency }
+              });
+              return res.data;
+            },
+            CACHE_TTL.PORTFOLIO_METRICS,
+            currency
+          )
+        ]);
+
+        const response = {
+          ...metricsResponse,
+          ytd_return_percentage: summaryResponse?.ytd_return_percentage,
+          ytd_complete: summaryResponse?.ytd_complete,
+          ytd_message: summaryResponse?.ytd_message
+        };
         
         console.log('API Response:', response)
         console.log('Individual Performance:', response?.individual_performance)
@@ -68,6 +88,11 @@ const OverviewSection = () => {
     return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`
   }
 
+  const formatPercentagePoints = (value) => {
+    if (typeof value !== 'number') return 'N/A'
+    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+  }
+
   const formatRatio = (value) => {
     if (typeof value !== 'number') return 'N/A'
     return value.toFixed(3)
@@ -77,6 +102,7 @@ const OverviewSection = () => {
     if (typeof value !== 'number') return 'neutral'
     
     switch (metric) {
+      case 'ytd_return_percentage':
       case 'portfolio_return_annualized':
       case 'sharpe_ratio':
         return value > 0 ? 'positive' : 'negative'
@@ -99,6 +125,8 @@ const OverviewSection = () => {
     if (typeof value !== 'number') return 'No Data'
     
     switch (metric) {
+      case 'ytd_return_percentage':
+        return value > 15 ? 'Excellent Performance' : value > 8 ? 'Good Performance' : 'Below Average'
       case 'portfolio_return_annualized':
         return value > 0.15 ? 'Excellent Performance' : value > 0.08 ? 'Good Performance' : 'Below Average'
       case 'portfolio_volatility_annualized':
@@ -117,6 +145,9 @@ const OverviewSection = () => {
     if (typeof value !== 'number') return 'No data available for this metric.'
     
     switch (key) {
+      case 'ytd_return_percentage':
+        return `Year-to-date return measures portfolio performance since the start of the current year, adjusted for this year's cash flows. A return of ${value.toFixed(2)}% is considered ${value >= 15 ? 'excellent' : value >= 8 ? 'strong' : value >= 5 ? 'moderate' : 'modest'} performance.`
+
       case 'portfolio_return_annualized':
         return `The annualized return represents the geometric average amount of money earned by the portfolio each year. A return of ${(value * 100).toFixed(2)}% is considered ${value >= 0.15 ? 'excellent' : value >= 0.10 ? 'strong' : value >= 0.05 ? 'moderate' : 'modest'} performance, especially when risk-adjusted.`
       
@@ -146,10 +177,11 @@ const OverviewSection = () => {
 
   const metrics = [
     {
-      key: 'portfolio_return_annualized',
-      label: 'Annual Return',
-      value: performanceMetrics.portfolio_return_annualized,
-      formatter: formatPercentage,
+      key: 'ytd_return_percentage',
+      label: 'YTD Return',
+      value: performanceMetrics.ytd_return_percentage,
+      formatter: formatPercentagePoints,
+      tooltip: performanceMetrics.ytd_message,
     },
     {
       key: 'portfolio_volatility_annualized',
@@ -198,7 +230,7 @@ const OverviewSection = () => {
           {metrics.map((metric) => {
             const status = getMetricStatus(metric.key, metric.value)
             const statusText = getStatusText(metric.key, metric.value)
-            const tooltip = getMetricTooltip(metric.key, metric.value)
+            const tooltip = metric.tooltip || getMetricTooltip(metric.key, metric.value)
             
             return (
               <div 

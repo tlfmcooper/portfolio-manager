@@ -105,6 +105,32 @@ def _calculate_ytd_from_history(hist, baseline_date=None) -> Optional[float]:
     return round((end_price - start_price) / start_price * 100, 2)
 
 
+def _calculate_ytd_from_holding_cost_basis(holding, live_holding: Optional[Dict[str, Any]] = None) -> Optional[float]:
+    """Calculate YTD from the current position's actual cost basis."""
+    if live_holding:
+        market_value = _valid_price(live_holding.get("market_value"))
+        cost_basis = _valid_price(live_holding.get("cost_basis"))
+        if market_value is not None and cost_basis is not None:
+            return round((market_value - cost_basis) / cost_basis * 100, 2)
+
+    try:
+        quantity = float(getattr(holding, "quantity", 0) or 0)
+        average_cost = _valid_price(getattr(holding, "average_cost", None))
+        current_price = _valid_price(getattr(holding, "current_price", None))
+    except (TypeError, ValueError):
+        return None
+
+    if quantity <= 0 or average_cost is None or current_price is None:
+        return None
+
+    cost_basis = quantity * average_cost
+    market_value = quantity * current_price
+    if cost_basis <= 0:
+        return None
+
+    return round((market_value - cost_basis) / cost_basis * 100, 2)
+
+
 @router.get("/live")
 async def get_live_market_data(
     currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
@@ -481,8 +507,8 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd:v5"
-    backup_key = f"portfolio:{portfolio.id}:ytd:v5:backup"
+    cache_key = f"portfolio:{portfolio.id}:ytd:v6"
+    backup_key = f"portfolio:{portfolio.id}:ytd:v6:backup"
     redis_client = await get_redis_client()
 
     # Try primary cache first (24h TTL)
@@ -490,6 +516,14 @@ async def get_ytd_data(
     if cached:
         logger.info(f"Cache hit for portfolio {portfolio.id} YTD data")
         return cached
+
+    live_cache_key = f"portfolio:{portfolio.id}:live_market:v2:{display_currency}"
+    live_cached = await redis_client.get(live_cache_key)
+    live_holdings_by_ticker = {
+        str(item.get("ticker") or "").upper(): item
+        for item in (live_cached or {}).get("holdings", [])
+        if item.get("ticker")
+    }
 
     holdings = await get_portfolio_holdings(db, portfolio.id)
     valid_holdings = [h for h in holdings if h.ticker]
@@ -513,14 +547,23 @@ async def get_ytd_data(
         except Exception as e:
             logger.warning(f"Could not load first buy dates for YTD baseline: {e}")
 
+    current_year_start = datetime.now().date().replace(month=1, day=1)
+
     # Separate by data source
     mutual_fund_holdings = [h for h in valid_holdings if _is_mutual_fund_holding(h)]
     other_holdings = [h for h in valid_holdings if h not in mutual_fund_holdings]
 
     ytd_map: Dict[str, Optional[float]] = {}
 
+    for holding in valid_holdings:
+        first_buy = first_buy_dates.get(getattr(holding, "asset_id", None))
+        if first_buy and first_buy.date() >= current_year_start:
+            live_holding = live_holdings_by_ticker.get(holding.ticker.upper())
+            ytd_map[holding.ticker] = _calculate_ytd_from_holding_cost_basis(holding, live_holding)
+
     # ── Stocks / ETFs / Crypto: per-ticker parallel history(end=yesterday) ────
-    if other_holdings:
+    holdings_needing_history = [h for h in other_holdings if h.ticker not in ytd_map]
+    if holdings_needing_history:
         import yfinance as yf
         from datetime import datetime as _dt, date as _date, timedelta as _td
 
@@ -534,7 +577,7 @@ async def get_ytd_data(
                 return f"{t.upper()}-USD"
             return t
 
-        symbol_map = {yf_symbol(h): h for h in other_holdings}
+        symbol_map = {yf_symbol(h): h for h in holdings_needing_history}
 
         def _fetch_one_ytd(yf_sym: str, holding) -> Optional[float]:
             """Fetch YTD return for one ticker using previous-day close. Runs in thread pool."""
@@ -564,8 +607,9 @@ async def get_ytd_data(
         ytd_map.update(dict(pairs))
 
     # ── Mutual funds: call directly in async context ─────────────────────────
-    if mutual_fund_holdings:
-        for h in mutual_fund_holdings:
+    mutual_funds_needing_history = [h for h in mutual_fund_holdings if h.ticker not in ytd_map]
+    if mutual_funds_needing_history:
+        for h in mutual_funds_needing_history:
             try:
                 perf = await FinanceService.calculate_ticker_performance(
                     h.ticker, "mutual_fund", ["ytd"]
