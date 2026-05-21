@@ -268,6 +268,28 @@ async def test_calculate_ticker_performance_uses_history_for_non_ytd_periods_eve
 
 
 @pytest.mark.asyncio
+async def test_calculate_ticker_performance_uses_live_price_for_stock_ytd(monkeypatch) -> None:
+    import pandas as pd
+
+    class _FakeTicker:
+        @property
+        def info(self):
+            return {"currentPrice": 115.0}
+
+        def history(self, **_kwargs):
+            return pd.DataFrame({"Close": [100.0, 110.0]})
+
+    monkeypatch.setattr(finance_service.yf, "Ticker", lambda _ticker: _FakeTicker())
+
+    result = await FinanceService.calculate_ticker_performance(
+        "AAPL", asset_type="stock", periods=["ytd"]
+    )
+
+    assert result["ytd_return"] == 15.0
+    assert result["current_price"] == 115.0
+
+
+@pytest.mark.asyncio
 async def test_calculate_ticker_performance_uses_barchart_history_for_mutual_funds(monkeypatch) -> None:
     fixed_now = datetime(2026, 4, 5)
 

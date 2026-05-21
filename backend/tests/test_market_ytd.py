@@ -62,9 +62,9 @@ async def test_get_ytd_data_falls_back_to_mutual_fund_fetch_for_cf_tickers(monke
     )
 
     assert result["ytd_data"] == [{"ticker": "PHN9756.CF", "ytd_return": 12.34}]
-    assert any(ttl == 86400 for _, _, ttl in fake_redis.writes), "primary key must use 24h TTL"
+    assert any(ttl == 300 for _, _, ttl in fake_redis.writes), "primary key must use 5m TTL"
     assert any("backup" in key for key, _, _ in fake_redis.writes), "backup key must be written"
-    assert any("v6" in key for key, _, _ in fake_redis.writes), "cache key must be v6"
+    assert any("v7" in key for key, _, _ in fake_redis.writes), "cache key must be v7"
 
 
 @pytest.mark.asyncio
@@ -149,11 +149,11 @@ async def test_get_ytd_data_writes_backup_key_on_success(monkeypatch) -> None:
 
     await market.get_ytd_data(currency=None, current_user=SimpleNamespace(id=1), db=object())
 
-    primary = f"portfolio:{portfolio.id}:ytd:v6"
-    backup = f"portfolio:{portfolio.id}:ytd:v6:backup"
-    assert primary in written, "primary v6 key must be written"
+    primary = f"portfolio:{portfolio.id}:ytd:v7"
+    backup = f"portfolio:{portfolio.id}:ytd:v7:backup"
+    assert primary in written, "primary v7 key must be written"
     assert backup in written, "backup key must be written on success"
-    assert written[primary][1] == 86400
+    assert written[primary][1] == 300
     assert written[backup][1] == 259200
 
 
@@ -193,7 +193,7 @@ async def test_get_ytd_data_serves_backup_when_compute_yields_no_data(monkeypatc
     )
 
     assert result == backup_payload
-    primary = f"portfolio:{portfolio.id}:ytd:v6"
+    primary = f"portfolio:{portfolio.id}:ytd:v7"
     assert written.get(primary, (None, None))[1] == 300
 
 
@@ -387,6 +387,20 @@ def test_calculate_ytd_from_history_uses_previous_close_for_new_position() -> No
     )
 
     assert market._calculate_ytd_from_history(hist, baseline_date=date(2026, 5, 1)) == 2.53
+
+
+def test_calculate_ytd_from_history_prefers_live_price_when_available() -> None:
+    import pandas as pd
+
+    hist = pd.DataFrame(
+        {
+            "Open": [100.0, 110.0],
+            "Close": [100.0, 110.0],
+        },
+        index=pd.to_datetime(["2026-01-02", "2026-05-01"]),
+    )
+
+    assert market._calculate_ytd_from_history(hist, end_price_override=115.0) == 15.0
 
 
 def test_calculate_ytd_from_history_uses_buy_day_open_when_previous_close_missing() -> None:

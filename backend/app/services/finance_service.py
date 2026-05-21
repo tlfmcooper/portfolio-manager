@@ -632,7 +632,12 @@ class FinanceService:
                     
                     if not hist.empty and len(hist) >= 2:
                         start_price = float(hist.iloc[0]['Close'])
-                        end_price = float(hist.iloc[-1]['Close'])
+                        previous_close = float(hist.iloc[-1]['Close'])
+                        try:
+                            live_price = float(result["current_price"]) if result["current_price"] else None
+                        except (TypeError, ValueError):
+                            live_price = None
+                        end_price = live_price if live_price and live_price > 0 else previous_close
                         result["ytd_return"] = round(((end_price - start_price) / start_price) * 100, 2)
                         result["current_price"] = end_price
                 except Exception as e:

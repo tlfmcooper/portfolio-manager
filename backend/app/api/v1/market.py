@@ -72,7 +72,31 @@ def _valid_price(value) -> Optional[float]:
     return price
 
 
-def _calculate_ytd_from_history(hist, baseline_date=None) -> Optional[float]:
+def _get_yfinance_live_price(ticker) -> Optional[float]:
+    """Return a live/latest tradable price from yfinance when available."""
+    try:
+        fast_info = getattr(ticker, "fast_info", None)
+        if fast_info:
+            for key in ("last_price", "lastPrice", "regular_market_price"):
+                price = _valid_price(fast_info.get(key))
+                if price is not None:
+                    return price
+    except Exception:
+        pass
+
+    try:
+        info = ticker.info
+        for key in ("currentPrice", "regularMarketPrice"):
+            price = _valid_price(info.get(key))
+            if price is not None:
+                return price
+    except Exception:
+        pass
+
+    return None
+
+
+def _calculate_ytd_from_history(hist, baseline_date=None, end_price_override=None) -> Optional[float]:
     """Calculate return from calendar year start, or from a new-position baseline."""
     if hist.empty:
         return None
@@ -81,9 +105,10 @@ def _calculate_ytd_from_history(hist, baseline_date=None) -> Optional[float]:
     if rows.empty:
         return None
 
-    end_price = _valid_price(rows["Close"].iloc[-1])
-    if end_price is None:
+    previous_close = _valid_price(rows["Close"].iloc[-1])
+    if previous_close is None:
         return None
+    end_price = _valid_price(end_price_override) or previous_close
 
     if baseline_date is None:
         if len(rows["Close"]) < 2:
@@ -497,7 +522,8 @@ async def get_ytd_data(
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
-    Get YTD return for each holding. Cached for 24h since YTD is a daily metric.
+    Get YTD return for each holding. Cached briefly because the endpoint uses
+    live market price as the endpoint when available.
     """
     portfolio = await get_user_portfolio(db, current_user.id)
     if not portfolio:
@@ -507,11 +533,11 @@ async def get_ytd_data(
         )
 
     display_currency = (currency or portfolio.currency or "USD").upper()
-    cache_key = f"portfolio:{portfolio.id}:ytd:v6"
-    backup_key = f"portfolio:{portfolio.id}:ytd:v6:backup"
+    cache_key = f"portfolio:{portfolio.id}:ytd:v7"
+    backup_key = f"portfolio:{portfolio.id}:ytd:v7:backup"
     redis_client = await get_redis_client()
 
-    # Try primary cache first (24h TTL)
+    # Try primary cache first
     cached = await redis_client.get(cache_key)
     if cached:
         logger.info(f"Cache hit for portfolio {portfolio.id} YTD data")
@@ -580,7 +606,7 @@ async def get_ytd_data(
         symbol_map = {yf_symbol(h): h for h in holdings_needing_history}
 
         def _fetch_one_ytd(yf_sym: str, holding) -> Optional[float]:
-            """Fetch YTD return for one ticker using previous-day close. Runs in thread pool."""
+            """Fetch YTD return for one ticker using live price when available."""
             try:
                 first_buy = first_buy_dates.get(getattr(holding, "asset_id", None))
                 baseline_date = None
@@ -589,8 +615,14 @@ async def get_ytd_data(
                     baseline_date = first_buy.date()
                     start = _dt.combine(baseline_date - _td(days=7), _dt.min.time())
 
-                hist = yf.Ticker(yf_sym).history(start=start, end=tomorrow)
-                return _calculate_ytd_from_history(hist, baseline_date=baseline_date)
+                ticker = yf.Ticker(yf_sym)
+                live_price = _get_yfinance_live_price(ticker)
+                hist = ticker.history(start=start, end=tomorrow)
+                return _calculate_ytd_from_history(
+                    hist,
+                    baseline_date=baseline_date,
+                    end_price_override=live_price,
+                )
             except Exception as e:
                 logger.warning(f"Per-ticker YTD fetch failed for {yf_sym}: {e}")
                 return None
@@ -642,7 +674,7 @@ async def get_ytd_data(
     has_data = any(d.get("ytd_return") is not None for d in ytd_data)
 
     if has_data:
-        await redis_client.set(cache_key, result, ttl=86400)    # 24 h primary
+        await redis_client.set(cache_key, result, ttl=300)      # 5 min primary
         await redis_client.set(backup_key, result, ttl=259200)  # 72 h backup
         return result
 
