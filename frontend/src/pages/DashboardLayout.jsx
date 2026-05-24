@@ -7,7 +7,6 @@ import { Loader2, Menu, TrendingUp, Shield, PieChart, Target, BarChart3, Trendin
 import Sidebar from '../components/Sidebar';
 import CurrencySwitcher from '../components/CurrencySwitcher';
 import ThemeToggle from '../components/ThemeToggle';
-import PortfolioChatWidget from '../components/PortfolioChatWidget';
 import { DashboardSkeleton } from '../components/ui/Skeleton';
 
 // Lazy load tab components
@@ -17,6 +16,7 @@ const TabAllocation = lazy(() => import('../components/tabs/TabAllocation'));
 const TabEfficientFrontier = lazy(() => import('../components/tabs/TabEfficientFrontier'));
 const TabMonteCarlo = lazy(() => import('../components/tabs/TabMonteCarlo'));
 const TabCPPI = lazy(() => import('../components/tabs/TabCPPI'));
+const PortfolioChatWidget = lazy(() => import('../components/PortfolioChatWidget'));
 
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-background)' }}>
@@ -28,6 +28,7 @@ const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [chatReady, setChatReady] = useState(false);
   const { user, logout } = useAuth();
   const { isDark } = useTheme();
   const location = useLocation();
@@ -61,6 +62,18 @@ const DashboardLayout = () => {
       setActiveTab('overview');
     }
   }, [location, searchParams]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(() => setChatReady(true), { timeout: 3000 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(() => setChatReady(true), 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
@@ -240,7 +253,11 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
-      <PortfolioChatWidget />
+      {chatReady && (
+        <Suspense fallback={null}>
+          <PortfolioChatWidget />
+        </Suspense>
+      )}
     </div>
   );
 };

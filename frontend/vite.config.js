@@ -15,13 +15,20 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: [
           'favicon.ico',
-          'vite.svg',
           'icons/*.png',
           'screenshots/*.png'
         ],
         manifest: false, // We're using our own public/manifest.json
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,jpg,jpeg}'],
+          globPatterns: [
+            'index.html',
+            'favicon.ico',
+            'manifest.json',
+            'logo.svg',
+            'icons/icon-192x192.png',
+            'icons/icon-512x512.png',
+            'icons/apple-touch-icon.png'
+          ],
           runtimeCaching: [
             {
               // Cache images with CacheFirst strategy
@@ -49,7 +56,7 @@ export default defineConfig(({ mode }) => {
             },
             {
               // Cache static assets with StaleWhileRevalidate
-              urlPattern: /\.(?:js|css)$/,
+              urlPattern: /\/assets\/.*\.(?:js|css)$/,
               handler: 'StaleWhileRevalidate',
               options: {
                 cacheName: 'static-resources',
@@ -64,7 +71,7 @@ export default defineConfig(({ mode }) => {
           navigateFallbackDenylist: [/^\/api/],
         },
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'module',
           navigateFallback: 'index.html',
         },
@@ -94,11 +101,19 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 500, // Warn if chunk > 500KB
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            charts: ['recharts'],
-            ai: ['@google/generative-ai'], // Separate chunk for AI library
-            utils: ['html2canvas'], // Separate chunk for utilities
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('@google/generative-ai')) return 'ai';
+            if (id.includes('html2canvas')) return 'capture';
+            if (id.includes('react') || id.includes('scheduler')) return 'vendor';
+            if (
+              id.includes('react-router') ||
+              id.includes('axios') ||
+              id.includes('lucide-react') ||
+              id.includes('react-hot-toast')
+            ) {
+              return 'app-vendor';
+            }
           },
         },
       },

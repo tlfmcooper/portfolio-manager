@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
@@ -15,7 +15,7 @@ import { DashboardSkeleton } from './components/ui/Skeleton';
 // Lazy load components
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
-import Onboarding from './pages/Onboarding';
+const Onboarding = lazy(() => import('./pages/Onboarding'));
 const DashboardLayout = lazy(() => import('./pages/DashboardLayout'));
 const Overview = lazy(() => import('./pages/Overview'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
@@ -24,6 +24,37 @@ const Settings = lazy(() => import('./pages/Settings'));
 const UpdatePortfolio = lazy(() => import('./pages/UpdatePortfolio'));
 const LiveMarket = lazy(() => import('./pages/LiveMarket'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+
+const AppUpdateBanner = () => {
+  const [updateHandler, setUpdateHandler] = useState(null);
+
+  useEffect(() => {
+    const handleUpdateAvailable = (event) => {
+      setUpdateHandler(() => event.detail?.update || null);
+    };
+
+    window.addEventListener('app:updateAvailable', handleUpdateAvailable);
+    return () => {
+      window.removeEventListener('app:updateAvailable', handleUpdateAvailable);
+    };
+  }, []);
+
+  if (!updateHandler) return null;
+
+  return (
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 z-[60] rounded-lg shadow-lg p-4 flex items-center justify-between gap-3" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
+      <span className="text-sm font-medium">A new version is ready.</span>
+      <button
+        type="button"
+        onClick={updateHandler}
+        className="px-3 py-1.5 rounded-md text-sm font-semibold"
+        style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-btn-primary-text)' }}
+      >
+        Update
+      </button>
+    </div>
+  );
+};
 
 // Loading component
 const LoadingSpinner = () => (
@@ -41,11 +72,30 @@ const DashboardLoadingFallback = () => (
 
 // Protected layout component
 const ProtectedLayout = () => {
-  const { user, loading, isOnboarded } = useAuth();
+  const { user, loading, error, isOnboarded, retryBootstrap, isAuthenticated } = useAuth();
   const location = useLocation();
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (!user && isAuthenticated && error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: 'var(--color-background)' }}>
+        <div className="max-w-md w-full rounded-lg p-6 text-center" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+          <h1 className="text-xl font-semibold mb-2">Unable to reach the dashboard</h1>
+          <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>{error}</p>
+          <button
+            type="button"
+            onClick={retryBootstrap}
+            className="px-4 py-2 rounded-lg text-sm font-semibold"
+            style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-btn-primary-text)' }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
@@ -94,6 +144,7 @@ function App() {
             <DataCacheProvider>
               <AgentProvider>
                 <OfflineIndicator />
+                <AppUpdateBanner />
                 <Toaster
                   position="top-right"
                   toastOptions={{

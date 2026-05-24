@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import PortfolioOnboarding from '../components/onboarding/PortfolioOnboarding';
 import { Loader2 } from 'lucide-react';
-import PortfolioService from '../services/portfolioService';
-import axios from 'axios';
 
 const Onboarding = () => {
   const { user, loading } = useAuth();

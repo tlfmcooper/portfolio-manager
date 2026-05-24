@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { TrendingUp, TrendingDown, Activity, RefreshCw, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { useDataCache } from '../contexts/DataCacheContext';
 import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import { ChartSkeleton, TableSkeleton } from '../components/ui/Skeleton';
@@ -12,6 +11,36 @@ const LiveStockChart = lazy(() => import('../components/LiveStockChart'));
 
 // Tickers not supported by Finnhub
 const UNSUPPORTED_TICKERS = ['MAU.TO'];
+const LIVE_MARKET_CACHE_TTL = 5 * 60 * 1000;
+
+const getLiveMarketCacheKey = (currency) => `live_market_${currency || 'default'}`;
+
+const readLiveMarketCache = (currency) => {
+  try {
+    const raw = localStorage.getItem(getLiveMarketCacheKey(currency));
+    if (!raw) return null;
+
+    const cached = JSON.parse(raw);
+    if (!cached?.timestamp || Date.now() - cached.timestamp > LIVE_MARKET_CACHE_TTL) {
+      return null;
+    }
+
+    return cached.data;
+  } catch {
+    return null;
+  }
+};
+
+const writeLiveMarketCache = (currency, data) => {
+  try {
+    localStorage.setItem(getLiveMarketCacheKey(currency), JSON.stringify({
+      timestamp: Date.now(),
+      data,
+    }));
+  } catch {
+    // Ignore storage limits; live data can always be refetched.
+  }
+};
 
 const LiveMarket = () => {
   const [holdings, setHoldings] = useState([]);
@@ -27,17 +56,27 @@ const LiveMarket = () => {
   const [ytdMap, setYtdMap] = useState({}) // ticker -> ytd_return (number|null)
   const { api } = useAuth();
   const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency();
-  const { fetchWithCache, CACHE_TTL, invalidateCache } = useDataCache();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const priceHistoryRef = useRef({});
   const autoRefreshIntervalRef = useRef(null);
+  const requestIdRef = useRef(0);
+  const ytdAbortRef = useRef(null);
 
   // Auto-refresh interval in milliseconds (60 seconds)
   const AUTO_REFRESH_INTERVAL = 60000;
 
   useEffect(() => {
-    fetchLiveMarketData();
+    const cached = readLiveMarketCache(currency);
+    if (cached?.holdings?.length) {
+      setHoldings(cached.holdings);
+      setCashBalance(cached.cash_balance || 0);
+      setLastUpdate(cached.updated_at ? new Date(cached.updated_at) : new Date());
+      setError(null);
+      setLoading(false);
+    }
+
+    fetchLiveMarketData(Boolean(cached));
 
     // Set up auto-refresh interval
     autoRefreshIntervalRef.current = setInterval(() => {
@@ -53,6 +92,10 @@ const LiveMarket = () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      if (ytdAbortRef.current) {
+        ytdAbortRef.current.abort();
+      }
+      requestIdRef.current += 1;
       // Cleanup auto-refresh interval
       if (autoRefreshIntervalRef.current) {
         clearInterval(autoRefreshIntervalRef.current);
@@ -160,6 +203,8 @@ const LiveMarket = () => {
   };
 
   const fetchLiveMarketData = async (silentUpdate = false) => {
+    const requestId = ++requestIdRef.current;
+
     try {
       if (!silentUpdate) {
         setLoading(true);
@@ -172,15 +217,29 @@ const LiveMarket = () => {
         params: { currency },
         timeout: 60000 // 60 second timeout for initial fetch with many holdings
       });
+
+      if (requestId !== requestIdRef.current) return;
+
       console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
+      writeLiveMarketCache(currency, response.data);
 
       // Clear stale YTD values before issuing new fetch (currency may have changed)
       setYtdMap({})
-      // Fire YTD fetch in parallel — don't await, don't block UI
-      api.get('/market/ytd', { params: { currency } })
+      if (ytdAbortRef.current) {
+        ytdAbortRef.current.abort();
+      }
+      const ytdController = new AbortController();
+      ytdAbortRef.current = ytdController;
+
+      // Fire YTD fetch in parallel. It must not block live-market rendering.
+      api.get('/market/ytd', {
+        params: { currency },
+        signal: ytdController.signal,
+      })
         .then(res => {
+          if (requestId !== requestIdRef.current) return;
           const map = {}
           ;(res.data.ytd_data || []).forEach(({ ticker, ytd_return }) => {
             map[ticker] = ytd_return
@@ -188,6 +247,7 @@ const LiveMarket = () => {
           setYtdMap(map)
         })
         .catch(err => {
+          if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
           console.warn('YTD fetch failed:', err)
           // Non-fatal — table shows N/A for all
         })
@@ -210,10 +270,15 @@ const LiveMarket = () => {
 
       // Connect to WebSocket for live updates
       if (symbols.length > 0 && !wsRef.current) {
-        connectWebSocket(symbols);
+        window.setTimeout(() => {
+          if (requestId === requestIdRef.current) {
+            connectWebSocket(symbols);
+          }
+        }, 0);
       }
 
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error('Error fetching live market data:', err);
       
       // Don't show error for auth-related issues (interceptor handles redirect)
@@ -232,7 +297,7 @@ const LiveMarket = () => {
         toast.error(errorMsg);
       }
     } finally {
-      if (!silentUpdate) {
+      if (requestId === requestIdRef.current && !silentUpdate) {
         setLoading(false);
       }
     }

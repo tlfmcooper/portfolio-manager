@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -14,15 +15,42 @@ from app.schemas import (
     LoginRequest,
     RegisterRequest,
     Token,
+    AuthBootstrapResponse,
     RefreshTokenRequest,
     ChangePasswordRequest,
     UserInDB,
 )
 from app.crud import authenticate_user, create_user, get_user_by_email, get_user_by_username, update_user_password
 from app.utils.dependencies import get_current_active_user
-from app.models import User
+from app.models import Portfolio, User
 
 router = APIRouter()
+
+
+@router.get("/bootstrap", response_model=AuthBootstrapResponse)
+async def bootstrap_auth(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Return the minimum authenticated state needed to render the app shell.
+
+    This endpoint intentionally avoids portfolio summary, market data, YTD,
+    yfinance, and analytics work so it remains fast during app startup.
+    """
+    portfolio_result = await db.execute(
+        select(Portfolio.id)
+        .where(Portfolio.user_id == current_user.id)
+        .where(Portfolio.is_active == True)
+        .limit(1)
+    )
+    portfolio_id = portfolio_result.scalar_one_or_none()
+
+    return {
+        "user": current_user,
+        "portfolio_id": portfolio_id,
+        "is_onboarded": portfolio_id is not None,
+    }
 
 
 @router.post("/login", response_model=Token)

@@ -1,35 +1,12 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import PortfolioService from '../services/portfolioService'; // Import PortfolioService
 import { getApiBaseUrl } from '../utils/apiConfig';
 
 const AuthContext = createContext(null);
 
 const API_BASE_URL = getApiBaseUrl();
-
-// Retry configuration for handling deployment restarts
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 seconds
-
-// Helper function to wait
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper function to retry requests with exponential backoff
-const retryRequest = async (fn, retries = MAX_RETRIES, delay = RETRY_DELAY) => {
-  try {
-    return await fn();
-  } catch (error) {
-    if (retries > 0 && (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || !error.response)) {
-      console.log(`Request failed, retrying in ${delay}ms... (${retries} retries left)`);
-      await wait(delay);
-      return retryRequest(fn, retries - 1, delay * 1.5); // Exponential backoff
-    }
-    throw error;
-  }
-};
 
 // Create axios instance with interceptors
 const api = axios.create({
@@ -74,9 +51,10 @@ const refreshAccessToken = async () => {
     
     return access_token;
   } catch (error) {
-    // Refresh failed - clear tokens
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    }
     throw error;
   }
 };
@@ -99,7 +77,7 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     // If error is 401 and we haven't already tried to refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       // Skip token refresh for auth endpoints
       if (originalRequest.url?.includes('/auth/login') || 
           originalRequest.url?.includes('/auth/register') ||
@@ -129,12 +107,12 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        
-        // Token refresh failed - trigger logout by dispatching event
-        // Components will listen for this to redirect to login
-        window.dispatchEvent(new CustomEvent('auth:sessionExpired', { 
-          detail: { message: 'Session expired. Please log in again.' }
-        }));
+
+        if (refreshError.response?.status === 401 || refreshError.response?.status === 403) {
+          window.dispatchEvent(new CustomEvent('auth:sessionExpired', {
+            detail: { message: 'Session expired. Please log in again.' }
+          }));
+        }
         
         return Promise.reject(refreshError);
       } finally {
@@ -146,39 +124,84 @@ api.interceptors.response.use(
   }
 );
 
-const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-screen">
-    <Loader2 className="h-12 w-12 text-indigo-600 animate-spin" />
-  </div>
-);
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [portfolioId, setPortfolioId] = useState(null); // CRITICAL FIX: Store portfolio ID
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOnboarded, setIsOnboarded] = useState(false); // Initialize as false to prevent premature dashboard access
+  const [hasAuthToken, setHasAuthToken] = useState(() => Boolean(localStorage.getItem('access_token')));
   const navigate = useNavigate();
 
-  const portfolioService = new PortfolioService(api); // Initialize portfolio service
-
-  const markOnboarded = (maybePortfolio) => {
+  const markOnboarded = useCallback((maybePortfolio) => {
     const id = maybePortfolio?.id;
     if (id) {
       setPortfolioId(id);
     }
     setIsOnboarded((prev) => prev || !!id);
-  };
+  }, []);
+
+  const clearAuthState = useCallback(() => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setHasAuthToken(false);
+    setUser(null);
+    setPortfolioId(null);
+    setIsOnboarded(false);
+  }, []);
+
+  const applyBootstrapPayload = useCallback((payload) => {
+    setUser(payload.user);
+    setPortfolioId(payload.portfolio_id || null);
+    setIsOnboarded(Boolean(payload.is_onboarded));
+    setHasAuthToken(true);
+    setError(null);
+  }, []);
+
+  const initializeAuth = useCallback(async ({ showToast = false } = {}) => {
+    const token = localStorage.getItem('access_token');
+    setHasAuthToken(Boolean(token));
+
+    if (!token) {
+      setUser(null);
+      setPortfolioId(null);
+      setIsOnboarded(false);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await api.get('/auth/bootstrap', { timeout: 15000 });
+      applyBootstrapPayload(response.data);
+      if (showToast) {
+        toast.success('Dashboard connection restored');
+      }
+    } catch (err) {
+      console.error('Auth bootstrap failed:', err);
+
+      if (err.response?.status === 401) {
+        clearAuthState();
+        setError(null);
+        return;
+      }
+
+      setUser(null);
+      setPortfolioId(null);
+      setIsOnboarded(false);
+      setError('We could not reach the server. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [applyBootstrapPayload, clearAuthState]);
 
   // Handle session expiration from interceptor
   useEffect(() => {
     const handleSessionExpired = (event) => {
       console.log('Session expired, redirecting to login...');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setUser(null);
-      setPortfolioId(null);
-      setIsOnboarded(false);
+      clearAuthState();
       toast.error(event.detail?.message || 'Session expired. Please log in again.');
       navigate('/login');
     };
@@ -187,49 +210,11 @@ export const AuthProvider = ({ children }) => {
     return () => {
       window.removeEventListener('auth:sessionExpired', handleSessionExpired);
     };
-  }, [navigate]);
+  }, [clearAuthState, navigate]);
 
   useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // CRITICAL FIX: Fetch both user data and portfolio info in parallel
-        const [userResponse, portfolioResponse] = await Promise.allSettled([
-          api.get('/users/me'),
-          api.get('/portfolios')
-        ]);
-
-        if (userResponse.status === 'fulfilled') {
-          const userData = userResponse.value.data;
-          setUser(userData);
-        }
-
-        if (portfolioResponse.status === 'fulfilled') {
-          const portfolioData = portfolioResponse.value.data;
-          markOnboarded(portfolioData);
-          await checkOnboardingStatus(userResponse.value?.data, portfolioData); // Pass portfolioData to avoid extra call
-        } else {
-          await checkOnboardingStatus(userResponse.value?.data);
-        }
-      } catch (err) {
-        console.error('Token validation failed:', err);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        setUser(null);
-        setPortfolioId(null);
-        setIsOnboarded(false); // Not onboarded if token validation fails
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
-  }, []);
+    initializeAuth();
+  }, [initializeAuth]);
 
   // Function to check onboarding status
   const checkOnboardingStatus = async (currentUser, existingPortfolio = null) => {
@@ -245,11 +230,9 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      // Use portfolio summary instead of analysis for onboarding check.
-      // This is simpler and doesn't require heavy computation.
-      // Keep retry logic for transient backend startup or restart windows.
-      const portfolio = await retryRequest(() => portfolioService.getPortfolio());
-
+      const { default: PortfolioService } = await import('../services/portfolioService');
+      const portfolioService = new PortfolioService(api);
+      const portfolio = await portfolioService.getPortfolio();
       markOnboarded(portfolio);
     } catch (err) {
       console.error('AuthContext: Error checking onboarding status:', err);
@@ -279,39 +262,18 @@ export const AuthProvider = ({ children }) => {
 
       const { access_token, refresh_token } = response.data;
 
-      // Store tokens
       localStorage.setItem('access_token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
+      setHasAuthToken(true);
 
-      // PERFORMANCE FIX: Only fetch user and portfolio data during login
-      // Portfolio analysis is expensive and should be lazy loaded by dashboard components
-      const [userResponse, portfolioResponse] = await Promise.allSettled([
-        api.get('/users/me'),
-        api.get('/portfolios')
-      ]);
-
-      if (userResponse.status === 'fulfilled') {
-        const userData = userResponse.value.data;
-        setUser(userData);
-      }
-
-      if (portfolioResponse.status === 'fulfilled') {
-        const portfolioData = portfolioResponse.value.data;
-        setPortfolioId(portfolioData.id); // Store portfolio ID
-      }
-
-      // Check onboarding status from portfolio existence (not expensive analysis)
-      if (portfolioResponse.status === 'fulfilled') {
-        markOnboarded(portfolioResponse.value?.data);
-      }
+      const bootstrapResponse = await api.get('/auth/bootstrap', { timeout: 15000 });
+      applyBootstrapPayload(bootstrapResponse.data);
 
       toast.success('Login successful!');
 
-      const hasPortfolio = portfolioResponse.status === 'fulfilled' && Boolean(portfolioResponse.value?.data?.id);
-
       return {
         success: true,
-        isOnboarded: hasPortfolio
+        isOnboarded: Boolean(bootstrapResponse.data.is_onboarded)
       };
     } catch (err) {
       console.error('Login error:', err);
@@ -350,10 +312,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setUser(null);
-      setPortfolioId(null); // CRITICAL FIX: Clear portfolio ID on logout
+      clearAuthState();
       // Dispatch event to clear data cache
       window.dispatchEvent(new CustomEvent('auth:logout'));
       navigate('/login');
@@ -386,15 +345,16 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     changePassword,
-    isAuthenticated: !!user,
+    isAuthenticated: hasAuthToken,
     isOnboarded, // Expose onboarding status
     checkOnboardingStatus, // Expose function to refresh onboarding status
+    retryBootstrap: () => initializeAuth({ showToast: true }),
     api, // Expose the configured axios instance
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? <LoadingSpinner /> : children}
+      {children}
     </AuthContext.Provider>
   );
 };

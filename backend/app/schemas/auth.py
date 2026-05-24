@@ -4,6 +4,8 @@ Authentication schemas for API request/response models.
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.schemas.user import UserInDB
+
 
 class LoginRequest(BaseModel):
     """Schema for login request."""
@@ -47,6 +49,13 @@ class Token(BaseModel):
     refresh_token: str = Field(..., description="JWT refresh token")
     token_type: str = Field(default="bearer", description="Token type")
     expires_in: int = Field(..., description="Token expiration time in seconds")
+
+
+class AuthBootstrapResponse(BaseModel):
+    """Lightweight authenticated app bootstrap response."""
+    user: UserInDB = Field(..., description="Current authenticated user")
+    portfolio_id: Optional[int] = Field(None, description="Current user's active portfolio ID")
+    is_onboarded: bool = Field(..., description="Whether the user has an active portfolio")
 
 
 class TokenData(BaseModel):
