@@ -46,6 +46,72 @@ class FinanceService:
     )
 
     @staticmethod
+    def _valid_price(value) -> Optional[float]:
+        try:
+            price = float(value)
+        except (TypeError, ValueError):
+            return None
+        if price != price or price <= 0:
+            return None
+        return price
+
+    @staticmethod
+    def _read_yahoo_value(source, key: str):
+        if not source:
+            return None
+        try:
+            if hasattr(source, "get"):
+                return source.get(key)
+            return source[key]
+        except Exception:
+            return None
+
+    @staticmethod
+    def _get_yahoo_live_price(stock) -> Optional[float]:
+        """Prefer Yahoo's live quote fields over the daily history close."""
+        try:
+            fast_info = getattr(stock, "fast_info", None)
+            for key in ("last_price", "lastPrice", "regular_market_price", "regularMarketPrice"):
+                price = FinanceService._valid_price(FinanceService._read_yahoo_value(fast_info, key))
+                if price is not None:
+                    return price
+        except Exception:
+            pass
+
+        try:
+            info = stock.info
+            for key in ("currentPrice", "regularMarketPrice"):
+                price = FinanceService._valid_price(info.get(key))
+                if price is not None:
+                    return price
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
+    def _get_yahoo_previous_close(stock) -> Optional[float]:
+        try:
+            fast_info = getattr(stock, "fast_info", None)
+            for key in ("previous_close", "previousClose", "regular_market_previous_close"):
+                price = FinanceService._valid_price(FinanceService._read_yahoo_value(fast_info, key))
+                if price is not None:
+                    return price
+        except Exception:
+            pass
+
+        try:
+            info = stock.info
+            for key in ("previousClose", "regularMarketPreviousClose"):
+                price = FinanceService._valid_price(info.get(key))
+                if price is not None:
+                    return price
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
     async def get_asset_info(ticker: str, asset_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Fetch comprehensive asset information based on asset type.
@@ -460,29 +526,31 @@ class FinanceService:
             open_price = float(latest['Open'])
             high_price = float(latest['High'])
             low_price = float(latest['Low'])
+            current_price = FinanceService._get_yahoo_live_price(stock) or close_price
 
             # Get previous day's close for change calculation
             previous_close = None
-            change_percent = None
 
             if len(hist) >= 2:
                 previous = hist.iloc[-2]
                 previous_close = float(previous['Close'])
-                change_percent = ((close_price - previous_close) / previous_close) * 100
             else:
-                # If only one day available, calculate change from open to close
-                change_percent = ((close_price - open_price) / open_price) * 100
+                previous_close = FinanceService._get_yahoo_previous_close(stock)
+
+            reference_price = previous_close or open_price
+            change = current_price - reference_price
+            change_percent = (change / reference_price) * 100 if reference_price else 0
 
             ohlc_data = {
                 'ticker': ticker.upper(),
-                'current_price': close_price,
+                'current_price': current_price,
                 'open': open_price,
                 'high': high_price,
                 'low': low_price,
                 'close': close_price,
                 'previous_close': previous_close,
                 'change_percent': change_percent,
-                'change': close_price - (previous_close if previous_close else open_price),
+                'change': change,
                 'last_updated': datetime.now()
             }
 

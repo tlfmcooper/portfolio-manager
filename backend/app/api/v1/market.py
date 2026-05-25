@@ -24,14 +24,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Tickers not supported by Finnhub free tier
-UNSUPPORTED_TICKERS = ["MAU.TO"]
+# Canadian exchange symbols are more reliable through Yahoo Finance than
+# Finnhub's free quote endpoint, especially for intraday change percent.
+YAHOO_QUOTE_TICKER_SUFFIXES = (".TO", ".V")
+YAHOO_QUOTE_TICKERS = {"MAU.TO"}
 
 
 def _is_mutual_fund_holding(holding) -> bool:
     asset_type = (holding.asset.asset_type if getattr(holding, "asset", None) else None) or ""
     ticker = str(getattr(holding, "ticker", "") or "").upper()
     return asset_type == "mutual_fund" or ticker.endswith(".CF")
+
+
+def _uses_yahoo_quote(ticker: str) -> bool:
+    symbol = str(ticker or "").upper()
+    return symbol in YAHOO_QUOTE_TICKERS or symbol.endswith(YAHOO_QUOTE_TICKER_SUFFIXES)
 
 
 def convert_price(price: float, from_currency: str, to_currency: str, exchange_rates: Dict[str, float]) -> float:
@@ -176,9 +183,9 @@ async def get_live_market_data(
     # Determine display currency
     display_currency = (currency or portfolio.currency or "USD").upper()
 
-    # ── Full-response cache (5 min TTL) ──────────────────────────────────────
+    # ── Full-response cache (short TTL for live rows) ────────────────────────
     redis_client = await get_redis_client()
-    live_cache_key = f"portfolio:{portfolio.id}:live_market:v2:{display_currency}"
+    live_cache_key = f"portfolio:{portfolio.id}:live_market:v3:{display_currency}"
     cached_response = await redis_client.get(live_cache_key)
     if cached_response:
         logger.info(f"[MARKET_LIVE] Full cache hit for portfolio {portfolio.id}")
@@ -220,7 +227,7 @@ async def get_live_market_data(
     stock_symbols = []
     mutual_fund_holdings = []
     crypto_holdings = []
-    unsupported_stock_holdings = []
+    yahoo_quote_holdings = []
 
     for holding in holdings:
         if not holding.ticker:
@@ -232,9 +239,8 @@ async def get_live_market_data(
             mutual_fund_holdings.append(holding)
         elif asset_type == 'crypto':
             crypto_holdings.append(holding)
-        elif holding.ticker in UNSUPPORTED_TICKERS:
-            # Unsupported by Finnhub, will use Yahoo Finance OHLC
-            unsupported_stock_holdings.append(holding)
+        elif _uses_yahoo_quote(holding.ticker):
+            yahoo_quote_holdings.append(holding)
         else:
             stock_symbols.append(holding.ticker)
 
@@ -268,7 +274,7 @@ async def get_live_market_data(
         return data
 
     async def get_cached_ohlc(ticker: str):
-        """Return cached OHLC data or fetch + cache with 15-min TTL."""
+        """Return cached OHLC data or fetch + cache briefly for live rows."""
         ck = f"ohlc:{ticker}"
         cached = await redis_client.get(ck)
         if cached:
@@ -279,7 +285,7 @@ async def get_live_market_data(
             lambda t=ticker: asyncio.run(FinanceService.get_ohlc_data(t))
         )
         if data:
-            await redis_client.set(ck, data, ttl=900)
+            await redis_client.set(ck, data, ttl=60)
         return data
 
     # ── Fetch mutual fund / crypto / OHLC data in parallel ───────────────────
@@ -342,10 +348,10 @@ async def get_live_market_data(
     for h in mutual_fund_holdings:
         await fetch_mf(h)
 
-    # Crypto and OHLC: truly parallel via thread-pool executors inside helpers
+    # Crypto and Yahoo OHLC: truly parallel via thread-pool executors inside helpers
     await asyncio.gather(
         *[fetch_crypto(h) for h in crypto_holdings],
-        *[fetch_ohlc(h) for h in unsupported_stock_holdings],
+        *[fetch_ohlc(h) for h in yahoo_quote_holdings],
     )
 
     # Commit database updates for prices
@@ -382,7 +388,7 @@ async def get_live_market_data(
                 "market_value": calculated_market_value,  # Always calculate fresh
             }
 
-            # Check if we have temp change_percent (for mutual funds, crypto, and unsupported stocks)
+            # Check if we have temp change_percent (for mutual funds, crypto, and Yahoo quote stocks)
             if hasattr(holding, '_temp_change_percent'):
                 holding_dict["change_percent"] = holding._temp_change_percent
                 # Use temp_change if available (from OHLC), otherwise calculate
@@ -409,7 +415,7 @@ async def get_live_market_data(
             "display_currency": display_currency,
             "updated_at": datetime.utcnow().isoformat()
         }
-        await redis_client.set(live_cache_key, early_response, ttl=300)
+        await redis_client.set(live_cache_key, early_response, ttl=60)
         return early_response
 
     # Update active symbols for WebSocket background task (only for stocks)
@@ -476,7 +482,7 @@ async def get_live_market_data(
             holding_dict["change_percent"] = quote["change_percent"]  # Percentage stays the same
             holding_dict["change"] = converted_change
         else:
-            # Use stored price if live data not available (e.g., MAU.TO, mutual funds, crypto)
+            # Use stored/Yahoo price if Finnhub live data is not used (e.g., .TO, mutual funds, crypto)
             # CRITICAL FIX: Always calculate market_value from quantity and price
             current_price_fallback = holding.current_price or holding.average_cost
             converted_current_price = convert_price(current_price_fallback, asset_currency, display_currency, exchange_rates)
@@ -484,7 +490,7 @@ async def get_live_market_data(
             holding_dict["current_price"] = converted_current_price
             holding_dict["market_value"] = holding.quantity * converted_current_price
 
-            # Check if we have temp change_percent (for mutual funds, crypto, and unsupported stocks)
+            # Check if we have temp change_percent (for mutual funds, crypto, and Yahoo quote stocks)
             if hasattr(holding, '_temp_change_percent'):
                 holding_dict["change_percent"] = holding._temp_change_percent
                 # Use temp_change if available (from OHLC), otherwise calculate
@@ -510,8 +516,8 @@ async def get_live_market_data(
         "display_currency": display_currency,
         "updated_at": datetime.utcnow().isoformat()
     }
-    # Cache full response for 5 minutes
-    await redis_client.set(live_cache_key, response, ttl=300)
+    # Cache full response briefly so auto-refresh can pick up moving markets.
+    await redis_client.set(live_cache_key, response, ttl=60)
     return response
 
 
@@ -543,7 +549,7 @@ async def get_ytd_data(
         logger.info(f"Cache hit for portfolio {portfolio.id} YTD data")
         return cached
 
-    live_cache_key = f"portfolio:{portfolio.id}:live_market:v2:{display_currency}"
+    live_cache_key = f"portfolio:{portfolio.id}:live_market:v3:{display_currency}"
     live_cached = await redis_client.get(live_cache_key)
     live_holdings_by_ticker = {
         str(item.get("ticker") or "").upper(): item

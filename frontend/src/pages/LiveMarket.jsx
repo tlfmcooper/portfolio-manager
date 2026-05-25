@@ -9,8 +9,10 @@ import { ChartSkeleton, TableSkeleton } from '../components/ui/Skeleton';
 // Lazy load chart component
 const LiveStockChart = lazy(() => import('../components/LiveStockChart'));
 
-// Tickers not supported by Finnhub
-const UNSUPPORTED_TICKERS = ['MAU.TO'];
+const isWebSocketTicker = (ticker) => {
+  const symbol = String(ticker || '').toUpperCase();
+  return Boolean(symbol) && !symbol.endsWith('.TO') && !symbol.endsWith('.V') && !symbol.endsWith('.CF');
+};
 const LIVE_MARKET_CACHE_TTL = 5 * 60 * 1000;
 
 const getLiveMarketCacheKey = (currency) => `live_market_${currency || 'default'}`;
@@ -257,7 +259,7 @@ const LiveMarket = () => {
 
       // Set initial selected stock
       if (!selectedStock && holdingsData.length > 0) {
-        const supported = holdingsData.filter(h => !UNSUPPORTED_TICKERS.includes(h.ticker));
+        const supported = holdingsData.filter(h => h.ticker);
         if (supported.length > 0) {
           setSelectedStock(supported[0].ticker);
         }
@@ -266,7 +268,7 @@ const LiveMarket = () => {
       // Extract symbols for WebSocket subscription
       const symbols = holdingsData
         .map(h => h.ticker)
-        .filter(ticker => ticker && !UNSUPPORTED_TICKERS.includes(ticker));
+        .filter(isWebSocketTicker);
 
       // Connect to WebSocket for live updates
       if (symbols.length > 0 && !wsRef.current) {
@@ -505,7 +507,7 @@ const LiveMarket = () => {
   const totalGainLoss = getTotalUnrealizedGainLoss();
   const totalGainLossPercentage = getTotalUnrealizedGainLossPercentage();
   const portfolioDailyReturn = getPortfolioDailyReturn();
-  const supportedHoldings = holdings.filter(h => !UNSUPPORTED_TICKERS.includes(h.ticker));
+  const supportedHoldings = holdings.filter(h => h.ticker);
 
   return (
     <div className="space-y-6">
@@ -775,11 +777,6 @@ const LiveMarket = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                         {holding.ticker}
-                        {UNSUPPORTED_TICKERS.includes(holding.ticker) && (
-                          <span className="ml-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                            (No live data)
-                          </span>
-                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm" style={{ color: 'var(--color-text)' }}>
@@ -867,11 +864,6 @@ const LiveMarket = () => {
                       <div className="font-bold" style={{ color: 'var(--color-text)' }}>
                         {formatCurrency(holding.current_price)}
                       </div>
-                      {UNSUPPORTED_TICKERS.includes(holding.ticker) && (
-                        <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                          No live data
-                        </div>
-                      )}
                     </div>
                   </div>
 

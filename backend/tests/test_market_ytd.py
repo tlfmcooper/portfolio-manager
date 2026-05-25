@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.api.v1 import market
+from app.services.finance_service import FinanceService
 
 
 def test_is_mutual_fund_holding_detects_cf_tickers_without_asset_type() -> None:
@@ -13,6 +14,129 @@ def test_is_mutual_fund_holding_detects_cf_tickers_without_asset_type() -> None:
     )
 
     assert market._is_mutual_fund_holding(holding) is True
+
+
+def test_tsx_tickers_use_yahoo_quote_path() -> None:
+    assert market._uses_yahoo_quote("CCO.TO") is True
+    assert market._uses_yahoo_quote("MAU.TO") is True
+    assert market._uses_yahoo_quote("AAPL") is False
+
+
+@pytest.mark.asyncio
+async def test_get_ohlc_data_prefers_yahoo_live_price_for_daily_change(monkeypatch) -> None:
+    import pandas as pd
+    import yfinance as _yf
+
+    class _FakeTicker:
+        fast_info = {
+            "last_price": 106.25,
+            "previous_close": 104.98,
+        }
+
+        def __init__(self, _symbol):
+            pass
+
+        def history(self, **_kwargs):
+            return pd.DataFrame(
+                {
+                    "Open": [103.0, 105.0],
+                    "High": [106.0, 106.5],
+                    "Low": [102.5, 104.0],
+                    "Close": [104.98, 104.98],
+                }
+            )
+
+        @property
+        def info(self):
+            return {}
+
+    monkeypatch.setattr(_yf, "Ticker", _FakeTicker)
+
+    data = await FinanceService.get_ohlc_data("CCO.TO")
+
+    assert data["current_price"] == 106.25
+    assert data["previous_close"] == 104.98
+    assert data["change"] == pytest.approx(1.27)
+    assert data["change_percent"] == pytest.approx(1.209754238902648)
+
+
+@pytest.mark.asyncio
+async def test_get_live_market_data_routes_tsx_holdings_through_yahoo(monkeypatch) -> None:
+    portfolio = SimpleNamespace(id=77, currency="CAD", cash_balance=0)
+    holding = SimpleNamespace(
+        id=1,
+        ticker="CCO.TO",
+        quantity=2.0,
+        average_cost=100.0,
+        current_price=104.98,
+        asset=SimpleNamespace(
+            name="Cameco Corporation",
+            ticker="CCO.TO",
+            asset_type="stock",
+            currency="CAD",
+            current_price=104.98,
+            last_price_update=None,
+        ),
+    )
+    writes = {}
+
+    class _FakeRedis:
+        async def get(self, _key):
+            return None
+
+        async def set(self, key, value, ttl=None):
+            writes[key] = (value, ttl)
+
+    class _FakeDb:
+        async def commit(self):
+            pass
+
+    class _ExchangeService:
+        async def get_exchange_rate(self, _from, _to):
+            return 1
+
+    class _Finnhub:
+        async def get_multiple_quotes_async(self, symbols):
+            raise AssertionError(f"TSX symbols should not use Finnhub: {symbols}")
+
+    async def fake_portfolio(_db, _uid):
+        return portfolio
+
+    async def fake_holdings(_db, _pid):
+        return [holding]
+
+    async def fake_redis():
+        return _FakeRedis()
+
+    async def fake_ohlc(ticker):
+        assert ticker == "CCO.TO"
+        return {
+            "current_price": 106.25,
+            "change_percent": 1.21,
+            "change": 1.27,
+        }
+
+    monkeypatch.setattr(market, "get_user_portfolio", fake_portfolio)
+    monkeypatch.setattr(market, "get_portfolio_holdings", fake_holdings)
+    monkeypatch.setattr(market, "get_redis_client", fake_redis)
+    monkeypatch.setattr(market, "get_exchange_rate_service", lambda: _ExchangeService())
+    monkeypatch.setattr(market, "get_finnhub_service", lambda: _Finnhub())
+    monkeypatch.setattr(market.FinanceService, "get_ohlc_data", fake_ohlc)
+
+    result = await market.get_live_market_data(
+        currency="CAD",
+        current_user=SimpleNamespace(id=1),
+        db=_FakeDb(),
+    )
+
+    live_holding = result["holdings"][0]
+    assert live_holding["ticker"] == "CCO.TO"
+    assert live_holding["current_price"] == 106.25
+    assert live_holding["change_percent"] == 1.21
+    assert live_holding["change"] == 1.27
+    assert live_holding["market_value"] == 212.5
+    assert result["market_data"] == {}
+    assert writes["portfolio:77:live_market:v3:CAD"][1] == 60
 
 
 @pytest.mark.asyncio

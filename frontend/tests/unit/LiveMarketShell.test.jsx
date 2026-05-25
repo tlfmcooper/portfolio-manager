@@ -58,4 +58,48 @@ describe('live market route shell', () => {
     expect(await screen.findByText('Strategic Multi-Asset Portfolio')).toBeInTheDocument();
     expect(screen.getByText(/Welcome back, Tester/)).toBeInTheDocument();
   });
+
+  it('does not mark MAU.TO as missing live data when the live endpoint returns a quote', async () => {
+    mocks.apiGet.mockImplementation((url) => {
+      if (url === '/market/live') {
+        return Promise.resolve({
+          data: {
+            holdings: [
+              {
+                id: 1,
+                ticker: 'MAU.TO',
+                quantity: 145,
+                average_cost: 7,
+                current_price: 11.07,
+                market_value: 1605.15,
+                change_percent: 6.77,
+                change: 0.7,
+                asset: { name: 'Montage Gold Corp.' },
+              },
+            ],
+            cash_balance: 0,
+            updated_at: new Date().toISOString(),
+          },
+        });
+      }
+      if (url === '/market/ytd') {
+        return Promise.resolve({ data: { ytd_data: [{ ticker: 'MAU.TO', ytd_return: 54.91 }] } });
+      }
+      return new Promise(() => {});
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard/live-market']}>
+        <Routes>
+          <Route path="/dashboard" element={<DashboardLayout />}>
+            <Route path="live-market" element={<LiveMarket />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect((await screen.findAllByText('MAU.TO')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('+6.77%')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No live data/i)).not.toBeInTheDocument();
+  });
 });
