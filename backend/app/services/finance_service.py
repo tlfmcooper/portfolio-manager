@@ -2,10 +2,10 @@
 Finance service for fetching asset data from Yahoo Finance and other sources.
 """
 import yfinance as yf
+import asyncio
 import logging
 import ast
 import re
-import time
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any, List
 from datetime import date, datetime, timedelta
@@ -44,6 +44,10 @@ class FinanceService:
         "tradeTime.format(m/d/Y),openPrice,highPrice,lowPrice,lastPrice,"
         "priceChange,percentChange,volume,symbolCode,symbolType"
     )
+
+    @staticmethod
+    async def _session_get(*args, **kwargs):
+        return await asyncio.to_thread(session.get, *args, **kwargs)
 
     @staticmethod
     def _valid_price(value) -> Optional[float]:
@@ -236,9 +240,9 @@ class FinanceService:
                 if attempt > 0:
                     wait_time = 2 ** attempt  # Exponential backoff: 2, 4, 8 seconds
                     logger.info(f"Retry attempt {attempt + 1}/{max_retries} for {ticker} after {wait_time}s delay")
-                    time.sleep(wait_time)
+                    await asyncio.sleep(wait_time)
 
-                response = session.get(URL, headers=headers, timeout=timeout)
+                response = await FinanceService._session_get(URL, headers=headers, timeout=timeout)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.text, "html.parser")
@@ -374,15 +378,16 @@ class FinanceService:
                 if attempt > 0:
                     wait_time = 2 ** attempt
                     logger.info(f"Retry attempt {attempt + 1}/{max_retries} for mutual fund history {ticker} after {wait_time}s delay")
-                    time.sleep(wait_time)
+                    await asyncio.sleep(wait_time)
 
-                session.get(page_url, headers=page_headers, timeout=timeout).raise_for_status()
+                page_response = await FinanceService._session_get(page_url, headers=page_headers, timeout=timeout)
+                page_response.raise_for_status()
                 xsrf_token = FinanceService._extract_barchart_xsrf_token()
                 if not xsrf_token:
                     logger.warning(f"Missing Barchart XSRF token for mutual fund history: {ticker}")
                     return None
 
-                response = session.get(
+                response = await FinanceService._session_get(
                     api_url,
                     params=params,
                     headers=FinanceService._build_barchart_history_headers(page_url, xsrf_token),
