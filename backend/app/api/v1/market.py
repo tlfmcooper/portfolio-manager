@@ -41,6 +41,18 @@ def _uses_yahoo_quote(ticker: str) -> bool:
     return symbol in YAHOO_QUOTE_TICKERS or symbol.endswith(YAHOO_QUOTE_TICKER_SUFFIXES)
 
 
+def _get_chart_source(holding) -> Optional[str]:
+    """Return the live-chart transport supported for a holding."""
+    if _is_mutual_fund_holding(holding):
+        return None
+
+    asset_type = (holding.asset.asset_type if getattr(holding, "asset", None) else None) or ""
+    if asset_type == "crypto" or _uses_yahoo_quote(getattr(holding, "ticker", "")):
+        return "polling"
+
+    return "websocket"
+
+
 def convert_price(price: float, from_currency: str, to_currency: str, exchange_rates: Dict[str, float]) -> float:
     """Convert price from one currency to another using exchange rates."""
     if from_currency == to_currency:
@@ -384,6 +396,7 @@ async def get_live_market_data(
                     "name": holding.asset.name if holding.asset else holding.ticker,
                     "ticker": holding.ticker
                 },
+                "chart_source": _get_chart_source(holding),
                 "current_price": converted_current_price,
                 "market_value": calculated_market_value,  # Always calculate fresh
             }
@@ -467,7 +480,8 @@ async def get_live_market_data(
             "asset": {
                 "name": holding.asset.name if holding.asset else holding.ticker,
                 "ticker": holding.ticker
-            }
+            },
+            "chart_source": _get_chart_source(holding),
         }
 
         # Add live market data if available

@@ -9,9 +9,13 @@ import { ChartSkeleton, TableSkeleton } from '../components/ui/Skeleton';
 // Lazy load chart component
 const LiveStockChart = lazy(() => import('../components/LiveStockChart'));
 
-const isWebSocketTicker = (ticker) => {
-  const symbol = String(ticker || '').toUpperCase();
-  return Boolean(symbol) && !symbol.endsWith('.TO') && !symbol.endsWith('.V') && !symbol.endsWith('.CF');
+const getChartSource = (holding) => {
+  if (holding?.chart_source) return holding.chart_source;
+
+  const symbol = String(holding?.ticker || '').toUpperCase();
+  if (!symbol || symbol.endsWith('.CF')) return null;
+  if (symbol.endsWith('.TO') || symbol.endsWith('.V')) return 'polling';
+  return 'websocket';
 };
 const LIVE_MARKET_CACHE_TTL = 5 * 60 * 1000;
 
@@ -68,12 +72,52 @@ const LiveMarket = () => {
   // Auto-refresh interval in milliseconds (60 seconds)
   const AUTO_REFRESH_INTERVAL = 60000;
 
+  const appendPollingChartData = (holdingsData, updatedAt) => {
+    const timestamp = new Date(updatedAt || Date.now()).getTime();
+    const currentTime = new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'America/New_York'
+    });
+    let changed = false;
+
+    holdingsData.forEach((holding) => {
+      if (getChartSource(holding) !== 'polling') return;
+
+      const price = Number(holding.current_price);
+      if (!Number.isFinite(price) || price <= 0) return;
+
+      const history = priceHistoryRef.current[holding.ticker] || [];
+      const point = { time: currentTime, price, timestamp };
+      const lastPoint = history[history.length - 1];
+
+      if (lastPoint?.timestamp === timestamp) {
+        if (lastPoint.price !== price) {
+          history[history.length - 1] = point;
+          changed = true;
+        }
+      } else {
+        history.push(point);
+        if (history.length > 200) history.shift();
+        changed = true;
+      }
+
+      priceHistoryRef.current[holding.ticker] = history;
+    });
+
+    if (changed) {
+      setChartData({ ...priceHistoryRef.current });
+    }
+  };
+
   useEffect(() => {
     const cached = readLiveMarketCache(currency);
     if (cached?.holdings?.length) {
       setHoldings(cached.holdings);
       setCashBalance(cached.cash_balance || 0);
       setLastUpdate(cached.updated_at ? new Date(cached.updated_at) : new Date());
+      appendPollingChartData(cached.holdings, cached.updated_at);
       setError(null);
       setLoading(false);
     }
@@ -225,6 +269,7 @@ const LiveMarket = () => {
       console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
+      appendPollingChartData(holdingsData, response.data.updated_at);
       writeLiveMarketCache(currency, response.data);
 
       // Clear stale YTD values before issuing new fetch (currency may have changed)
@@ -267,8 +312,8 @@ const LiveMarket = () => {
 
       // Extract symbols for WebSocket subscription
       const symbols = holdingsData
-        .map(h => h.ticker)
-        .filter(isWebSocketTicker);
+        .filter(holding => getChartSource(holding) === 'websocket')
+        .map(holding => holding.ticker);
 
       // Connect to WebSocket for live updates
       if (symbols.length > 0 && !wsRef.current) {

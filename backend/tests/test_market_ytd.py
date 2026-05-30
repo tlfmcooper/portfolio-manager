@@ -22,6 +22,21 @@ def test_tsx_tickers_use_yahoo_quote_path() -> None:
     assert market._uses_yahoo_quote("AAPL") is False
 
 
+def test_chart_source_uses_polling_for_yahoo_and_crypto_holdings() -> None:
+    assert market._get_chart_source(
+        SimpleNamespace(ticker="CCO.TO", asset=SimpleNamespace(asset_type="stock"))
+    ) == "polling"
+    assert market._get_chart_source(
+        SimpleNamespace(ticker="SOL", asset=SimpleNamespace(asset_type="crypto"))
+    ) == "polling"
+    assert market._get_chart_source(
+        SimpleNamespace(ticker="AAPL", asset=SimpleNamespace(asset_type="stock"))
+    ) == "websocket"
+    assert market._get_chart_source(
+        SimpleNamespace(ticker="PHN9756.CF", asset=SimpleNamespace(asset_type=None))
+    ) is None
+
+
 @pytest.mark.asyncio
 async def test_get_ohlc_data_prefers_yahoo_live_price_for_daily_change(monkeypatch) -> None:
     import pandas as pd
@@ -135,6 +150,7 @@ async def test_get_live_market_data_routes_tsx_holdings_through_yahoo(monkeypatc
     assert live_holding["change_percent"] == 1.21
     assert live_holding["change"] == 1.27
     assert live_holding["market_value"] == 212.5
+    assert live_holding["chart_source"] == "polling"
     assert result["market_data"] == {}
     assert writes["portfolio:77:live_market:v3:CAD"][1] == 60
 
