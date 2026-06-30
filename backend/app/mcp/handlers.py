@@ -1410,7 +1410,7 @@ async def sampling_create_message(ctx: HandlerContext, arguments: Dict[str, Any]
         modelPreferences={
             "temperature": temperature,
             "toolChoice": "auto",
-            "preferredModels": ["gpt-5.4", "claude-sonnet", "gemini-2.5-pro"],
+            "preferredModels": ["gpt-5.4", "claude-sonnet", "gemini-3.5-flash"],
         },
     )
 

@@ -149,7 +149,7 @@ const PortfolioChatWidget = () => {
       // Lazy load Google Generative AI
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(apiKey);
-      const modelName = "gemini-2.5-pro";
+      const modelName = "gemini-3.5-flash";
 
       const model = genAI.getGenerativeModel({ 
         model: modelName,
