@@ -8,9 +8,7 @@ if (import.meta.env.PROD) {
   // Register service worker for PWA functionality in production only.
   const updateSW = registerSW({
     onNeedRefresh() {
-      window.dispatchEvent(new CustomEvent('app:updateAvailable', {
-        detail: { update: () => updateSW(true) },
-      }));
+      updateSW(true);
     },
     onOfflineReady() {
       console.log('App ready to work offline');
