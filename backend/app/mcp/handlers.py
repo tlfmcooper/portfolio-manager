@@ -6,6 +6,7 @@ import json
 import csv
 import io
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Callable, Dict, Iterable
 
 from fastapi import HTTPException
@@ -262,6 +263,45 @@ async def tool_portfolio_get_summary(ctx: HandlerContext, arguments: Dict[str, A
         ),
         data=result,
         ui=ui,
+    )
+
+
+async def tool_portfolio_get_period_inputs(
+    ctx: HandlerContext,
+    arguments: Dict[str, Any],
+) -> ToolResult:
+    """Return normalized facts for interpreter-driven period calculations."""
+    from app.services.portfolio_period_service import build_portfolio_period_inputs
+
+    try:
+        start_date = date.fromisoformat(str(arguments.get("start_date", "")))
+        end_date = date.fromisoformat(str(arguments.get("end_date", "")))
+    except ValueError as exc:
+        raise invalid_params(
+            message="start_date and end_date must use YYYY-MM-DD format"
+        ) from exc
+    if end_date < start_date:
+        raise invalid_params(message="end_date must be on or after start_date")
+
+    _, portfolio = await _get_current_portfolio(ctx)
+    currency = str(arguments.get("currency") or portfolio.currency).upper()
+    if currency not in {"USD", "CAD"}:
+        raise invalid_params(message="currency must be USD or CAD")
+
+    result = await build_portfolio_period_inputs(
+        ctx.db,
+        portfolio,
+        start_date,
+        end_date,
+        currency,
+    )
+    return _tool_result(
+        text=(
+            "Historical portfolio inputs are ready for code-interpreter analysis. "
+            "Use calculation_contract and coverage; do not present this tool output "
+            "as the final answer."
+        ),
+        data=result,
     )
 
 
@@ -1417,6 +1457,7 @@ async def sampling_create_message(ctx: HandlerContext, arguments: Dict[str, Any]
 
 TOOL_HANDLERS: Dict[str, Callable[[HandlerContext, Dict[str, Any]], Any]] = {
     "tool_portfolio_get_summary": tool_portfolio_get_summary,
+    "tool_portfolio_get_period_inputs": tool_portfolio_get_period_inputs,
     "tool_portfolio_get_analysis": tool_portfolio_get_analysis,
     "tool_portfolio_get_cash_balance": tool_portfolio_get_cash_balance,
     "tool_holdings_list": tool_holdings_list,

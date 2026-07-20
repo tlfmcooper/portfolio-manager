@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import quote
 
 import pytest
@@ -68,6 +68,48 @@ async def test_get_mutual_fund_history_uses_barchart_proxy_with_xsrf(monkeypatch
     assert fake_session.calls[1]["headers"]["Referer"].endswith("/PHN9756.CF/price-history/historical")
     assert fake_session.calls[1]["params"]["symbol"] == "PHN9756.CF"
     assert fake_session.calls[1]["params"]["orderDir"] == "asc"
+
+
+def test_history_price_points_resolve_weekend_to_preceding_close() -> None:
+    result = FinanceService._history_price_points(
+        [
+            (date(2026, 7, 10), 100.0),
+            (date(2026, 7, 13), 102.0),
+            (date(2026, 7, 17), 105.0),
+        ],
+        date(2026, 7, 12),
+        date(2026, 7, 19),
+    )
+
+    assert result["start"] == {"date": "2026-07-10", "close": 100.0}
+    assert result["end"] == {"date": "2026-07-17", "close": 105.0}
+
+
+@pytest.mark.asyncio
+async def test_get_price_points_uses_mutual_fund_history(monkeypatch) -> None:
+    async def fake_history(ticker, limit=400, start_date=None, end_date=None):
+        assert ticker == "PHN9756.CF"
+        assert limit >= 400
+        assert start_date == date(2026, 7, 2)
+        assert end_date == date(2026, 7, 19)
+        return [
+            {"raw": {"tradeTime": "2026-07-10", "lastPrice": 20.0}},
+            {"raw": {"tradeTime": "2026-07-17", "lastPrice": 21.0}},
+        ]
+
+    monkeypatch.setattr(FinanceService, "_get_mutual_fund_history", fake_history)
+
+    result = await FinanceService.get_price_points(
+        "PHN9756.CF",
+        date(2026, 7, 12),
+        date(2026, 7, 19),
+        "mutual_fund",
+    )
+
+    assert result["complete"] is True
+    assert result["source"] == "barchart"
+    assert result["start"]["close"] == 20.0
+    assert result["end"]["close"] == 21.0
 
 
 # ── _extract_ytd_from_raw_data ──────────────────────────────────────────────

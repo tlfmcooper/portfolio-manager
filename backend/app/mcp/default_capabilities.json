@@ -44,6 +44,63 @@
       }
     },
     {
+      "name": "portfolio_get_period_inputs",
+      "description": "Get normalized historical portfolio facts for a requested date range. Use this for weekly, monthly, since-date, comparative, attribution, and other period-performance questions. The result is input for a code interpreter, not a final narrative answer.",
+      "handler": "tool_portfolio_get_period_inputs",
+      "requiresAuth": true,
+      "permissions": ["portfolio:read"],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Requested opening boundary in YYYY-MM-DD format."
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Requested closing boundary in YYYY-MM-DD format."
+          },
+          "currency": {
+            "type": "string",
+            "enum": ["USD", "CAD"]
+          }
+        },
+        "required": ["start_date", "end_date"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "requested_period": {"type": "object"},
+          "effective_period": {"type": "object"},
+          "currency": {"type": "string"},
+          "opening": {"type": "object"},
+          "closing": {"type": "object"},
+          "assets": {"type": "array"},
+          "external_cash_flows": {"type": "array"},
+          "net_external_cash_flow": {"type": "number"},
+          "calculation_contract": {"type": "object"},
+          "coverage": {"type": "object"},
+          "generated_at": {"type": "string"}
+        },
+        "required": [
+          "requested_period",
+          "effective_period",
+          "currency",
+          "opening",
+          "closing",
+          "assets",
+          "external_cash_flows",
+          "net_external_cash_flow",
+          "calculation_contract",
+          "coverage",
+          "generated_at"
+        ]
+      }
+    },
+    {
       "name": "portfolio_get_analysis",
       "description": "Get advanced portfolio analytics for the current authenticated user.",
       "handler": "tool_portfolio_get_analysis",

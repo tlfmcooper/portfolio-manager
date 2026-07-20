@@ -347,7 +347,12 @@ class FinanceService:
         }
 
     @staticmethod
-    async def _get_mutual_fund_history(ticker: str, limit: int = 400) -> Optional[List[Dict[str, Any]]]:
+    async def _get_mutual_fund_history(
+        ticker: str,
+        limit: int = 400,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> Optional[List[Dict[str, Any]]]:
         """Fetch mutual fund historical EOD data from Barchart's proxied core API."""
         max_retries = 3
         base_timeout = 20
@@ -371,6 +376,10 @@ class FinanceService:
             "meta": "field.shortName,field.type,field.description",
             "raw": "1",
         }
+        if start_date is not None:
+            params["startDate"] = start_date.strftime("%m/%d/%Y")
+        if end_date is not None:
+            params["endDate"] = end_date.strftime("%m/%d/%Y")
 
         for attempt in range(max_retries):
             try:
@@ -434,6 +443,110 @@ class FinanceService:
                 continue
 
         return None
+
+    @staticmethod
+    def _history_price_points(
+        rows: List[tuple[date, float]],
+        start_date: date,
+        end_date: date,
+    ) -> Dict[str, Any]:
+        """Select closing prices on or before both requested boundaries."""
+        ordered = sorted(
+            ((row_date, float(price)) for row_date, price in rows if price and price > 0),
+            key=lambda item: item[0],
+        )
+
+        def point_on_or_before(boundary: date) -> tuple[date, float] | None:
+            matches = [item for item in ordered if item[0] <= boundary]
+            return matches[-1] if matches else None
+
+        start_point = point_on_or_before(start_date)
+        end_point = point_on_or_before(end_date)
+        return {
+            "start": (
+                {"date": start_point[0].isoformat(), "close": start_point[1]}
+                if start_point
+                else None
+            ),
+            "end": (
+                {"date": end_point[0].isoformat(), "close": end_point[1]}
+                if end_point
+                else None
+            ),
+        }
+
+    @staticmethod
+    async def get_price_points(
+        ticker: str,
+        start_date: date,
+        end_date: date,
+        asset_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return auditable closing-price points for arbitrary date boundaries."""
+        normalized_ticker = ticker.upper().strip()
+        result: Dict[str, Any] = {
+            "ticker": normalized_ticker,
+            "requested_start_date": start_date.isoformat(),
+            "requested_end_date": end_date.isoformat(),
+            "start": None,
+            "end": None,
+            "source": "barchart" if asset_type == "mutual_fund" else "yfinance",
+            "complete": False,
+        }
+
+        if asset_type == "mutual_fund" or normalized_ticker.endswith(".CF"):
+            days = max((end_date - start_date).days, 1)
+            history = await FinanceService._get_mutual_fund_history(
+                normalized_ticker,
+                limit=min(max(400, days * 2), 5000),
+                start_date=start_date - timedelta(days=10),
+                end_date=end_date,
+            )
+            rows: List[tuple[date, float]] = []
+            for row in history or []:
+                raw = row.get("raw") or {}
+                trade_time = raw.get("tradeTime")
+                price = FinanceService._valid_price(raw.get("lastPrice"))
+                if not trade_time or price is None:
+                    continue
+                try:
+                    rows.append((datetime.fromisoformat(str(trade_time)).date(), price))
+                except (TypeError, ValueError):
+                    continue
+            result.update(FinanceService._history_price_points(rows, start_date, end_date))
+        else:
+            yahoo_ticker = normalized_ticker
+            if asset_type == "crypto" and "-USD" not in yahoo_ticker:
+                yahoo_ticker = f"{yahoo_ticker}-USD"
+
+            def fetch_history():
+                # Include a buffer so weekends and market holidays resolve to the
+                # latest preceding close. yfinance's end boundary is exclusive.
+                return yf.Ticker(yahoo_ticker).history(
+                    start=start_date - timedelta(days=10),
+                    end=end_date + timedelta(days=2),
+                    auto_adjust=False,
+                )
+
+            try:
+                history = await asyncio.to_thread(fetch_history)
+                rows = []
+                if history is not None and not history.empty:
+                    price_column = "Adj Close" if "Adj Close" in history.columns else "Close"
+                    for index, row in history.iterrows():
+                        price = FinanceService._valid_price(row.get(price_column))
+                        if price is not None:
+                            rows.append((index.date(), price))
+                result.update(FinanceService._history_price_points(rows, start_date, end_date))
+            except Exception as exc:
+                logger.warning(
+                    "Failed to fetch price points for %s: %s",
+                    normalized_ticker,
+                    exc,
+                )
+
+        result["complete"] = bool(result["start"] and result["end"])
+        return result
 
     @staticmethod
     async def _get_crypto_info(ticker: str) -> Optional[Dict[str, Any]]:

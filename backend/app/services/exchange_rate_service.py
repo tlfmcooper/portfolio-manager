@@ -221,6 +221,60 @@ class ExchangeRateService:
         rate = await self.get_exchange_rate(from_currency, to_currency, use_cache)
         return amount * rate
 
+    async def get_historical_exchange_rate(
+        self,
+        from_currency: str,
+        to_currency: str,
+        rate_date,
+    ) -> Dict:
+        """Return a dated FX rate, falling back explicitly to the current rate."""
+        from_currency = from_currency.upper()
+        to_currency = to_currency.upper()
+        requested_date = rate_date.isoformat()
+        if from_currency == to_currency:
+            return {
+                "rate": 1.0,
+                "requested_date": requested_date,
+                "effective_date": requested_date,
+                "source": "identity",
+                "is_historical": True,
+            }
+
+        try:
+            url = f"https://api.frankfurter.dev/v1/{requested_date}"
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                response = await client.get(
+                    url,
+                    params={"base": from_currency, "symbols": to_currency},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                rate = payload.get("rates", {}).get(to_currency)
+                if rate is not None:
+                    return {
+                        "rate": float(rate),
+                        "requested_date": requested_date,
+                        "effective_date": payload.get("date", requested_date),
+                        "source": "frankfurter",
+                        "is_historical": True,
+                    }
+        except Exception as exc:
+            logger.warning(
+                "Historical exchange-rate lookup failed for %s/%s on %s: %s",
+                from_currency,
+                to_currency,
+                requested_date,
+                exc,
+            )
+
+        return {
+            "rate": await self.get_exchange_rate(from_currency, to_currency),
+            "requested_date": requested_date,
+            "effective_date": datetime.utcnow().date().isoformat(),
+            "source": "current_rate_fallback",
+            "is_historical": False,
+        }
+
     async def get_rate_info(self, from_currency: str, to_currency: str) -> Dict:
         """
         Get exchange rate with metadata.
