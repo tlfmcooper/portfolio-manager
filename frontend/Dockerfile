@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -8,10 +8,9 @@ WORKDIR /app
 COPY frontend/package.json ./package.json
 COPY frontend/package-lock.json ./package-lock.json
 
-# Install dependencies
-RUN npm install -g npm@latest && \
-    npm install -g vite && \
-    npm install
+# Install the exact dependency graph from the committed lockfile. Vite is a
+# project dependency, so no mutable global npm or Vite install is needed.
+RUN npm ci
 
 # Copy source code
 COPY frontend/. .
