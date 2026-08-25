@@ -13,6 +13,17 @@ const BuyAssetForm = ({ onAssetAdded }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { api } = useAuth();
 
+  const quantity = Number.parseFloat(formData.quantity);
+  const unitPrice = Number.parseFloat(formData.average_cost);
+  const hasPurchaseEstimate = Number.isFinite(quantity) && quantity > 0
+    && Number.isFinite(unitPrice) && unitPrice > 0;
+  const formatMoney = (value) => new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: formData.currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -238,7 +249,7 @@ const BuyAssetForm = ({ onAssetAdded }) => {
               color: 'var(--color-text)'
             }}
           >
-            Average Cost ($)
+            Price per Share / Unit
           </label>
           <input
             type="number"
@@ -246,7 +257,8 @@ const BuyAssetForm = ({ onAssetAdded }) => {
             name="average_cost"
             value={formData.average_cost}
             onChange={handleChange}
-            placeholder="Price per share"
+            placeholder="Unit price, e.g. 18.79"
+            aria-describedby="average-cost-help purchase-estimate"
             required
             min="0"
             step="0.01"
@@ -264,6 +276,22 @@ const BuyAssetForm = ({ onAssetAdded }) => {
               transition: 'border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)'
             }}
           />
+          <p
+            id="average-cost-help"
+            className="mt-2 text-sm"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            Enter the unit price, not the transaction total.
+          </p>
+          {hasPurchaseEstimate && (
+            <p
+              id="purchase-estimate"
+              className="mt-2 text-sm font-medium"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {formData.quantity} × {formatMoney(unitPrice)} = {formatMoney(quantity * unitPrice)}
+            </p>
+          )}
         </div>
 
         <button
