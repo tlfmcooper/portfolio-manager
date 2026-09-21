@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { TrendingUp, TrendingDown, Activity, RefreshCw, Search } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, RefreshCw, Search, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import toast from 'react-hot-toast';
@@ -18,6 +18,18 @@ const getChartSource = (holding) => {
   return 'websocket';
 };
 const LIVE_MARKET_CACHE_TTL = 5 * 60 * 1000;
+
+// Mirrors the sortable desktop table columns
+const MOBILE_SORT_OPTIONS = [
+  { key: 'asset', label: 'Asset' },
+  { key: 'symbol', label: 'Symbol' },
+  { key: 'quantity', label: 'Quantity' },
+  { key: 'price', label: 'Current price' },
+  { key: 'value', label: 'Market value' },
+  { key: 'dayChange', label: 'Day change' },
+  { key: 'ytd', label: 'YTD' },
+  { key: 'return', label: 'Return %' },
+];
 
 const getLiveMarketCacheKey = (currency) => `live_market_${currency || 'default'}`;
 
@@ -888,6 +900,49 @@ const LiveMarket = () => {
 
         {/* Mobile Card View */}
         <div className="md:hidden">
+          {/* Mobile sort controls (table headers are hidden on mobile) */}
+          <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <label htmlFor="mobile-holdings-sort" className="text-sm whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+              Sort by
+            </label>
+            <select
+              id="mobile-holdings-sort"
+              value={sortConfig.key || ''}
+              onChange={(e) => setSortConfig(prev => ({
+                key: e.target.value || null,
+                direction: prev.direction
+              }))}
+              className="flex-1 min-w-0 px-3 py-2 rounded-md text-sm focus:ring-2 focus:outline-none"
+              style={{
+                backgroundColor: 'var(--color-secondary)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+              }}
+            >
+              <option value="">Default</option>
+              {MOBILE_SORT_OPTIONS.map(({ key, label }) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortConfig(prev => ({
+                ...prev,
+                direction: prev.direction === 'asc' ? 'desc' : 'asc'
+              }))}
+              disabled={!sortConfig.key}
+              aria-label={sortConfig.direction === 'asc' ? 'Sort ascending, tap for descending' : 'Sort descending, tap for ascending'}
+              className="flex items-center gap-1 px-3 py-2 rounded-md text-sm disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--color-secondary)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+              }}
+            >
+              {sortConfig.direction === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+              {sortConfig.direction === 'asc' ? 'Asc' : 'Desc'}
+            </button>
+          </div>
           <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
             {sortedHoldings.map((holding) => {
               const unrealizedGainLoss = calculateUnrealizedGainLoss(holding);
