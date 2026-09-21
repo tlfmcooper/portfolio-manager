@@ -88,3 +88,6 @@ backend/portfolio.db.backup_migrate_asset_id
 test_deposit.py.mcp.json
 .gstack/
 .worktrees/
+
+# Local Codex config (contains MCP API key)
+.codex/
