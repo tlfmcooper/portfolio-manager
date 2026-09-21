@@ -32,6 +32,13 @@ except ImportError:
     session = requests.Session()
     logger.warning("curl_cffi not available; Barchart may be blocked on VPS IPs")
 
+# www.barchart.com now sits behind an AWS WAF JavaScript challenge that blocks
+# every non-browser client (even from residential IPs). The Globe and Mail's
+# Barchart white-label EOD feed serves the same fund NAVs as plain CSV, with no
+# challenge, auth or proxy required.
+globe_session = requests.Session()
+_GLOBE_EOD_URL = "https://globeandmail.pl.barchart.com/proxies/timeseries/queryeod.ashx"
+
 
 class FinanceService:
     """Service for fetching financial data from Yahoo Finance and other sources."""
@@ -215,8 +222,109 @@ class FinanceService:
         return None
 
     @staticmethod
+    def _parse_globe_eod_csv(text: str) -> List[Dict[str, Any]]:
+        """Parse `SYMBOL,YYYY-MM-DD,open,high,low,close,volume` lines into
+        Barchart-history-shaped rows ({"raw": {"tradeTime", "lastPrice"}})."""
+        rows: List[Dict[str, Any]] = []
+        for line in text.splitlines():
+            parts = line.strip().split(",")
+            if len(parts) < 6:
+                continue
+            try:
+                trade_date = date.fromisoformat(parts[1])
+            except ValueError:
+                continue
+            price = FinanceService._valid_price(parts[5])
+            if price is None:
+                continue
+            rows.append({"raw": {"tradeTime": trade_date.isoformat(), "lastPrice": price}})
+        rows.sort(key=lambda row: row["raw"]["tradeTime"])
+        return rows
+
+    @staticmethod
+    async def _get_globe_eod_history(
+        ticker: str,
+        start_date: date,
+        end_date: Optional[date] = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Fetch daily NAV closes from the Globe and Mail Barchart EOD feed."""
+        end_date = end_date or datetime.now().date()
+        params = {
+            "symbol": ticker.upper(),
+            "data": "daily",
+            "start": start_date.strftime("%Y%m%d"),
+            "end": end_date.strftime("%Y%m%d"),
+            "volume": "contract",
+            "order": "asc",
+        }
+        headers = {
+            "User-Agent": FinanceService._BARCHART_USER_AGENT,
+            "Referer": "https://www.theglobeandmail.com/",
+        }
+        try:
+            response = await asyncio.to_thread(
+                globe_session.get, _GLOBE_EOD_URL, params=params, headers=headers, timeout=20
+            )
+            response.raise_for_status()
+            rows = FinanceService._parse_globe_eod_csv(response.text)
+        except Exception as e:
+            logger.warning(f"Globe/Barchart EOD fetch failed for {ticker}: {e}")
+            return None
+        if not rows:
+            logger.warning(f"Globe/Barchart EOD returned no rows for {ticker}")
+            return None
+        return rows
+
+    @staticmethod
+    async def _get_mutual_fund_info_from_globe(ticker: str) -> Optional[Dict[str, Any]]:
+        today = datetime.now().date()
+        # Start before Dec 31 so the prior year-end NAV is included for YTD.
+        rows = await FinanceService._get_globe_eod_history(
+            ticker, date(today.year - 1, 12, 15), today
+        )
+        if not rows:
+            return None
+
+        last_price = rows[-1]["raw"]["lastPrice"]
+        previous_price = rows[-2]["raw"]["lastPrice"] if len(rows) >= 2 else None
+        change = last_price - previous_price if previous_price else 0.0
+        change_percent = (change / previous_price) * 100 if previous_price else 0.0
+
+        year_start = date(today.year, 1, 1).isoformat()
+        prior_year_rows = [row for row in rows if row["raw"]["tradeTime"] < year_start]
+        ytd_return = None
+        if prior_year_rows:
+            year_end_close = prior_year_rows[-1]["raw"]["lastPrice"]
+            ytd_return = round((last_price - year_end_close) / year_end_close * 100, 2)
+
+        logger.info(
+            f"Fetched mutual fund data for {ticker} from Globe/Barchart EOD: "
+            f"price={last_price}, prev={previous_price}, ytd={ytd_return}"
+        )
+        return {
+            'ticker': ticker.upper(),
+            'name': ticker,
+            'asset_type': 'mutual_fund',
+            'currency': 'USD',
+            'current_price': last_price,
+            'last_price_update': datetime.now(),
+            'change_percent': change_percent,
+            'change': change,
+            'previous_close': previous_price,
+            'ytd_return': ytd_return,
+        }
+
+    @staticmethod
     async def _get_mutual_fund_info(ticker: str) -> Optional[Dict[str, Any]]:
-        """Fetch mutual fund information from Barchart with retry logic."""
+        """Fetch mutual fund information, preferring the Globe/Barchart EOD feed."""
+        globe_info = await FinanceService._get_mutual_fund_info_from_globe(ticker)
+        if globe_info:
+            return globe_info
+        return await FinanceService._get_mutual_fund_info_from_barchart(ticker)
+
+    @staticmethod
+    async def _get_mutual_fund_info_from_barchart(ticker: str) -> Optional[Dict[str, Any]]:
+        """Fetch mutual fund information from the Barchart quote page with retry logic."""
         max_retries = 3
         base_timeout = 20  # Increased from 10 to 20 seconds
 
@@ -348,6 +456,23 @@ class FinanceService:
 
     @staticmethod
     async def _get_mutual_fund_history(
+        ticker: str,
+        limit: int = 400,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Fetch mutual fund historical EOD data, preferring the Globe/Barchart feed."""
+        globe_start = start_date or (datetime.now().date() - timedelta(days=int(limit * 1.5)))
+        rows = await FinanceService._get_globe_eod_history(ticker, globe_start, end_date)
+        if rows:
+            logger.info(f"Fetched {len(rows)} historical mutual fund rows for {ticker} from Globe/Barchart EOD")
+            return rows
+        return await FinanceService._get_mutual_fund_history_from_barchart(
+            ticker, limit=limit, start_date=start_date, end_date=end_date
+        )
+
+    @staticmethod
+    async def _get_mutual_fund_history_from_barchart(
         ticker: str,
         limit: int = 400,
         start_date: date | None = None,

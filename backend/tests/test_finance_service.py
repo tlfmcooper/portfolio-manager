@@ -8,6 +8,86 @@ from app.services import finance_service
 from app.services.finance_service import FinanceService
 
 
+@pytest.fixture(autouse=True)
+def _no_globe_feed(monkeypatch):
+    """Disable the Globe/Barchart EOD feed by default so tests never hit the network."""
+
+    class _DownSession:
+        def get(self, *args, **kwargs):
+            raise finance_service.requests.exceptions.ConnectionError("globe feed disabled in tests")
+
+    monkeypatch.setattr(finance_service, "globe_session", _DownSession())
+
+
+class _GlobeSession:
+    def __init__(self, text: str):
+        self.text = text
+        self.calls = []
+
+    def get(self, url, params=None, headers=None, timeout=None):
+        self.calls.append({"url": url, "params": params, "headers": headers or {}})
+        return _FakeResponse(text=self.text)
+
+
+_GLOBE_CSV = "\n".join([
+    "PHN9756.CF,2025-12-30,59.1,59.1,59.1,59.1,0",
+    "PHN9756.CF,2025-12-31,59.492,59.492,59.492,59.492,0",
+    "PHN9756.CF,2026-01-02,59.8,59.8,59.8,59.8,0",
+    "PHN9756.CF,2026-09-17,67.5,67.5,67.5,67.5,0",
+    "PHN9756.CF,2026-09-18,67.8665,67.8665,67.8665,67.8665,0",
+    "",
+])
+
+
+class _FixedGlobeDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 9, 21, 12, 0, 0)
+
+
+@pytest.mark.asyncio
+async def test_get_mutual_fund_info_uses_globe_eod_feed(monkeypatch) -> None:
+    globe = _GlobeSession(_GLOBE_CSV)
+    monkeypatch.setattr(finance_service, "globe_session", globe)
+    monkeypatch.setattr(finance_service, "datetime", _FixedGlobeDatetime)
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("www.barchart.com must not be called when the Globe feed works")
+
+    monkeypatch.setattr(finance_service, "session", type("S", (), {"get": staticmethod(_fail)})())
+
+    result = await FinanceService._get_mutual_fund_info("PHN9756.CF")
+
+    assert result is not None
+    assert result["current_price"] == 67.8665
+    assert result["previous_close"] == 67.5
+    assert result["ytd_return"] == round((67.8665 - 59.492) / 59.492 * 100, 2)
+    assert globe.calls[0]["url"] == finance_service._GLOBE_EOD_URL
+    assert globe.calls[0]["params"]["symbol"] == "PHN9756.CF"
+    assert globe.calls[0]["params"]["start"] == "20251215"
+    assert globe.calls[0]["params"]["end"] == "20260921"
+
+
+@pytest.mark.asyncio
+async def test_get_mutual_fund_history_uses_globe_eod_feed(monkeypatch) -> None:
+    monkeypatch.setattr(finance_service, "globe_session", _GlobeSession(_GLOBE_CSV))
+
+    rows = await FinanceService._get_mutual_fund_history(
+        "PHN9756.CF", start_date=date(2025, 12, 1), end_date=date(2026, 9, 21)
+    )
+
+    assert rows is not None
+    assert rows[0] == {"raw": {"tradeTime": "2025-12-30", "lastPrice": 59.1}}
+    assert rows[-1] == {"raw": {"tradeTime": "2026-09-18", "lastPrice": 67.8665}}
+
+
+def test_parse_globe_eod_csv_skips_malformed_lines() -> None:
+    rows = FinanceService._parse_globe_eod_csv(
+        "garbage\nX.CF,not-a-date,1,1,1,1,0\nX.CF,2026-01-05,1,1,1,0,0\nX.CF,2026-01-02,1,1,1,10.5,0\n"
+    )
+    assert rows == [{"raw": {"tradeTime": "2026-01-02", "lastPrice": 10.5}}]
+
+
 class _FakeResponse:
     def __init__(self, *, text: str = "", json_data=None, status_code: int = 200):
         self.text = text
