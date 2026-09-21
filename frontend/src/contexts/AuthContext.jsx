@@ -144,6 +144,7 @@ export const AuthProvider = ({ children }) => {
   const clearAuthState = useCallback(() => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('portfolio_chat_history');
     setHasAuthToken(false);
     setUser(null);
     setPortfolioId(null);

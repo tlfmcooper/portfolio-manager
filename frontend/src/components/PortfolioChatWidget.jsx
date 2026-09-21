@@ -7,6 +7,55 @@ import { tools, executeTool } from '../tools/agentTools';
 import ReactMarkdown from 'react-markdown';
 import Logo from '../assets/portfolio_pilot_logo.png';
 
+const DataCard = ({ tool, data }) => {
+  const formatValue = (key, val) => {
+    if (val === null || val === undefined) return '—';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (typeof val === 'number') {
+      const k = key.toLowerCase();
+      if (k.includes('value') || k.includes('balance') || k.includes('gain') || k.includes('cost') || k.includes('cash')) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(val);
+      }
+      if (k.includes('percent') || k.includes('return') || k.includes('ratio') || k.includes('ytd')) {
+        return `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
+      }
+      return val.toLocaleString();
+    }
+    if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}/)) {
+      return new Date(val).toLocaleString();
+    }
+    return String(val);
+  };
+
+  const flatEntries = Object.entries(data)
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object' && !Array.isArray(v))
+    .slice(0, 8);
+
+  if (flatEntries.length === 0) return null;
+
+  const title = tool.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  return (
+    <div className="mt-2 rounded-lg border border-indigo-100 dark:border-indigo-900/40 overflow-hidden text-xs">
+      <div className="bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 font-semibold text-indigo-700 dark:text-indigo-300">
+        {title}
+      </div>
+      <div className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700/50">
+        {flatEntries.map(([key, val]) => (
+          <div key={key} className="flex justify-between items-center px-3 py-1.5">
+            <span className="text-gray-500 dark:text-gray-400">
+              {key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </span>
+            <span className="font-medium text-gray-800 dark:text-gray-200">
+              {formatValue(key, val)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const ThinkingIndicator = () => (
   <div className="flex justify-start">
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-none p-4 shadow-sm flex items-center gap-2">
@@ -22,9 +71,19 @@ const ThinkingIndicator = () => (
 
 const PortfolioChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am your Portfolio Pilot. How can I help you manage your investments today?' }
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const defaultMsg = [{ role: 'assistant', content: 'Hello! I am your Portfolio Pilot. How can I help you manage your investments today?' }];
+    try {
+      const saved = localStorage.getItem('portfolio_chat_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultMsg;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return defaultMsg;
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
@@ -39,6 +98,20 @@ const PortfolioChatWidget = () => {
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Persist messages to localStorage (cap at 50 to stay within storage limits)
+  useEffect(() => {
+    try {
+      localStorage.setItem('portfolio_chat_history', JSON.stringify(messages.slice(-50)));
+    } catch {
+      // localStorage may be full — try with fewer messages
+      try {
+        localStorage.setItem('portfolio_chat_history', JSON.stringify(messages.slice(-20)));
+      } catch {
+        // ignore
+      }
+    }
   }, [messages]);
 
   const handleSaveApiKey = (key) => {
@@ -255,6 +328,20 @@ const PortfolioChatWidget = () => {
             result: toolResult
           });
         }
+
+        // Extract structured data from tool results for card rendering
+        const richData = toolResults
+          .map(tr => {
+            try {
+              const parsed = JSON.parse(tr.result);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const flatKeys = Object.entries(parsed).filter(([, v]) => typeof v !== 'object' && !Array.isArray(v));
+                if (flatKeys.length > 0) return { tool: tr.name, data: parsed };
+              }
+            } catch { /* not JSON */ }
+            return null;
+          })
+          .filter(Boolean);
         
         // Update to show analyzing
         setMessages(prev => {
@@ -288,6 +375,18 @@ const PortfolioChatWidget = () => {
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage.role === 'assistant') {
               lastMessage.content = baseMessageContent + '\n\n' + followUpText;
+            }
+            return newMessages;
+          });
+        }
+
+        // Attach structured data cards to the final message
+        if (richData.length > 0) {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage.role === 'assistant') {
+              lastMessage.richData = richData;
             }
             return newMessages;
           });
@@ -416,6 +515,9 @@ const PortfolioChatWidget = () => {
                   {msg.content}
                 </ReactMarkdown>
               </div>
+              {msg.richData && msg.richData.map((rd, i) => (
+                <DataCard key={i} tool={rd.tool} data={rd.data} />
+              ))}
             </div>
           </div>
         ))}
