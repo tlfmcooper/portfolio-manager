@@ -168,10 +168,13 @@ class TextContent(BaseModel):
 
 
 class ResourceContent(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     uri: str
     mimeType: str = "application/json"
     text: Optional[str] = None
     blob: Optional[str] = None
+    meta: Dict[str, Any] = Field(default_factory=dict, alias="_meta")
 
 
 class UIConfiguration(BaseModel):

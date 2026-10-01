@@ -29,6 +29,28 @@ class HandlerContext:
     session_id: str | None = None
 
 
+NATIVE_APP_URI = "ui://portfolio/app"
+NATIVE_APP_URL = "https://portfolio.alikone.dev/dashboard?mcpApp=1"
+NATIVE_APP_META = {
+    "ui": {
+        "domain": "https://portfolio.alikone.dev",
+        "nativeAppUrl": NATIVE_APP_URL,
+        "csp": {"frameDomains": ["https://portfolio.alikone.dev"], "resourceDomains": ["https://portfolio.alikone.dev"]},
+    }
+}
+
+
+async def tool_portfolio_open_app(ctx: HandlerContext, arguments: Dict[str, Any]) -> ToolResult:
+    return ToolResult(content=[TextContent(text="Open the native Portfolio app.").model_dump()], _meta={"ui": {"resourceUri": NATIVE_APP_URI}})
+
+
+async def resource_portfolio_native_app(ctx: HandlerContext, arguments: Dict[str, Any]) -> ResourceReadResult:
+    # The native origin owns sign-in, assets, routing, and all app interactions.
+    # Hosts supporting nativeAppUrl load this same resource directly on that origin.
+    html = f'<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0"><iframe title="Portfolio" src="{NATIVE_APP_URL}" style="width:100%;height:100vh;border:0"></iframe></body></html>'
+    return ResourceReadResult(contents=[ResourceContent(uri=NATIVE_APP_URI, mimeType="text/html;profile=mcp-app", text=html, _meta=NATIVE_APP_META)])
+
+
 def _tool_result(text: str, data: Any = None, ui: Dict[str, Any] | None = None) -> ToolResult:
     meta = {}
     if ui:
@@ -1456,6 +1478,7 @@ async def sampling_create_message(ctx: HandlerContext, arguments: Dict[str, Any]
 
 
 TOOL_HANDLERS: Dict[str, Callable[[HandlerContext, Dict[str, Any]], Any]] = {
+    "tool_portfolio_open_app": tool_portfolio_open_app,
     "tool_portfolio_get_summary": tool_portfolio_get_summary,
     "tool_portfolio_get_period_inputs": tool_portfolio_get_period_inputs,
     "tool_portfolio_get_analysis": tool_portfolio_get_analysis,
@@ -1496,6 +1519,7 @@ TOOL_HANDLERS: Dict[str, Callable[[HandlerContext, Dict[str, Any]], Any]] = {
 
 
 RESOURCE_HANDLERS: Dict[str, Callable[[HandlerContext, Dict[str, Any]], Any]] = {
+    "resource_portfolio_native_app": resource_portfolio_native_app,
     "resource_portfolio_summary": resource_portfolio_summary,
     "resource_portfolio_holdings": resource_portfolio_holdings,
     "resource_portfolio_cash_balance": resource_portfolio_cash_balance,

@@ -6,6 +6,28 @@
   },
   "tools": [
     {
+      "name": "portfolio_open_app",
+      "description": "Open the complete native Portfolio app, including overview, holdings, analytics, live market, imports, and settings.",
+      "handler": "tool_portfolio_open_app",
+      "requiresAuth": true,
+      "permissions": [
+        "portfolio:read"
+      ],
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "meta": {
+        "ui": {
+          "resourceUri": "ui://portfolio/app"
+        }
+      }
+    },
+    {
       "name": "portfolio_get_summary",
       "description": "Get the current authenticated user's portfolio summary with value, return, holdings count, and currency-aware totals.",
       "handler": "tool_portfolio_get_summary",
@@ -658,6 +680,22 @@
     }
   ],
   "resources": [
+    {
+      "name": "portfolio_native_app",
+      "description": "The complete native Portfolio app.",
+      "handler": "resource_portfolio_native_app",
+      "uri": "ui://portfolio/app",
+      "mimeType": "text/html;profile=mcp-app",
+      "requiresAuth": true,
+      "permissions": [
+        "portfolio:read"
+      ],
+      "meta": {
+        "ui": {
+          "domain": "https://portfolio.alikone.dev"
+        }
+      }
+    },
     {
       "name": "system.health",
       "description": "Read backend health and dependency status.",

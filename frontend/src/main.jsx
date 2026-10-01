@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import { registerSW } from 'virtual:pwa-register'
+import { connectMcpApp } from './mcp-app'
+
+connectMcpApp()
 
 if (import.meta.env.PROD) {
   // Register service worker for PWA functionality in production only.
