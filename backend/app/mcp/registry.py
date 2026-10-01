@@ -59,6 +59,7 @@ class CapabilityRegistry:
                 _meta=resource.meta,
             )
             for resource in self.config.resources
+            if resource.uri
         ]
 
     def list_resource_templates(self) -> list[ResourceTemplateDescriptor]:
