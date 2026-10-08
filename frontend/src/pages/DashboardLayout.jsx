@@ -27,7 +27,6 @@ const LoadingSpinner = () => (
 const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
   const [chatReady, setChatReady] = useState(false);
   const { user, logout } = useAuth();
   const { isDark } = useTheme();
@@ -44,24 +43,12 @@ const DashboardLayout = () => {
     { id: 'strategy', label: 'CPPI Strategy', icon: TrendingDown },
   ];
 
-  useEffect(() => {
-    const path = location.pathname;
-    const viewParam = searchParams.get('view');
-
-    if (viewParam && tabs.find(t => t.id === viewParam)) {
-      setActiveTab(viewParam);
-    } else if (path.includes('overview')) {
-      setActiveTab('overview');
-    } else if (path.includes('portfolio')) {
-      setActiveTab('allocation');
-    } else if (path.includes('analytics')) {
-      setActiveTab('risk');
-    } else if (path.includes('update-portfolio')) {
-      setActiveTab('overview');
-    } else if (path === '/dashboard' || path === '/dashboard/') {
-      setActiveTab('overview');
-    }
-  }, [location, searchParams]);
+  const viewParam = searchParams.get('view');
+  // Derive the view before rendering so navigation never mounts the previous
+  // page's analytics and starts requests that the destination does not need.
+  const activeTab = tabs.some(tab => tab.id === viewParam) ? viewParam
+    : location.pathname.includes('analytics') ? 'risk'
+    : location.pathname.endsWith('/portfolio') ? 'allocation' : 'overview';
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -76,7 +63,6 @@ const DashboardLayout = () => {
   }, []);
 
   const handleTabClick = (tabId) => {
-    setActiveTab(tabId);
     // Update URL to reflect tab change for deep linking
     const currentPath = location.pathname;
     if (currentPath.includes('analytics')) {

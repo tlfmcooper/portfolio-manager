@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
   const apiGet = vi.fn();
   return { apiGet, api: { get: apiGet }, cache: {
     CACHE_TTL: { PORTFOLIO_METRICS: 120000 },
+    getFromCache: vi.fn(() => null),
     fetchWithCache: (_key, fetchFn) => fetchFn(),
     invalidateCache: vi.fn(),
   } };
@@ -33,6 +34,7 @@ vi.mock('../../src/contexts/DataCacheContext', () => ({
 describe('OverviewSection', () => {
   beforeEach(() => {
     mocks.apiGet.mockReset();
+    mocks.cache.getFromCache.mockReset().mockReturnValue(null);
     mocks.cache.invalidateCache.mockClear();
   });
 
@@ -103,6 +105,17 @@ describe('OverviewSection', () => {
       : Promise.resolve({ data: { ytd_return_percentage: 8, ytd_complete: true } }));
     render(<OverviewSection />);
     expect(await screen.findByText('+8.00%')).toBeInTheDocument();
+  });
+
+  it('keeps cached metrics visible while a return visit refreshes them', () => {
+    mocks.cache.getFromCache.mockImplementation(key => key.startsWith('portfolio_metrics')
+      ? { sharpe_ratio: 2, portfolio_volatility_annualized: 0.3 }
+      : { ytd_return_percentage: 8, ytd_complete: true });
+    mocks.apiGet.mockImplementation(() => new Promise(() => {}));
+    render(<OverviewSection />);
+    expect(screen.getByText('+8.00%')).toBeInTheDocument();
+    expect(screen.getByText('2.000')).toBeInTheDocument();
+    expect(screen.getByText('Loading remaining analytics…')).toBeInTheDocument();
   });
 
   it('invalidates the snapshot and announces prices after receiving the summary', async () => {

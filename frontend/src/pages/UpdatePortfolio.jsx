@@ -14,10 +14,12 @@ const UpdatePortfolio = () => {
     invalidateCache([
       'dashboard_overview',
       'portfolio_metrics',
+      'portfolio_analysis',
       'portfolio_summary',
       'portfolio_snapshot',
       'sector_allocation',
       'live_market',
+      'live_market_ytd',
       'transactions',
       'holdings',
       'allocation'

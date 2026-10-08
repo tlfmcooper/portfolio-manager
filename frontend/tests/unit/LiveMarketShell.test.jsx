@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => {
   return {
     api: { get: apiGet },
     apiGet,
-    cache: { getFromCache: () => null, setInCache: vi.fn(), invalidateCache: vi.fn() },
+    cache: { getFromCache: () => null, setInCache: vi.fn(), invalidateCache: vi.fn(),
+      prefetch: vi.fn(), CACHE_TTL: { HOLDINGS: 60000, PORTFOLIO_METRICS: 120000 } },
   };
 });
 

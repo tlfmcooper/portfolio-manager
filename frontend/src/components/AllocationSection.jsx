@@ -7,14 +7,20 @@ import { TrendingUp, DollarSign, Percent, PieChart as PieChartIcon } from 'lucid
 import ResponsiveChartContainer from './ResponsiveChartContainer';
 
 const AllocationSection = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency();
-  const { fetchWithCache, CACHE_TTL } = useDataCache();
+  const { getFromCache, fetchWithCache, CACHE_TTL } = useDataCache();
+  const cached = getFromCache(`sector_allocation:${portfolioId}`, currency, { allowStale: true });
+  const [data, setData] = useState(cached);
+  const [loading, setLoading] = useState(!cached);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    let active = true;
+    const previous = getFromCache(`sector_allocation:${portfolioId}`, currency, { allowStale: true });
+    setData(previous);
+    setLoading(!previous);
+    setError(null);
     const fetchData = async () => {
       if (!portfolioId) {
         setLoading(false);
@@ -39,22 +45,22 @@ const AllocationSection = () => {
         
         console.log('[AllocationSection] Received data:', response);
         console.log('[AllocationSection] Currency used:', currency);
-        setData(response);
-        setError(null);
+        if (active) { setData(response); setError(null); }
       } catch (err) {
         // Don't show error for auth issues - interceptor handles redirect
         if (err.response?.status === 401) {
           return;
         }
-        setError('Failed to load allocation data. Please refresh the page.');
+        if (active) setError('Failed to load allocation data. Please refresh the page.');
         console.error(err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     fetchData();
-  }, [api, portfolioId, currency, fetchWithCache, CACHE_TTL]); // Add currency to dependencies
+    return () => { active = false; };
+  }, [api, portfolioId, currency, getFromCache, fetchWithCache, CACHE_TTL]);
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -63,7 +69,7 @@ const AllocationSection = () => {
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="rounded-lg p-6" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>
         <p style={{ color: 'var(--color-error)' }}>{error}</p>
@@ -255,7 +261,7 @@ const AllocationSection = () => {
 
         <ResponsiveChartContainer height={400} mobileHeight={320}>
           <PieChart>
-            <Pie
+            <Pie isAnimationActive={false}
               data={pieData}
               cx="50%"
               cy="50%"

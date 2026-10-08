@@ -25,6 +25,8 @@ Use this command without the earlier `DATABASE_URL=sqlite...` prefix: shell envi
 
 Readiness: `http://127.0.0.1:8000/health` should report `database.type` as `postgresql` and `database.status` as `connected`. API documentation is available at `http://127.0.0.1:8000/docs`.
 
+The backend reuses a bounded PostgreSQL connection pool so the tunnel does not require a new database authentication handshake for every request. Set `DATABASE_USE_NULL_POOL=true` only if your database environment requires connections to close after each request.
+
 Redis points to the local machine. If Redis is not running, the app uses its in-process fallback cache; cluster Redis credentials are not required for this setup.
 
 ## Frontend

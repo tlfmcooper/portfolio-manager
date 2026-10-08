@@ -13,17 +13,19 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 
 const TransactionHistory = () => {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('ALL'); // ALL, BUY, SELL, DEPOSIT, WITHDRAWAL
   const { api, portfolioId } = useAuth();
   const { formatCurrency } = useCurrency();
-
-  const { fetchWithCache, CACHE_TTL } = useDataCache();
+  const { getFromCache, fetchWithCache, CACHE_TTL } = useDataCache();
+  const cached = getFromCache(`transactions:${portfolioId}`, null, { allowStale: true });
+  const [transactions, setTransactions] = useState(cached || []);
+  const [loading, setLoading] = useState(!cached);
+  const [filter, setFilter] = useState('ALL'); // ALL, BUY, SELL, DEPOSIT, WITHDRAWAL
   useEffect(() => {
     let active = true;
     if (!portfolioId) { setLoading(false); return undefined; }
-    setLoading(true);
+    const previous = getFromCache(`transactions:${portfolioId}`, null, { allowStale: true });
+    setTransactions(previous || []);
+    setLoading(!previous);
     fetchWithCache(`transactions:${portfolioId}`, async () =>
       (await api.get(`/portfolios/${portfolioId}/transactions/`)).data,
       CACHE_TTL.HOLDINGS).then(data => {
@@ -32,7 +34,7 @@ const TransactionHistory = () => {
         if (error.response?.status !== 401) console.error('Error fetching transactions:', error);
       }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [api, portfolioId, fetchWithCache, CACHE_TTL]);
+  }, [api, portfolioId, getFromCache, fetchWithCache, CACHE_TTL]);
 
   const getTransactionIcon = (type) => {
     switch (type) {

@@ -40,13 +40,15 @@ const LiveMarket = () => {
   const [error, setError] = useState(null);
   const [selectedStock, setSelectedStock] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [ytdMap, setYtdMap] = useState({}) // ticker -> ytd_return (number|null)
   const { api, portfolioId } = useAuth();
-  const { getFromCache, setInCache, invalidateCache } = useDataCache();
+  const { getFromCache, setInCache, invalidateCache, prefetch, CACHE_TTL } = useDataCache();
   const liveCacheKey = `live_market:${portfolioId}`;
+  const ytdCacheKey = `live_market_ytd:${portfolioId}`;
   const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -59,7 +61,7 @@ const LiveMarket = () => {
   // Auto-refresh interval in milliseconds (60 seconds)
   const AUTO_REFRESH_INTERVAL = 60000;
 
-  const appendPollingChartData = (holdingsData, updatedAt) => {
+  const appendQuoteChartData = (holdingsData, updatedAt) => {
     const timestamp = new Date(updatedAt || Date.now()).getTime();
     const currentTime = new Date(timestamp).toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -70,7 +72,7 @@ const LiveMarket = () => {
     let changed = false;
 
     holdingsData.forEach((holding) => {
-      if (getChartSource(holding) !== 'polling') return;
+      if (!getChartSource(holding)) return;
 
       const price = Number(holding.current_price);
       if (!Number.isFinite(price) || price <= 0) return;
@@ -99,19 +101,21 @@ const LiveMarket = () => {
   };
 
   useEffect(() => {
-    const cached = getFromCache(liveCacheKey, currency);
+    const cached = getFromCache(liveCacheKey, currency, { allowStale: true });
     setHoldings(cached?.holdings || []);
     setCashBalance(cached?.cash_balance || 0);
     setChartData({});
     priceHistoryRef.current = {};
-    setYtdMap({});
+    setYtdMap(Object.fromEntries((getFromCache(ytdCacheKey, currency, { allowStale: true })?.ytd_data || [])
+      .map(({ ticker, ytd_return }) => [ticker, ytd_return])));
     setSelectedStock(null);
     setLoading(!cached);
     if (cached?.holdings?.length) {
       setHoldings(cached.holdings);
       setCashBalance(cached.cash_balance || 0);
       setLastUpdate(cached.updated_at ? new Date(cached.updated_at) : new Date());
-      appendPollingChartData(cached.holdings, cached.updated_at);
+      appendQuoteChartData(cached.holdings, cached.updated_at);
+      setSelectedStock(cached.holdings.find(holding => getChartSource(holding))?.ticker || null);
       setError(null);
       setLoading(false);
     }
@@ -248,6 +252,7 @@ const LiveMarket = () => {
     const requestId = ++requestIdRef.current;
 
     try {
+      setRefreshing(true);
       if (!silentUpdate) {
         setLoading(true);
       }
@@ -269,15 +274,23 @@ const LiveMarket = () => {
       console.log(`Live market data fetched in ${Date.now() - startTime}ms`);
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
-      appendPollingChartData(holdingsData, response.data.updated_at);
+      appendQuoteChartData(holdingsData, response.data.updated_at);
       setInCache(liveCacheKey, response.data, LIVE_MARKET_CACHE_TTL, currency);
       // Every successful quote update makes the stored-price snapshot obsolete.
       invalidateCache([`portfolio_snapshot:${portfolioId}`]);
+      // Warm the next Overview/Portfolio visit after saving the latest quotes.
+      // Navigation joins this request if the user moves before it finishes.
+      if (portfolioId) prefetch(`portfolio_snapshot:${portfolioId}`,
+        async () => (await api.get('/portfolios/snapshot', { params: { currency }, timeout: 8000 })).data,
+        CACHE_TTL.HOLDINGS, currency);
       window.dispatchEvent(new CustomEvent('portfolio:pricesUpdated', { detail: { portfolioId, currency } }));
-      if (refresh) invalidateCache(['portfolio_summary', 'portfolio_metrics', 'sector_allocation']);
+      if (refresh) invalidateCache(['portfolio_summary', 'portfolio_metrics', 'portfolio_analysis', 'sector_allocation']);
 
       // Clear stale YTD values before issuing new fetch (currency may have changed)
-      setYtdMap({})
+      const cachedYtd = !refresh && getFromCache(ytdCacheKey, currency);
+      const shownYtd = cachedYtd || getFromCache(ytdCacheKey, currency, { allowStale: true });
+      setYtdMap(Object.fromEntries((shownYtd?.ytd_data || [])
+        .map(({ ticker, ytd_return }) => [ticker, ytd_return])));
       if (ytdAbortRef.current) {
         ytdAbortRef.current.abort();
       }
@@ -285,12 +298,14 @@ const LiveMarket = () => {
       ytdAbortRef.current = ytdController;
 
       // Fire YTD fetch in parallel. It must not block live-market rendering.
-      api.get('/market/ytd', {
+      const ytdRequest = cachedYtd ? Promise.resolve({ data: cachedYtd }) : api.get('/market/ytd', {
         params: { currency },
         signal: ytdController.signal,
-      })
+      });
+      ytdRequest
         .then(res => {
           if (requestId !== requestIdRef.current) return;
+          setInCache(ytdCacheKey, res.data, CACHE_TTL.PORTFOLIO_METRICS, currency);
           const map = {}
           ;(res.data.ytd_data || []).forEach(({ ticker, ytd_return }) => {
             map[ticker] = ytd_return
@@ -308,7 +323,7 @@ const LiveMarket = () => {
 
       // Set initial selected stock
       if (!selectedStock && holdingsData.length > 0) {
-        const supported = holdingsData.filter(h => h.ticker);
+        const supported = holdingsData.filter(h => getChartSource(h));
         if (supported.length > 0) {
           setSelectedStock(supported[0].ticker);
         }
@@ -351,6 +366,7 @@ const LiveMarket = () => {
     } finally {
       if (requestId === requestIdRef.current) {
         liveAbortRef.current = null;
+        setRefreshing(false);
         if (!silentUpdate) setLoading(false);
       }
     }
@@ -618,6 +634,7 @@ const LiveMarket = () => {
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {lastUpdate ? `Updated: ${lastUpdate.toLocaleTimeString()}` : 'Connecting...'}
           </p>
+          {refreshing && <p role="status" className="text-xs mt-1">Updating market data…</p>}
           <button
             onClick={handleRefresh}
             className="mt-2 px-3 py-1 rounded text-xs font-medium flex items-center space-x-1"

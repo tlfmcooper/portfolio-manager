@@ -1,47 +1,21 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Target, Info } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
+import { usePortfolioAnalysis } from '../hooks/usePortfolioAnalysis'
 import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 
 const EfficientFrontierSection = () => {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth()
   const { frontierParams, globalParams } = useAgentContext()
   const { currency: contextCurrency } = useCurrency()
 
   // Determine effective currency: Frontier-specific > Global Agent > App Context
   const currency = frontierParams.currency || globalParams.currency || contextCurrency
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!portfolioId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true)
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/efficient-frontier`, {
-          params: { currency }
-        })
-        setData(response.data)
-      } catch (err) {
-        setError('Failed to fetch efficient frontier data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [api, portfolioId, currency])
+  const { data, loading, updating, error } = usePortfolioAnalysis('efficient-frontier', currency);
 
   if (loading) return <div>Loading...</div>
-  if (error) return <div className="text-red-500">{error}</div>
+  if (error && !data) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
   const efficientFrontier = data || {}
@@ -133,6 +107,8 @@ const EfficientFrontierSection = () => {
 
   return (
     <div className="space-y-8">
+      {updating && <p role="status" className="text-sm">Updating analytics…</p>}
+      {error && <p role="alert" className="text-sm">{error}</p>}
       <div>
         {/* Explanation Card */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
@@ -240,7 +216,7 @@ const EfficientFrontierSection = () => {
                 <Tooltip content={<CustomTooltip />} />
                 
                 {/* Efficient Frontier Line */}
-                <Scatter
+                <Scatter isAnimationActive={false}
                   data={frontierData}
                   fill="#3B82F6"
                   name="Efficient Frontier"
@@ -250,7 +226,7 @@ const EfficientFrontierSection = () => {
                 
                 {/* Special Portfolios */}
                 {specialData.map((portfolio, index) => (
-                  <Scatter
+                  <Scatter isAnimationActive={false}
                     key={portfolio.type}
                     data={[portfolio]}
                     fill={getPortfolioColor(portfolio.type)}

@@ -22,7 +22,7 @@ export function usePortfolioSnapshot() {
     try {
       if (refreshPrices) {
         await api.get('/market/live', { params: { currency, refresh: true }, timeout: 20000 });
-        invalidateCache(['portfolio_snapshot', 'portfolio_summary', 'portfolio_metrics', 'sector_allocation']);
+        invalidateCache(['portfolio_snapshot', 'portfolio_summary', 'portfolio_metrics', 'portfolio_analysis', 'sector_allocation']);
       }
       const snapshot = await fetchWithCache(key,
         async () => (await api.get('/portfolios/snapshot', { params: { currency }, timeout: 8000 })).data,

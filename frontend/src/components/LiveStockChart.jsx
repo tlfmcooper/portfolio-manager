@@ -70,7 +70,7 @@ const LiveStockChart = ({
               }}
               formatter={(value) => [formatCurrency(value), 'Price']}
             />
-            <Area 
+            <Area isAnimationActive={false}
               type="monotone" 
               dataKey="price" 
               stroke="var(--color-primary)" 

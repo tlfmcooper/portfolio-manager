@@ -5,52 +5,37 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 
 const CashBalance = ({ onAddCash }) => {
-  const [cashData, setCashData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [realizedGains, setRealizedGains] = useState(null);
-  const [realizedGainsDetailed, setRealizedGainsDetailed] = useState(null);
-  const [showDetailedTable, setShowDetailedTable] = useState(false);
   const { api, portfolioId } = useAuth();
   const { currency, formatCurrency } = useCurrency();
-  const { fetchWithCache, CACHE_TTL } = useDataCache();
+  const { getFromCache, fetchWithCache, CACHE_TTL } = useDataCache();
+  const key = `dashboard_overview:${portfolioId}`;
+  const cached = getFromCache(key, currency, { allowStale: true });
+  const [cashData, setCashData] = useState(cached?.cash_balance || null);
+  const [loading, setLoading] = useState(!cached);
+  const [realizedGains, setRealizedGains] = useState(cached?.realized_gains || null);
+  const [realizedGainsDetailed, setRealizedGainsDetailed] = useState(cached?.realized_gains_detailed || null);
+  const [showDetailedTable, setShowDetailedTable] = useState(false);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [portfolioId, currency]);
-
-  const fetchDashboardData = async () => {
-    if (!portfolioId) return;
-
-    try {
-      setLoading(true);
-      
-      // Use cache to prevent redundant API calls
-      const response = await fetchWithCache(
-        `dashboard_overview:${portfolioId}`,
-        async () => {
-          const res = await api.get(
-            `/dashboard/overview`,
-            { params: { currency: currency } }
-          );
-          return res.data;
-        },
-        CACHE_TTL.DASHBOARD,
-        currency
-      );
-
-      // Extract data from the batched response
+    let active = true;
+    const previous = getFromCache(key, currency, { allowStale: true });
+    setCashData(previous?.cash_balance || null);
+    setRealizedGains(previous?.realized_gains || null);
+    setRealizedGainsDetailed(previous?.realized_gains_detailed || null);
+    setLoading(!!portfolioId && !previous);
+    if (!portfolioId) return undefined;
+    fetchWithCache(key, async () => (await api.get('/dashboard/overview', {
+      params: { currency },
+    })).data, CACHE_TTL.DASHBOARD, currency).then(response => {
+      if (!active) return;
       setCashData(response.cash_balance);
       setRealizedGains(response.realized_gains);
       setRealizedGainsDetailed(response.realized_gains_detailed);
-    } catch (error) {
-      // Don't log or handle 401 errors - interceptor handles redirect
-      if (error.response?.status !== 401) {
-        console.error('Error fetching dashboard data:', error);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch(error => {
+      if (error.response?.status !== 401) console.error('Error fetching dashboard data:', error);
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [api, portfolioId, key, currency, getFromCache, fetchWithCache, CACHE_TTL]);
 
   if (loading) {
     return (

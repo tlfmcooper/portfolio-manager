@@ -1,51 +1,22 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
+import { usePortfolioAnalysis } from '../hooks/usePortfolioAnalysis'
 import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
 
 const MonteCarloSection = () => {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth()
   const { monteCarloParams, globalParams } = useAgentContext()
   const { currency: contextCurrency, formatCurrency: formatCurrencyFromContext } = useCurrency()
 
   // Determine effective currency and params
   const currency = monteCarloParams.currency || globalParams.currency || contextCurrency
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!portfolioId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true)
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/monte-carlo`, {
-          params: { 
-            currency,
-            ...monteCarloParams // Inject agent params (scenarios, time_horizon)
-          }
-        })
-        setData(response.data)
-      } catch (err) {
-        setError('Failed to fetch Monte Carlo simulation data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [api, portfolioId, currency, monteCarloParams])
+  const { data, loading, updating, error } = usePortfolioAnalysis('monte-carlo', currency, monteCarloParams);
 
   if (loading) return <div>Loading...</div>
-  if (error) return <div className="text-red-500">{error}</div>
+  if (error && !data) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
   const monteCarlo = data || {}
@@ -159,6 +130,8 @@ const MonteCarloSection = () => {
 
   return (
     <div className="space-y-8">
+      {updating && <p role="status" className="text-sm">Updating analytics…</p>}
+      {error && <p role="alert" className="text-sm">{error}</p>}
       <div>
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -216,7 +189,7 @@ const MonteCarloSection = () => {
                 <Tooltip content={<CustomTooltip />} />
 
                 {/* Individual paths with transparency */}
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="path_1"
                   stroke="#F59E0B"
@@ -225,7 +198,7 @@ const MonteCarloSection = () => {
                   dot={false}
                   name="Path 1"
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="path_2"
                   stroke="#EF4444"
@@ -234,7 +207,7 @@ const MonteCarloSection = () => {
                   dot={false}
                   name="Path 2"
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="path_3"
                   stroke="#10B981"
@@ -243,7 +216,7 @@ const MonteCarloSection = () => {
                   dot={false}
                   name="Path 3"
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="path_4"
                   stroke="#8B5CF6"
@@ -252,7 +225,7 @@ const MonteCarloSection = () => {
                   dot={false}
                   name="Path 4"
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="path_5"
                   stroke="#06B6D4"
@@ -263,7 +236,7 @@ const MonteCarloSection = () => {
                 />
 
                 {/* Mean path highlighted */}
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="mean_path"
                   stroke="#3B82F6"
@@ -298,7 +271,7 @@ const MonteCarloSection = () => {
                   label={{ value: 'Number of Scenarios', angle: -90, position: 'insideLeft' }}
                 />
                 <Tooltip content={<DistributionTooltip />} />
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="count"
                   fill="#3B82F6"
                   radius={[2, 2, 0, 0]}

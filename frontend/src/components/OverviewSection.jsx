@@ -8,21 +8,31 @@ import ResponsiveChartContainer from './ResponsiveChartContainer'
 import { DashboardSkeleton } from './ui/Skeleton'
 
 const OverviewSection = () => {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [pending, setPending] = useState(0)
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency()
-  const { fetchWithCache, invalidateCache, CACHE_TTL } = useDataCache()
+  const { getFromCache, fetchWithCache, invalidateCache, CACHE_TTL } = useDataCache()
+  const cachedMetrics = getFromCache(`portfolio_metrics:${portfolioId}`, currency, { allowStale: true });
+  const cachedSummary = getFromCache(`portfolio_summary:${portfolioId}`, currency, { allowStale: true });
+  const cachedPrevious = cachedMetrics || cachedSummary ? { ...cachedMetrics,
+    ytd_return_percentage: cachedSummary?.ytd_return_percentage,
+    ytd_complete: cachedSummary?.ytd_complete, ytd_message: cachedSummary?.ytd_message } : null;
+  const [data, setData] = useState(cachedPrevious)
+  const [loading, setLoading] = useState(!cachedPrevious)
+  const [error, setError] = useState(null)
+  const [pending, setPending] = useState(0)
 
   useEffect(() => {
     let active = true;
     let failures = 0;
-    setData(null);
+    const metrics = getFromCache(`portfolio_metrics:${portfolioId}`, currency, { allowStale: true });
+    const summary = getFromCache(`portfolio_summary:${portfolioId}`, currency, { allowStale: true });
+    const previous = metrics || summary ? { ...metrics,
+      ytd_return_percentage: summary?.ytd_return_percentage,
+      ytd_complete: summary?.ytd_complete, ytd_message: summary?.ytd_message } : null;
+    setData(previous);
     setError(null);
     setPending(portfolioId ? 2 : 0);
-    setLoading(Boolean(portfolioId));
+    setLoading(Boolean(portfolioId) && !previous);
     if (!portfolioId) return undefined;
 
     const receive = result => {
@@ -56,7 +66,7 @@ const OverviewSection = () => {
         });
       }).catch(fail);
     return () => { active = false; };
-  }, [api, portfolioId, currency, fetchWithCache, invalidateCache, CACHE_TTL]);
+  }, [api, portfolioId, currency, getFromCache, fetchWithCache, invalidateCache, CACHE_TTL]);
 
   if (loading) return <DashboardSkeleton />
   if (error && !data) return <div role="alert" className="text-red-500">{error}</div>
@@ -274,13 +284,13 @@ const OverviewSection = () => {
                     name === 'return' ? 'Annual Return' : 'Volatility'
                   ]}
                 />
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="return"
                   fill="var(--color-primary)"
                   name="return"
                   radius={[2, 2, 0, 0]}
                 />
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="volatility"
                   fill="var(--color-warning)"
                   name="volatility"

@@ -1,49 +1,20 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { TrendingDown, Shield, Target, Info } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
+import { usePortfolioAnalysis } from '../hooks/usePortfolioAnalysis'
 import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import ResponsiveChartContainer from './ResponsiveChartContainer'
 import { MiniCardSkeleton, ChartSkeleton } from './ui/Skeleton'
 
 const CPPISection = () => {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth()
   const { cppiParams, globalParams } = useAgentContext()
   const { currency: contextCurrency, formatCurrency: formatCurrencyFromContext } = useCurrency()
 
   // Determine effective currency and params
   const currency = cppiParams.currency || globalParams.currency || contextCurrency
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!portfolioId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true)
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`, {
-          params: { 
-            currency,
-            ...cppiParams // Inject agent params (multiplier, floor)
-          }
-        })
-        setData(response.data)
-      } catch (err) {
-        setError('Failed to fetch CPPI analysis data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [api, portfolioId, currency, cppiParams])
+  const { data, loading, updating, error } = usePortfolioAnalysis('cppi', currency, cppiParams);
 
   if (loading) return (
     <div className="space-y-8">
@@ -55,7 +26,7 @@ const CPPISection = () => {
       </div>
     </div>
   )
-  if (error) return <div className="text-red-500">{error}</div>
+  if (error && !data) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
   const cppiAnalysis = data || {}
@@ -171,6 +142,8 @@ const CPPISection = () => {
 
   return (
     <div className="space-y-8">
+      {updating && <p role="status" className="text-sm">Updating analytics…</p>}
+      {error && <p role="alert" className="text-sm">{error}</p>}
       <div>
         {/* Explanation Card */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
@@ -252,7 +225,7 @@ const CPPISection = () => {
                 />
                 <Tooltip content={<CustomTooltip />} />
 
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="cppi_wealth"
                   stroke="#3B82F6"
@@ -260,7 +233,7 @@ const CPPISection = () => {
                   dot={{ r: 2 }}
                   name="CPPI Strategy"
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="buyhold_wealth"
                   stroke="#F59E0B"
@@ -268,7 +241,7 @@ const CPPISection = () => {
                   dot={false}
                   name="Buy & Hold"
                 />
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="floor_value"
                   stroke="#EF4444"
@@ -303,7 +276,7 @@ const CPPISection = () => {
                 />
                 <Tooltip content={<CustomTooltip />} />
 
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone"
                   dataKey="risky_allocation"
                   stackId="1"
@@ -312,7 +285,7 @@ const CPPISection = () => {
                   fillOpacity={0.6}
                   name="Risky Assets"
                 />
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone"
                   dataKey="safe_allocation"
                   stackId="1"
@@ -347,7 +320,7 @@ const CPPISection = () => {
                 />
                 <Tooltip content={<CustomTooltip />} />
 
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone"
                   dataKey="risk_budget"
                   stroke="#8B5CF6"
@@ -382,7 +355,7 @@ const CPPISection = () => {
                 />
                 <Tooltip content={<CustomTooltip />} />
 
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone"
                   dataKey="cppi_drawdown"
                   stroke="#3B82F6"
@@ -390,7 +363,7 @@ const CPPISection = () => {
                   fillOpacity={0.4}
                   name="CPPI Drawdown"
                 />
-                <Area
+                <Area isAnimationActive={false}
                   type="monotone"
                   dataKey="buyhold_drawdown"
                   stroke="#F59E0B"

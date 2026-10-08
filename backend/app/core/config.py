@@ -142,6 +142,7 @@ class Settings:
     SUPABASE_ANON_KEY: Optional[str] = None
     DATABASE_URL: str = "sqlite+aiosqlite:///./portfolio.db"
     DATABASE_ECHO: bool = False
+    DATABASE_USE_NULL_POOL: bool = False
     BACKEND_CORS_ORIGINS: List[str] | str = "*"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
@@ -182,6 +183,7 @@ class Settings:
         self.SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
         self.DATABASE_URL = build_database_url()
         self.DATABASE_ECHO = _parse_bool(os.getenv("DATABASE_ECHO"), self.DATABASE_ECHO)
+        self.DATABASE_USE_NULL_POOL = _parse_bool(os.getenv("DATABASE_USE_NULL_POOL"), self.DATABASE_USE_NULL_POOL)
         self.BACKEND_CORS_ORIGINS = _parse_cors_origins(os.getenv("BACKEND_CORS_ORIGINS", self.BACKEND_CORS_ORIGINS))
         self.ENVIRONMENT = os.getenv("ENVIRONMENT", self.ENVIRONMENT)
         self.DEBUG = _parse_bool(os.getenv("DEBUG"), self.DEBUG)

@@ -44,10 +44,13 @@ engine_kwargs = {
     "future": True,
 }
 
-# PostgreSQL-specific settings for Supabase pooler compatibility
+# Keep transaction-pooler compatibility without opening a new TCP/auth session
+# for every request to the directly connected cluster PostgreSQL database.
 if is_postgres:
-    # Use NullPool for serverless/pooler connections (Supabase uses PgBouncer)
-    engine_kwargs["poolclass"] = NullPool
+    if settings.DATABASE_USE_NULL_POOL:
+        engine_kwargs["poolclass"] = NullPool
+    else:
+        engine_kwargs.update(pool_size=5, max_overflow=5, pool_pre_ping=True, pool_recycle=1800)
     # Disable prepared statements for transaction pooling mode (asyncpg specific)
     engine_kwargs["connect_args"] = {
         "statement_cache_size": 0,

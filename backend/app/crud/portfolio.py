@@ -15,7 +15,7 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int) -> Optional[Portfol
     """Get portfolio by ID with holdings."""
     stmt = (
         select(Portfolio)
-        .options(selectinload(Portfolio.holdings).selectinload(Holding.asset))
+        .options(selectinload(Portfolio.holdings).joinedload(Holding.asset))
         .where(Portfolio.id == portfolio_id)
     )
     result = await db.execute(stmt)
@@ -26,7 +26,7 @@ async def get_user_portfolio(db: AsyncSession, user_id: int) -> Optional[Portfol
     """Get user's portfolio with holdings."""
     stmt = (
         select(Portfolio)
-        .options(selectinload(Portfolio.holdings).selectinload(Holding.asset))
+        .options(selectinload(Portfolio.holdings).joinedload(Holding.asset))
         .where(Portfolio.user_id == user_id)
         .where(Portfolio.is_active == True)
     )

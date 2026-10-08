@@ -38,7 +38,7 @@ The browser also verified dark mode and that logout removed the account session 
 ## Automated checks
 
 - Backend: **74 tests pass** across the full backend suite. Coverage includes authenticated snapshots, currency conversion and unavailable FX, saved targets/invalid plans, ownership, exports including 105 transactions, formula escaping, quote timestamp selection, fallback-cache TTL/bounds/coalescing, invalidation during loading, Redis recovery and nonblocking Yahoo work.
-- Frontend: **34 frontend tests pass** in the full suite. All focused planning, cache and snapshot synchronization checks pass. Coverage includes stable cache effects, session persistence/account and currency isolation, failed requests and invalidation races, contribution/cash math, target rounding and validation, concentration coverage, target-saving UI, refresh errors/retry, progressive overview loading, invalidation and immediate snapshot refresh after live quotes or summary completion, Live Market shell and existing auth/buy/chat tool behavior.
+- Frontend: **39 frontend tests pass** in the full suite. All focused planning, cache and snapshot synchronization checks pass. Coverage includes stable cache effects, session persistence/account and currency isolation, failed requests and invalidation races, contribution/cash math, target rounding and validation, concentration coverage, target-saving UI, refresh errors/retry, progressive overview loading, invalidation and immediate snapshot refresh after live quotes or summary completion, Live Market shell and existing auth/buy/chat tool behavior.
 - Production build and `git diff --check` pass. The normal lint command cannot run because the repository has no ESLint configuration; an explicit React hook lint check passes for the new cache, snapshot and planning files.
 - The baseline complete frontend suite had 12 failures across five landing-page test files with outdated content assertions. Those same 12 failures remain; no new functional regression was observed in the focused checks.
 
@@ -50,6 +50,27 @@ cd frontend
 npm run build
 npm test -- --run tests/unit/PortfolioWorkspace.test.jsx tests/unit/DataCacheContext.test.jsx tests/unit/dataCache.test.js tests/unit/portfolioPlanning.test.js tests/unit/usePortfolioSnapshot.test.jsx tests/unit/OverviewSection.test.jsx tests/unit/LiveMarketShell.test.jsx tests/unit/AuthContext.test.jsx tests/unit/BuyAssetForm.test.jsx tests/unit/agentTools.test.js
 ```
+
+## Real-session navigation follow-up
+
+The original synthetic snapshot test did not establish that page-to-page navigation was fast. A follow-up used the signed-in local browser and the real cluster database through its loopback port-forward.
+
+The PostgreSQL engine used `NullPool`, opening and authenticating a new connection for each API request. Four read-only connection/query/release samples took 4,094, 2,787, 2,603 and 2,564 ms. The application now reuses a bounded pool (five connections plus five overflow connections), validates connections and recycles them. With the actual application configuration, samples were 2,531 ms for the first connection, then 1,134, 1,125 and 1,143 ms. These are database diagnostics, not whole-page timings. `DATABASE_USE_NULL_POOL=true` retains the old connection behavior if an environment specifically requires it. Joining assets into the holdings load also removes one query round trip.
+
+Risk, efficient frontier, Monte Carlo and CPPI now share account-scoped frontend results, including the same metrics key used by Overview. Currency and simulation parameters separate calculations. Pending requests survive a page departure and are reused on return. Previously loaded values remain visible while expired results refresh; analytics indicate that refresh is running. Portfolio mutations invalidate these calculations.
+
+Overview, allocation, cash and transaction sections initialize from their previous account-session data instead of starting empty on every visit. Live Market retains its timestamped quotes and YTD rows during refresh, seeds chart data from known quotes, and warms the snapshot after quote updates. The layout derives its analytics view from the URL before rendering, avoiding a transient mount of the previous view. Charts render without the default entry animations that delayed visible chart data.
+
+| Tested transition | Click to first accessibility observation | Data present in that observation |
+| --- | --- | --- |
+| Risk to Overview | 652 ms | Snapshot, performance metrics and distribution chart; refresh status visible |
+| Overview to Risk | 673 ms | Risk metrics and distribution chart; refresh status visible |
+| Settings to Portfolio | 871 ms | Snapshot, planning, cash, sector breakdown and transactions |
+| Portfolio to Live Market | 618 ms | Last-loaded quotes and holdings, with their original update timestamp |
+
+These measurements include browser-control overhead and are not precise paint timings or cold-start guarantees. The user had already visited the pages, and some cached values had expired. Browser logs also showed warm live-market requests around 1.67–1.81 seconds, while cold external quote refreshes still took 6.34–6.96 seconds. Keeping previously loaded data visible does not make those external requests instantaneous; quote and snapshot timestamps remain visible while fresh values arrive.
+
+Regression checks cover immediate reuse of Overview metrics in Risk, a pending calculation reused after leaving and returning, currency/parameter isolation, visible stale analytics during refresh, and Overview retaining metrics during revalidation. The backend suite still passes all 74 tests. All 39 passing frontend tests include the new navigation checks; the same 12 baseline landing-page assertion failures remain. Production builds verify the generated React vendor module graph as well as compiling the source.
 
 ## Deployment limits
 

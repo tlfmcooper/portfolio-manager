@@ -1,48 +1,21 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
 import { AlertTriangle, Info } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
+import { usePortfolioAnalysis } from '../hooks/usePortfolioAnalysis'
 import { useAgentContext } from '../contexts/AgentContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 
 const RiskSection = () => {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const { api, portfolioId } = useAuth()
   const { riskParams, globalParams } = useAgentContext()
   const { currency: contextCurrency } = useCurrency()
 
   // Determine effective currency: Risk-specific > Global Agent > App Context
   const currency = riskParams.currency || globalParams.currency || contextCurrency
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!portfolioId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true)
-        // Pass currency param to the API
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
-          params: { currency }
-        })
-        setData(response.data)
-      } catch (err) {
-        setError('Failed to fetch risk data')
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [api, portfolioId, currency]) // Re-fetch when currency changes
+  const { data, loading, updating, error } = usePortfolioAnalysis('metrics', currency);
 
   if (loading) return <div>Loading...</div>
-  if (error) return <div className="text-red-500">{error}</div>
+  if (error && !data) return <div className="text-red-500">{error}</div>
   if (!data) return null
 
   const riskAnalytics = data || {}
@@ -185,6 +158,8 @@ const RiskSection = () => {
 
   return (
     <div className="space-y-8">
+      {updating && <p role="status" className="text-sm">Updating analytics…</p>}
+      {error && <p role="alert" className="text-sm">{error}</p>}
       <div>
         {/* Risk Metrics Grid */}
         <div className="metrics-grid">
@@ -227,7 +202,7 @@ const RiskSection = () => {
           <div className="h-96">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
+                <Pie isAnimationActive={false}
                   data={chartData}
                   cx="50%"
                   cy="50%"
