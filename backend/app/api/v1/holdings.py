@@ -28,27 +28,14 @@ from app.models.asset import Asset
 from app.services.exchange_rate_service import get_exchange_rate_service
 from app.services.finance_service import FinanceService
 from app.core.redis_client import get_redis_client
+from app.services.cache_invalidation import invalidate_portfolio_cache
 import json
 
 router = APIRouter()
 
 
 async def invalidate_portfolio_transaction_caches(portfolio_id: int):
-    """Invalidate cached portfolio data after buy/sell cash mutations."""
-    try:
-        redis_client = await get_redis_client()
-        for currency_code in ["USD", "CAD"]:
-            await redis_client.delete(f"dashboard:overview:{portfolio_id}:{currency_code}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:holdings:{currency_code}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:{currency_code}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:v2:{currency_code}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:v3:{currency_code}")
-        await redis_client.delete(f"portfolio:{portfolio_id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio_id}:analytics_cache")
-        await redis_client.delete(f"portfolio:{portfolio_id}:ytd:v5")
-        await redis_client.delete(f"portfolio:{portfolio_id}:ytd:v5:backup")
-    except Exception:
-        pass
+    await invalidate_portfolio_cache(portfolio_id)
 
 
 @router.get("/")
@@ -179,9 +166,7 @@ async def create_user_holding(
 
     # Invalidate returns cache so CPPI/Monte Carlo use fresh data
     try:
-        redis_client = await get_redis_client()
-        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+        await invalidate_portfolio_cache(portfolio.id)
     except Exception:
         pass
 
@@ -256,9 +241,7 @@ async def update_user_holding(
 
     # Invalidate returns cache so CPPI/Monte Carlo use fresh data
     try:
-        redis_client = await get_redis_client()
-        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+        await invalidate_portfolio_cache(portfolio.id)
     except Exception:
         pass
 
@@ -298,9 +281,7 @@ async def delete_user_holding(
 
     # Invalidate returns cache so CPPI/Monte Carlo use fresh data
     try:
-        redis_client = await get_redis_client()
-        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+        await invalidate_portfolio_cache(portfolio.id)
     except Exception:
         pass
 
@@ -336,9 +317,7 @@ async def edit_holding_details(
 
     # Invalidate returns cache so CPPI/Monte Carlo use fresh data
     try:
-        redis_client = await get_redis_client()
-        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+        await invalidate_portfolio_cache(portfolio.id)
     except Exception:
         pass
 
@@ -437,9 +416,7 @@ async def sell_asset(
 
     # Invalidate returns cache so CPPI/Monte Carlo use fresh data
     try:
-        redis_client = await get_redis_client()
-        await redis_client.delete(f"portfolio:{portfolio.id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio.id}:analytics_cache")
+        await invalidate_portfolio_cache(portfolio.id)
     except Exception:
         pass
 

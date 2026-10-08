@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 
 const TransactionHistory = () => {
   const [transactions, setTransactions] = useState([]);
@@ -18,26 +19,20 @@ const TransactionHistory = () => {
   const { api, portfolioId } = useAuth();
   const { formatCurrency } = useCurrency();
 
+  const { fetchWithCache, CACHE_TTL } = useDataCache();
   useEffect(() => {
-    fetchTransactions();
-  }, [portfolioId]);
-
-  const fetchTransactions = async () => {
-    if (!portfolioId) return;
-
-    try {
-      setLoading(true);
-      const response = await api.get(`/portfolios/${portfolioId}/transactions/`);
-      setTransactions(response.data);
-    } catch (error) {
-      // Don't log or handle 401 errors - interceptor handles redirect
-      if (error.response?.status !== 401) {
-        console.error('Error fetching transactions:', error);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+    let active = true;
+    if (!portfolioId) { setLoading(false); return undefined; }
+    setLoading(true);
+    fetchWithCache(`transactions:${portfolioId}`, async () =>
+      (await api.get(`/portfolios/${portfolioId}/transactions/`)).data,
+      CACHE_TTL.HOLDINGS).then(data => {
+        if (active) setTransactions(data);
+      }).catch(error => {
+        if (error.response?.status !== 401) console.error('Error fetching transactions:', error);
+      }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [api, portfolioId, fetchWithCache, CACHE_TTL]);
 
   const getTransactionIcon = (type) => {
     switch (type) {

@@ -15,6 +15,7 @@ from app.schemas.transaction import (
 )
 from app.core.database import get_db
 from app.core.redis_client import get_redis_client
+from app.services.cache_invalidation import invalidate_portfolio_cache
 from app.models.user import User
 from app.models.transaction import TransactionType
 from app.utils.dependencies import get_current_active_user
@@ -26,17 +27,7 @@ router = APIRouter()
 
 
 async def invalidate_dashboard_cache(portfolio_id: int):
-    """Invalidate dashboard cache for all currencies after cash transactions."""
-    redis_client = await get_redis_client()
-    try:
-        # Invalidate cache for both USD and CAD views
-        for currency in ["USD", "CAD"]:
-            cache_key = f"dashboard:overview:{portfolio_id}:{currency}"
-            await redis_client.delete(cache_key)
-        print(f"[CACHE] Invalidated dashboard cache for portfolio {portfolio_id}")
-    except Exception as e:
-        print(f"[CACHE] Failed to invalidate cache: {e}")
-        pass  # Continue even if cache invalidation fails
+    await invalidate_portfolio_cache(portfolio_id)
 
 
 @router.post("/{portfolio_id}/transactions/", response_model=Transaction)

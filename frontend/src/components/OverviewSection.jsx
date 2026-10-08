@@ -11,73 +11,55 @@ const OverviewSection = () => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [pending, setPending] = useState(0)
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency()
-  const { fetchWithCache, CACHE_TTL } = useDataCache()
+  const { fetchWithCache, invalidateCache, CACHE_TTL } = useDataCache()
 
   useEffect(() => {
-    const fetchData = async () => {
-      // If no portfolio ID, we can't fetch data
-      if (!portfolioId) {
-         setLoading(false);
-         return;
-      }
+    let active = true;
+    let failures = 0;
+    setData(null);
+    setError(null);
+    setPending(portfolioId ? 2 : 0);
+    setLoading(Boolean(portfolioId));
+    if (!portfolioId) return undefined;
 
-      try {
-        // Use cache to prevent redundant API calls
-        const [metricsResponse, summaryResponse] = await Promise.all([
-          fetchWithCache(
-            'portfolio_metrics',
-            async () => {
-              const res = await api.get(`/analysis/portfolios/${portfolioId}/metrics`, {
-                params: { currency }
-              });
-              return res.data;
-            },
-            CACHE_TTL.PORTFOLIO_METRICS,
-            currency
-          ),
-          fetchWithCache(
-            'portfolio_summary',
-            async () => {
-              const res = await api.get('/portfolios/summary', {
-                params: { currency }
-              });
-              return res.data;
-            },
-            CACHE_TTL.PORTFOLIO_METRICS,
-            currency
-          )
-        ]);
-
-        const response = {
-          ...metricsResponse,
-          ytd_return_percentage: summaryResponse?.ytd_return_percentage,
-          ytd_complete: summaryResponse?.ytd_complete,
-          ytd_message: summaryResponse?.ytd_message
-        };
-        
-        console.log('API Response:', response)
-        console.log('Individual Performance:', response?.individual_performance)
-        setData(response)
-        setError(null)
-      } catch (err) {
-        // Don't show error for auth issues - interceptor handles redirect
-        if (err.response?.status === 401) {
-          return;
-        }
-        setError('Failed to load portfolio overview. Please refresh the page.')
-        console.error('API Error:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [api, portfolioId, currency, fetchWithCache, CACHE_TTL]) // Add currency to dependencies
+    const receive = result => {
+      if (!active) return;
+      setData(previous => ({ ...previous, ...result }));
+      setPending(value => Math.max(0, value - 1));
+      setLoading(false);
+    };
+    const fail = err => {
+      if (!active || err.response?.status === 401) return;
+      failures++;
+      setPending(value => Math.max(0, value - 1));
+      setError('Some analytics could not be loaded. Retry when the connection is restored.');
+      if (failures === 2) setLoading(false);
+    };
+    // A slow historical calculation must not hold back the summary, or vice versa.
+    fetchWithCache(`portfolio_metrics:${portfolioId}`, async () =>
+      (await api.get(`/analysis/portfolios/${portfolioId}/metrics`, { params: { currency } })).data,
+      CACHE_TTL.PORTFOLIO_METRICS, currency).then(receive).catch(fail);
+    fetchWithCache(`portfolio_summary:${portfolioId}`, async () =>
+      (await api.get('/portfolios/summary', { params: { currency } })).data,
+      CACHE_TTL.PORTFOLIO_METRICS, currency).then(summary => {
+        if (!active) return;
+        // The summary may have refreshed quotes after the initial fast snapshot.
+        invalidateCache([`portfolio_snapshot:${portfolioId}`]);
+        window.dispatchEvent(new CustomEvent('portfolio:pricesUpdated', { detail: { portfolioId, currency } }));
+        receive({
+          ytd_return_percentage: summary?.ytd_return_percentage,
+          ytd_complete: summary?.ytd_complete,
+          ytd_message: summary?.ytd_message,
+        });
+      }).catch(fail);
+    return () => { active = false; };
+  }, [api, portfolioId, currency, fetchWithCache, invalidateCache, CACHE_TTL]);
 
   if (loading) return <DashboardSkeleton />
-  if (error) return <div className="text-red-500">{error}</div>
+  if (error && !data) return <div role="alert" className="text-red-500">{error}</div>
   if (!data) return null
 
   const performanceMetrics = data || {}
@@ -224,6 +206,8 @@ const OverviewSection = () => {
 
   return (
     <div className="space-y-8">
+      {pending > 0 && <p role="status" className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Loading remaining analytics…</p>}
+      {error && <p role="alert" className="text-sm" style={{ color: 'var(--color-warning)' }}>{error}</p>}
       <div>
         {/* Metrics Grid */}
         <div className="metrics-grid">

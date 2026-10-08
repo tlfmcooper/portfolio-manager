@@ -96,6 +96,11 @@ async def test_get_live_market_data_routes_tsx_holdings_through_yahoo(monkeypatc
     writes = {}
 
     class _FakeRedis:
+        async def get_or_load(self, key, loader, ttl):
+            value = await loader()
+            await self.set(key, value, ttl)
+            return value
+
         async def get(self, _key):
             return None
 
@@ -117,7 +122,7 @@ async def test_get_live_market_data_routes_tsx_holdings_through_yahoo(monkeypatc
     async def fake_portfolio(_db, _uid):
         return portfolio
 
-    async def fake_holdings(_db, _pid):
+    async def fake_holdings(_db, _pid, **_kwargs):
         return [holding]
 
     async def fake_redis():
@@ -151,6 +156,8 @@ async def test_get_live_market_data_routes_tsx_holdings_through_yahoo(monkeypatc
     assert live_holding["change"] == 1.27
     assert live_holding["market_value"] == 212.5
     assert live_holding["chart_source"] == "polling"
+    assert holding.asset.last_price_update.utcoffset().total_seconds() == 0
+    assert datetime.fromisoformat(result["updated_at"]).utcoffset().total_seconds() == 0
     assert result["market_data"] == {}
     assert writes["portfolio:77:live_market:v3:CAD"][1] == 60
 

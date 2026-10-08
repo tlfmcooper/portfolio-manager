@@ -24,6 +24,8 @@ from app.models.transaction import Transaction
 from app.services.portfolio_analysis import AdvancedPortfolioAnalytics
 from app.services.exchange_rate_service import get_exchange_rate_service
 from app.services.finance_service import FinanceService
+from app.core.redis_client import get_redis_client
+from app.services.cache_invalidation import invalidate_portfolio_cache
 from app.services.portfolio_ytd import calculate_portfolio_ytd_metrics
 
 router = APIRouter()
@@ -184,11 +186,29 @@ async def update_user_portfolio(
             detail="Failed to update portfolio"
         )
     
+    await invalidate_portfolio_cache(portfolio.id)
     return updated_portfolio
 
 
 @router.get("/summary", response_model=PortfolioSummary)
 async def get_portfolio_summary(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+    currency: Optional[str] = Query(None),
+):
+    portfolio = await get_user_portfolio(db, current_user.id)
+    if not portfolio:
+        raise HTTPException(404, "Portfolio not found")
+    display_currency = (currency or portfolio.currency).upper()
+    cache = await get_redis_client()
+    return await cache.get_or_load(
+        f"portfolio:{portfolio.id}:summary:{display_currency}",
+        lambda: _calculate_portfolio_summary(current_user=current_user, db=db, currency=display_currency),
+        ttl=60,
+    )
+
+
+async def _calculate_portfolio_summary(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
     currency: Optional[str] = Query(None, description="Display currency (USD or CAD)")

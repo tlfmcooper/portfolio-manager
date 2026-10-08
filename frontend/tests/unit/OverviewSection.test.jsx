@@ -4,13 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import OverviewSection from '../../src/components/OverviewSection';
 
-const mocks = vi.hoisted(() => ({
-  apiGet: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const apiGet = vi.fn();
+  return { apiGet, api: { get: apiGet }, cache: {
+    CACHE_TTL: { PORTFOLIO_METRICS: 120000 },
+    fetchWithCache: (_key, fetchFn) => fetchFn(),
+    invalidateCache: vi.fn(),
+  } };
+});
 
 vi.mock('../../src/contexts/AuthContext', () => ({
   useAuth: () => ({
-    api: { get: mocks.apiGet },
+    api: mocks.api,
     portfolioId: 1,
   }),
 }));
@@ -22,15 +27,13 @@ vi.mock('../../src/contexts/CurrencyContext', () => ({
 }));
 
 vi.mock('../../src/contexts/DataCacheContext', () => ({
-  useDataCache: () => ({
-    CACHE_TTL: { PORTFOLIO_METRICS: 120000 },
-    fetchWithCache: (_key, fetchFn) => fetchFn(),
-  }),
+  useDataCache: () => mocks.cache,
 }));
 
 describe('OverviewSection', () => {
   beforeEach(() => {
     mocks.apiGet.mockReset();
+    mocks.cache.invalidateCache.mockClear();
   });
 
   it('shows YTD return instead of annual return on the first metric card', async () => {
@@ -94,4 +97,26 @@ describe('OverviewSection', () => {
     expect(await screen.findByText('YTD Return')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('N/A')).toBeInTheDocument());
   });
+  it('renders a summary while historical analytics are still pending', async () => {
+    mocks.apiGet.mockImplementation(url => url.includes('/metrics')
+      ? new Promise(() => {})
+      : Promise.resolve({ data: { ytd_return_percentage: 8, ytd_complete: true } }));
+    render(<OverviewSection />);
+    expect(await screen.findByText('+8.00%')).toBeInTheDocument();
+  });
+
+  it('invalidates the snapshot and announces prices after receiving the summary', async () => {
+    mocks.apiGet.mockResolvedValue({ data: { ytd_return_percentage: 8, ytd_complete: true } });
+    const updates = vi.fn();
+    window.addEventListener('portfolio:pricesUpdated', updates);
+    try {
+      render(<OverviewSection />);
+      await waitFor(() => expect(updates).toHaveBeenCalledTimes(1));
+      expect(mocks.cache.invalidateCache).toHaveBeenCalledWith(['portfolio_snapshot:1']);
+      expect(updates.mock.calls[0][0].detail).toEqual({ portfolioId: 1, currency: 'USD' });
+    } finally {
+      window.removeEventListener('portfolio:pricesUpdated', updates);
+    }
+  });
+
 });

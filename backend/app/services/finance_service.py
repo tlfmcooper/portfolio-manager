@@ -145,6 +145,10 @@ class FinanceService:
 
     @staticmethod
     async def _get_stock_info(ticker: str, asset_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        return await asyncio.to_thread(FinanceService._get_stock_info_sync, ticker, asset_type)
+
+    @staticmethod
+    def _get_stock_info_sync(ticker: str, asset_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Fetch stock/ETF information from Yahoo Finance."""
         try:
             # Create yfinance ticker object
@@ -675,6 +679,10 @@ class FinanceService:
 
     @staticmethod
     async def _get_crypto_info(ticker: str) -> Optional[Dict[str, Any]]:
+        return await asyncio.to_thread(FinanceService._get_crypto_info_sync, ticker)
+
+    @staticmethod
+    def _get_crypto_info_sync(ticker: str) -> Optional[Dict[str, Any]]:
         """Fetch cryptocurrency information from Yahoo Finance or CoinGecko."""
         try:
             # Try Yahoo Finance first (e.g., BTC-USD, ETH-USD)
@@ -743,6 +751,10 @@ class FinanceService:
 
     @staticmethod
     async def get_ohlc_data(ticker: str) -> Optional[Dict[str, Any]]:
+        return await asyncio.to_thread(FinanceService.get_ohlc_data_sync, ticker)
+
+    @staticmethod
+    def get_ohlc_data_sync(ticker: str) -> Optional[Dict[str, Any]]:
         """
         Get OHLC (Open, High, Low, Close) data for a stock from Yahoo Finance.
         Uses the most recent trading day data.
@@ -917,6 +929,10 @@ class FinanceService:
 
             return result
         
+        return await asyncio.to_thread(FinanceService._calculate_yahoo_performance, ticker, asset_type, periods, result)
+
+    @staticmethod
+    def _calculate_yahoo_performance(ticker, asset_type, periods, result):
         try:
             # Use yfinance for stocks, ETFs, and crypto
             stock_ticker = ticker

@@ -144,7 +144,7 @@ class ExchangeRateService:
             return None
 
     async def get_exchange_rate(
-        self, from_currency: str, to_currency: str, use_cache: bool = True
+        self, from_currency: str, to_currency: str, use_cache: bool = True, *, strict: bool = False
     ) -> float:
         """
         Get exchange rate from one currency to another.
@@ -171,6 +171,8 @@ class ExchangeRateService:
             or to_currency not in SUPPORTED_CURRENCIES
         ):
             logger.warning(f"Unsupported currency pair: {from_currency}/{to_currency}")
+            if strict:
+                raise ValueError("Unsupported currency pair")
             return 1.0
 
         # Try cache first
@@ -194,6 +196,8 @@ class ExchangeRateService:
         # Fallback: try to use stale cache or return 1.0
         logger.warning(f"Failed to fetch exchange rate, using fallback")
         cached_rate = await self._get_from_cache(from_currency, to_currency)
+        if cached_rate is None and strict:
+            raise ValueError("Exchange rate unavailable")
         return cached_rate if cached_rate is not None else 1.0
 
     async def convert_amount(

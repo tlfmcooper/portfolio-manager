@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
   return {
     api: { get: apiGet },
     apiGet,
+    cache: { getFromCache: () => null, setInCache: vi.fn(), invalidateCache: vi.fn() },
   };
 });
 
@@ -24,6 +25,10 @@ vi.mock('../../src/contexts/CurrencyContext', () => ({
     currency: 'USD',
     formatCurrency: (value) => `$${Number(value || 0).toFixed(2)}`,
   }),
+}));
+
+vi.mock('../../src/contexts/DataCacheContext', () => ({
+  useDataCache: () => mocks.cache,
 }));
 
 vi.mock('../../src/contexts/ThemeContext', () => ({

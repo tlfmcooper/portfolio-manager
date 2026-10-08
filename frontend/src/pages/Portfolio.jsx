@@ -2,7 +2,7 @@ import React, { Suspense, useState } from 'react';
 import { Loader2, PieChart, TrendingUp, Wallet, DollarSign, Receipt } from 'lucide-react';
 import CashBalance from '../components/CashBalance';
 import TransactionHistory from '../components/TransactionHistory';
-import ErrorBoundary from '../components/ErrorBoundary';
+import PortfolioWorkspace from '../components/PortfolioWorkspace';
 
 // Lazy load portfolio-related sections
 const AllocationSection = React.lazy(() => import('../components/AllocationSection'));
@@ -16,7 +16,8 @@ const LoadingSpinner = () => (
 );
 
 const Portfolio = () => {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey] = useState(0);
+  const [showPerformance, setShowPerformance] = useState(false);
 
   return (
     <section className="dashboard-section active">
@@ -49,6 +50,7 @@ const Portfolio = () => {
         </div>
       </div>
 
+      <PortfolioWorkspace planning />
       <Suspense fallback={<LoadingSpinner />}>
         {/* Cash Balance Section */}
         <div style={{ marginBottom: 'var(--space-32)' }}>
@@ -93,7 +95,8 @@ const Portfolio = () => {
               Performance Metrics
             </h3>
           </div>
-          <PerformanceView />
+          <button type="button" className="rounded border px-4 py-2 text-sm" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }} onClick={() => setShowPerformance(value => !value)}>{showPerformance ? 'Hide historical metrics' : 'Load historical metrics'}</button>
+          {showPerformance && <Suspense fallback={<LoadingSpinner />}><PerformanceView /></Suspense>}
         </div>
 
         {/* Transaction History Section */}

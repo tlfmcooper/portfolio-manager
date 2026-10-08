@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
+import PortfolioWorkspace from '../PortfolioWorkspace';
 
 // Lazy load the overview section
 const OverviewSection = React.lazy(() => import('../OverviewSection'));
@@ -12,9 +13,12 @@ const LoadingSpinner = () => (
 
 const TabOverview = () => {
   return (
+    <>
+    <PortfolioWorkspace />
     <Suspense fallback={<LoadingSpinner />}>
       <OverviewSection />
     </Suspense>
+    </>
   );
 };
 

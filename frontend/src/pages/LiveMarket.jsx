@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { ChartSkeleton, TableSkeleton } from '../components/ui/Skeleton';
 
 // Lazy load chart component
@@ -31,35 +32,6 @@ const MOBILE_SORT_OPTIONS = [
   { key: 'return', label: 'Return %' },
 ];
 
-const getLiveMarketCacheKey = (currency) => `live_market_${currency || 'default'}`;
-
-const readLiveMarketCache = (currency) => {
-  try {
-    const raw = localStorage.getItem(getLiveMarketCacheKey(currency));
-    if (!raw) return null;
-
-    const cached = JSON.parse(raw);
-    if (!cached?.timestamp || Date.now() - cached.timestamp > LIVE_MARKET_CACHE_TTL) {
-      return null;
-    }
-
-    return cached.data;
-  } catch {
-    return null;
-  }
-};
-
-const writeLiveMarketCache = (currency, data) => {
-  try {
-    localStorage.setItem(getLiveMarketCacheKey(currency), JSON.stringify({
-      timestamp: Date.now(),
-      data,
-    }));
-  } catch {
-    // Ignore storage limits; live data can always be refetched.
-  }
-};
-
 const LiveMarket = () => {
   const [holdings, setHoldings] = useState([]);
   const [cashBalance, setCashBalance] = useState(0);
@@ -72,7 +44,9 @@ const LiveMarket = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [ytdMap, setYtdMap] = useState({}) // ticker -> ytd_return (number|null)
-  const { api } = useAuth();
+  const { api, portfolioId } = useAuth();
+  const { getFromCache, setInCache, invalidateCache } = useDataCache();
+  const liveCacheKey = `live_market:${portfolioId}`;
   const { currency, formatCurrency: formatCurrencyFromContext } = useCurrency();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -80,6 +54,7 @@ const LiveMarket = () => {
   const autoRefreshIntervalRef = useRef(null);
   const requestIdRef = useRef(0);
   const ytdAbortRef = useRef(null);
+  const liveAbortRef = useRef(null);
 
   // Auto-refresh interval in milliseconds (60 seconds)
   const AUTO_REFRESH_INTERVAL = 60000;
@@ -124,7 +99,14 @@ const LiveMarket = () => {
   };
 
   useEffect(() => {
-    const cached = readLiveMarketCache(currency);
+    const cached = getFromCache(liveCacheKey, currency);
+    setHoldings(cached?.holdings || []);
+    setCashBalance(cached?.cash_balance || 0);
+    setChartData({});
+    priceHistoryRef.current = {};
+    setYtdMap({});
+    setSelectedStock(null);
+    setLoading(!cached);
     if (cached?.holdings?.length) {
       setHoldings(cached.holdings);
       setCashBalance(cached.cash_balance || 0);
@@ -138,7 +120,7 @@ const LiveMarket = () => {
 
     // Set up auto-refresh interval
     autoRefreshIntervalRef.current = setInterval(() => {
-      console.log('Auto-refreshing market data...');
+      if (document.hidden || liveAbortRef.current) return;
       fetchLiveMarketData(true); // Silent update
     }, AUTO_REFRESH_INTERVAL);
 
@@ -153,13 +135,15 @@ const LiveMarket = () => {
       if (ytdAbortRef.current) {
         ytdAbortRef.current.abort();
       }
+      liveAbortRef.current?.abort();
+      liveAbortRef.current = null;
       requestIdRef.current += 1;
       // Cleanup auto-refresh interval
       if (autoRefreshIntervalRef.current) {
         clearInterval(autoRefreshIntervalRef.current);
       }
     };
-  }, [api, currency]);
+  }, [api, portfolioId, currency, getFromCache]);
 
   // WebSocket connection setup
   const connectWebSocket = (symbols) => {
@@ -260,7 +244,7 @@ const LiveMarket = () => {
     }
   };
 
-  const fetchLiveMarketData = async (silentUpdate = false) => {
+  const fetchLiveMarketData = async (silentUpdate = false, refresh = false) => {
     const requestId = ++requestIdRef.current;
 
     try {
@@ -271,8 +255,12 @@ const LiveMarket = () => {
 
       console.log('Fetching live market data with currency:', currency);
       const startTime = Date.now();
+      liveAbortRef.current?.abort();
+      const controller = new AbortController();
+      liveAbortRef.current = controller;
       const response = await api.get('/market/live', {
-        params: { currency },
+        signal: controller.signal,
+        params: { currency, ...(refresh ? { refresh: true } : {}) },
         timeout: 60000 // 60 second timeout for initial fetch with many holdings
       });
 
@@ -282,7 +270,11 @@ const LiveMarket = () => {
       const holdingsData = response.data.holdings;
       setHoldings(holdingsData);
       appendPollingChartData(holdingsData, response.data.updated_at);
-      writeLiveMarketCache(currency, response.data);
+      setInCache(liveCacheKey, response.data, LIVE_MARKET_CACHE_TTL, currency);
+      // Every successful quote update makes the stored-price snapshot obsolete.
+      invalidateCache([`portfolio_snapshot:${portfolioId}`]);
+      window.dispatchEvent(new CustomEvent('portfolio:pricesUpdated', { detail: { portfolioId, currency } }));
+      if (refresh) invalidateCache(['portfolio_summary', 'portfolio_metrics', 'sector_allocation']);
 
       // Clear stale YTD values before issuing new fetch (currency may have changed)
       setYtdMap({})
@@ -312,7 +304,7 @@ const LiveMarket = () => {
         })
 
       setCashBalance(response.data.cash_balance || 0);
-      setLastUpdate(new Date());
+      setLastUpdate(new Date(response.data.updated_at || Date.now()));
 
       // Set initial selected stock
       if (!selectedStock && holdingsData.length > 0) {
@@ -338,6 +330,7 @@ const LiveMarket = () => {
 
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
+      if (err.code === 'ERR_CANCELED') return;
       console.error('Error fetching live market data:', err);
       
       // Don't show error for auth-related issues (interceptor handles redirect)
@@ -356,8 +349,9 @@ const LiveMarket = () => {
         toast.error(errorMsg);
       }
     } finally {
-      if (requestId === requestIdRef.current && !silentUpdate) {
-        setLoading(false);
+      if (requestId === requestIdRef.current) {
+        liveAbortRef.current = null;
+        if (!silentUpdate) setLoading(false);
       }
     }
   };
@@ -373,7 +367,7 @@ const LiveMarket = () => {
       wsRef.current = null;
     }
 
-    fetchLiveMarketData();
+    fetchLiveMarketData(true, true);
     toast.success('Refreshing market data...');
   };
 

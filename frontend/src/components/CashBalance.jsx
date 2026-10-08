@@ -26,7 +26,7 @@ const CashBalance = ({ onAddCash }) => {
       
       // Use cache to prevent redundant API calls
       const response = await fetchWithCache(
-        'dashboard_overview',
+        `dashboard_overview:${portfolioId}`,
         async () => {
           const res = await api.get(
             `/dashboard/overview`,

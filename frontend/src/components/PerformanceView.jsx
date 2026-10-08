@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
+import { useCurrency } from '../contexts/CurrencyContext'
+import { useDataCache } from '../contexts/DataCacheContext'
 
 const PerformanceView = () => {
   const [data, setData] = useState(null)
@@ -8,13 +10,18 @@ const PerformanceView = () => {
   const [error, setError] = useState(null)
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
 
+  const { currency } = useCurrency();
+  const { fetchWithCache, CACHE_TTL } = useDataCache();
+
   useEffect(() => {
     const fetchData = async () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/metrics`) // CRITICAL FIX: Use dynamic portfolioId
-        setData(response.data)
+        const response = await fetchWithCache(`portfolio_metrics:${portfolioId}`, async () =>
+          (await api.get(`/analysis/portfolios/${portfolioId}/metrics`, { params: { currency } })).data,
+          CACHE_TTL.PORTFOLIO_METRICS, currency);
+        setData(response)
       } catch (err) {
         setError('Failed to fetch performance data')
         console.error(err)
@@ -24,7 +31,7 @@ const PerformanceView = () => {
     }
 
     fetchData()
-  }, [api, portfolioId]) // CRITICAL FIX: Add portfolioId to dependencies
+  }, [api, portfolioId, currency, fetchWithCache, CACHE_TTL]) // CRITICAL FIX: Add portfolioId to dependencies
 
   if (loading) return <div>Loading...</div>
   if (error) return <div className="text-red-500">{error}</div>

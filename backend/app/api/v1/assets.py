@@ -30,23 +30,9 @@ router = APIRouter()
 
 
 async def invalidate_portfolio_transaction_caches(portfolio_id: int):
-    """Invalidate cached portfolio data after buy/sell cash mutations."""
-    try:
-        from app.core.redis_client import get_redis_client
+    from app.services.cache_invalidation import invalidate_portfolio_cache
+    await invalidate_portfolio_cache(portfolio_id)
 
-        redis_client = await get_redis_client()
-        for currency in ["USD", "CAD"]:
-            await redis_client.delete(f"dashboard:overview:{portfolio_id}:{currency}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:holdings:{currency}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:{currency}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:v2:{currency}")
-            await redis_client.delete(f"portfolio:{portfolio_id}:live_market:v3:{currency}")
-        await redis_client.delete(f"portfolio:{portfolio_id}:returns_cache")
-        await redis_client.delete(f"portfolio:{portfolio_id}:analytics_cache")
-        await redis_client.delete(f"portfolio:{portfolio_id}:ytd:v5")
-        await redis_client.delete(f"portfolio:{portfolio_id}:ytd:v5:backup")
-    except Exception as e:
-        logger.warning(f"Failed to invalidate portfolio caches for {portfolio_id}: {e}")
 
 
 async def convert_amount_to_portfolio_currency(

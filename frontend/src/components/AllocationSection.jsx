@@ -26,7 +26,7 @@ const AllocationSection = () => {
         
         // Use cache to prevent redundant API calls
         const response = await fetchWithCache(
-          'sector_allocation',
+          `sector_allocation:${portfolioId}`,
           async () => {
             const res = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`, {
               params: { currency }

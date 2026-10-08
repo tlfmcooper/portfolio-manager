@@ -14,6 +14,11 @@ const UpdatePortfolio = () => {
     invalidateCache([
       'dashboard_overview',
       'portfolio_metrics',
+      'portfolio_summary',
+      'portfolio_snapshot',
+      'sector_allocation',
+      'live_market',
+      'transactions',
       'holdings',
       'allocation'
     ]);

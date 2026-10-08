@@ -1,157 +1,70 @@
-"""
-API endpoints for portfolio analysis.
-"""
-import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+"""Owned portfolio analytics with currency-aware caching and coalesced requests."""
+from typing import Annotated, Literal
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.services.portfolio_analysis import AdvancedPortfolioAnalytics
 from app.core.redis_client import get_redis_client
+from app.models import Portfolio, User
+from app.services.portfolio_analysis import AdvancedPortfolioAnalytics
+from app.utils.dependencies import get_current_active_user
 
-logger = logging.getLogger(__name__)
 
-router = APIRouter()
+async def require_portfolio(
+    portfolio_id: int, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    result = await db.execute(select(Portfolio.id).where(
+        Portfolio.id == portfolio_id, Portfolio.user_id == current_user.id, Portfolio.is_active.is_(True)))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(404, "Portfolio not found")
+
+
+router = APIRouter(dependencies=[Depends(require_portfolio)])
+Currency = Literal["USD", "CAD"]
+
+
+async def cached_analysis(portfolio_id, db, currency, kind, method, ttl, **params):
+    cache = await get_redis_client()
+    key = f"portfolio:{portfolio_id}:{kind}:v2:{currency or 'default'}:{tuple(sorted(params.items()))}"
+
+    async def load():
+        analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
+        return await getattr(analytics, method)(**params)
+
+    return await cache.get_or_load(key, load, ttl)
 
 
 @router.get("/portfolios/{portfolio_id}/metrics")
-async def get_portfolio_metrics(
-    portfolio_id: int,
-    db: AsyncSession = Depends(get_db),
-):
-    """Get portfolio metrics with Redis caching for faster response."""
-    cache_key = f"portfolio:{portfolio_id}:metrics"
-    redis_client = await get_redis_client()
-
-    # Try cache first
-    cached_metrics = await redis_client.get(cache_key)
-    if cached_metrics:
-        logger.info(f"Cache hit for portfolio {portfolio_id} metrics")
-        return cached_metrics
-
-    # Calculate if not cached
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db)
-    metrics = await analytics.calculate_portfolio_metrics()
-
-    # Cache for 5 minutes
-    await redis_client.set(cache_key, metrics, ttl=300)
-
-    return metrics
+async def get_portfolio_metrics(portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db)):
+    return await cached_analysis(portfolio_id, db, currency, "metrics", "calculate_portfolio_metrics", 300)
 
 
 @router.get("/portfolios/{portfolio_id}/sector-allocation")
-async def get_sector_allocation(
-    portfolio_id: int,
-    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get portfolio sector allocation with currency conversion and caching."""
-    # Include currency in cache key
-    cache_key = f"portfolio:{portfolio_id}:sector-allocation:{currency or 'default'}"
-    redis_client = await get_redis_client()
-
-    # Try cache first
-    cached_allocation = await redis_client.get(cache_key)
-    if cached_allocation:
-        logger.info(f"Cache hit for portfolio {portfolio_id} sector allocation (currency: {currency})")
-        return cached_allocation
-
-    # Calculate if not cached
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db)
-    allocation = await analytics.sector_analysis(display_currency=currency)
-
-    # Cache for 10 minutes (sector allocation changes less frequently)
-    await redis_client.set(cache_key, allocation, ttl=600)
-
-    return allocation
+async def get_sector_allocation(portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db)):
+    return await cached_analysis(portfolio_id, db, currency, "sector-allocation", "sector_analysis", 600, display_currency=currency)
 
 
 @router.get("/portfolios/{portfolio_id}/efficient-frontier")
-async def get_efficient_frontier(
-    portfolio_id: int,
-    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get efficient frontier data with currency conversion and caching."""
-    cache_key = f"portfolio:{portfolio_id}:efficient-frontier:{currency or 'default'}"
-    redis_client = await get_redis_client()
-
-    # Try cache first
-    cached_data = await redis_client.get(cache_key)
-    if cached_data:
-        logger.info(f"Cache hit for portfolio {portfolio_id} efficient frontier")
-        return cached_data
-
-    # Calculate if not cached
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
-    frontier_data = await analytics.generate_efficient_frontier()
-
-    # Cache for 15 minutes (optimization is computationally expensive)
-    await redis_client.set(cache_key, frontier_data, ttl=900)
-
-    return frontier_data
+async def get_efficient_frontier(portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db)):
+    return await cached_analysis(portfolio_id, db, currency, "efficient-frontier", "generate_efficient_frontier", 900)
 
 
 @router.get("/portfolios/{portfolio_id}/monte-carlo")
 async def run_monte_carlo_simulation(
-    portfolio_id: int,
-    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
-    db: AsyncSession = Depends(get_db),
-    scenarios: int = 1000,
-    time_horizon: int = 252,
+    portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db),
+    scenarios: Annotated[int, Query(ge=1, le=10000)] = 1000, time_horizon: Annotated[int, Query(ge=1, le=2520)] = 252,
 ):
-    """Run a Monte Carlo simulation with currency conversion and caching."""
-    cache_key = f"portfolio:{portfolio_id}:monte-carlo:{currency or 'default'}:{scenarios}:{time_horizon}"
-    redis_client = await get_redis_client()
-
-    # Try cache first
-    cached_data = await redis_client.get(cache_key)
-    if cached_data:
-        logger.info(f"Cache hit for portfolio {portfolio_id} Monte Carlo simulation")
-        return cached_data
-
-    # Calculate if not cached
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
-    simulation_data = await analytics.run_monte_carlo_simulation(
-        scenarios=scenarios, time_horizon=time_horizon
-    )
-
-    # Cache for 10 minutes
-    await redis_client.set(cache_key, simulation_data, ttl=600)
-
-    return simulation_data
+    return await cached_analysis(portfolio_id, db, currency, "monte-carlo", "run_monte_carlo_simulation", 600,
+                                 scenarios=scenarios, time_horizon=time_horizon)
 
 
 @router.get("/portfolios/{portfolio_id}/cppi")
 async def run_cppi_simulation(
-    portfolio_id: int,
-    currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
-    db: AsyncSession = Depends(get_db),
-    multiplier: int = 3,
-    floor: float = 0.8,
-    time_horizon: int = 252,
+    portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db),
+    multiplier: Annotated[int, Query(ge=1, le=10)] = 3, floor: Annotated[float, Query(gt=0, le=1)] = 0.8,
+    time_horizon: Annotated[int, Query(ge=1, le=2520)] = 252,
 ):
-    """Run a CPPI simulation with currency conversion and caching."""
-    cache_key = f"portfolio:{portfolio_id}:cppi:{currency or 'default'}:{multiplier}:{floor}:{time_horizon}"
-    redis_client = await get_redis_client()
-
-    # Try cache first
-    cached_data = await redis_client.get(cache_key)
-    if cached_data:
-        logger.info(f"Cache hit for portfolio {portfolio_id} CPPI simulation")
-        return cached_data
-
-    # Calculate if not cached
-    analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
-    simulation_data = await analytics.run_cppi_simulation(
-        multiplier=multiplier, floor=floor, time_horizon=time_horizon
-    )
-
-    # Don't cache error responses
-    if simulation_data.get("error"):
-        return simulation_data
-
-    # Cache for 10 minutes (only successful results)
-    await redis_client.set(cache_key, simulation_data, ttl=600)
-    return simulation_data
+    return await cached_analysis(portfolio_id, db, currency, "cppi", "run_cppi_simulation", 600,
+                                 multiplier=multiplier, floor=floor, time_horizon=time_horizon)

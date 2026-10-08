@@ -105,7 +105,9 @@ export default defineConfig(({ mode }) => {
             if (!id.includes('node_modules')) return;
             if (id.includes('@google/generative-ai')) return 'ai';
             if (id.includes('html2canvas')) return 'capture';
-            if (id.includes('react') || id.includes('scheduler')) return 'vendor';
+            if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'vendor';
+            if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-vendor/')) return 'charts';
+            if (id.includes('/react-markdown/') || id.includes('/remark-') || id.includes('/micromark')) return 'markdown';
             if (
               id.includes('react-router') ||
               id.includes('axios') ||

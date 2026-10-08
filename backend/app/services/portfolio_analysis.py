@@ -297,7 +297,7 @@ class AdvancedPortfolioAnalytics:
         Returns (pd.Series, float) on hit, (None, None) on miss.
         """
         from app.core.redis_client import get_redis_client
-        cache_key = f"portfolio:{self.portfolio_id}:returns_cache"
+        cache_key = f"portfolio:{self.portfolio_id}:returns_cache:{self.display_currency or 'default'}"
         redis_client = await get_redis_client()
         cached = await redis_client.get(cache_key)
         if cached is None:
@@ -315,7 +315,7 @@ class AdvancedPortfolioAnalytics:
     async def _cache_returns(self, returns: pd.Series, total_value: float) -> None:
         """Store portfolio returns + value in Redis for 15 minutes."""
         from app.core.redis_client import get_redis_client
-        cache_key = f"portfolio:{self.portfolio_id}:returns_cache"
+        cache_key = f"portfolio:{self.portfolio_id}:returns_cache:{self.display_currency or 'default'}"
         redis_client = await get_redis_client()
         try:
             await redis_client.set(
@@ -337,7 +337,7 @@ class AdvancedPortfolioAnalytics:
         Returns a 4-tuple on hit, None on miss.
         """
         from app.core.redis_client import get_redis_client
-        cache_key = f"portfolio:{self.portfolio_id}:analytics_cache"
+        cache_key = f"portfolio:{self.portfolio_id}:analytics_cache:{self.display_currency or 'default'}"
         redis_client = await get_redis_client()
         cached = await redis_client.get(cache_key)
         if cached is None:
@@ -368,7 +368,7 @@ class AdvancedPortfolioAnalytics:
     ) -> None:
         """Store full analytics dataset in Redis for 15 minutes."""
         from app.core.redis_client import get_redis_client
-        cache_key = f"portfolio:{self.portfolio_id}:analytics_cache"
+        cache_key = f"portfolio:{self.portfolio_id}:analytics_cache:{self.display_currency or 'default'}"
         redis_client = await get_redis_client()
         try:
             payload = {

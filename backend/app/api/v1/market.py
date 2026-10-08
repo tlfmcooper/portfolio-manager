@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import logging
 
@@ -18,6 +18,7 @@ from app.services.finnhub_service import get_finnhub_service
 from app.services.market_websocket import get_ws_manager
 from app.services.finance_service import FinanceService
 from app.core.redis_client import get_redis_client
+from app.services.cache_invalidation import invalidate_portfolio_cache
 from app.services.exchange_rate_service import get_exchange_rate_service
 
 logger = logging.getLogger(__name__)
@@ -179,7 +180,8 @@ def _calculate_ytd_from_holding_cost_basis(holding, live_holding: Optional[Dict[
 async def get_live_market_data(
     currency: Optional[str] = Query(None, description="Currency for display (USD or CAD)"),
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    refresh: bool = False
 ) -> Any:
     """
     Get live market data for all holdings in current user's portfolio with currency conversion.
@@ -198,6 +200,13 @@ async def get_live_market_data(
     # ── Full-response cache (short TTL for live rows) ────────────────────────
     redis_client = await get_redis_client()
     live_cache_key = f"portfolio:{portfolio.id}:live_market:v3:{display_currency}"
+    if refresh:
+        await invalidate_portfolio_cache(portfolio.id)
+        for holding in portfolio.holdings:
+            await redis_client.delete(f"stock:quote:{holding.ticker}")
+            await redis_client.delete(f"ohlc:{holding.ticker}")
+            if holding.asset:
+                await redis_client.delete(f"asset_info:{holding.ticker}:{holding.asset.asset_type}")
     cached_response = await redis_client.get(live_cache_key)
     if cached_response:
         logger.info(f"[MARKET_LIVE] Full cache hit for portfolio {portfolio.id}")
@@ -209,7 +218,7 @@ async def get_live_market_data(
     exchange_rates = {}
 
     # Get all holdings
-    holdings = await get_portfolio_holdings(db, portfolio.id)
+    holdings = await get_portfolio_holdings(db, portfolio.id, limit=None)
 
     if not holdings:
         return {
@@ -218,7 +227,7 @@ async def get_live_market_data(
             "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, {}),
             "portfolio_currency": portfolio.currency,
             "display_currency": display_currency,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "message": "No holdings found in portfolio"
         }
 
@@ -261,44 +270,15 @@ async def get_live_market_data(
 
     # ── Helpers: cached wrappers for slow asset-info calls ───────────────────
     async def get_cached_asset_info(ticker: str, asset_type: str):
-        """Return cached asset info or fetch + cache with 15-min TTL.
-
-        Mutual fund fetches use a shared Barchart XSRF session and must NOT
-        be called from multiple threads simultaneously. All other asset types
-        are safe to run in a thread-pool executor for true parallelism.
-        """
-        ck = f"asset_info:{ticker}:{asset_type}"
-        cached = await redis_client.get(ck)
-        if cached:
-            return cached
-        if asset_type == 'mutual_fund':
-            # Keep on event-loop thread — shared session, XSRF-token safety
-            data = await FinanceService.get_asset_info(ticker, asset_type)
-        else:
-            # yfinance / etc. are blocking; run in thread pool so gather() parallelises
-            loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(
-                None,
-                lambda t=ticker, at=asset_type: asyncio.run(FinanceService.get_asset_info(t, at))
-            )
-        if data:
-            await redis_client.set(ck, data, ttl=900)
-        return data
+        return await redis_client.get_or_load(
+            f"asset_info:{ticker}:{asset_type}",
+            lambda: FinanceService.get_asset_info(ticker, asset_type), ttl=900,
+        )
 
     async def get_cached_ohlc(ticker: str):
-        """Return cached OHLC data or fetch + cache briefly for live rows."""
-        ck = f"ohlc:{ticker}"
-        cached = await redis_client.get(ck)
-        if cached:
-            return cached
-        loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            None,
-            lambda t=ticker: asyncio.run(FinanceService.get_ohlc_data(t))
+        return await redis_client.get_or_load(
+            f"ohlc:{ticker}", lambda: FinanceService.get_ohlc_data(ticker), ttl=60,
         )
-        if data:
-            await redis_client.set(ck, data, ttl=60)
-        return data
 
     # ── Fetch mutual fund / crypto / OHLC data in parallel ───────────────────
     async def fetch_mf(holding):
@@ -310,7 +290,7 @@ async def get_live_market_data(
                 holding._temp_change = data.get('change', 0)
                 if holding.asset:
                     holding.asset.current_price = data['current_price']
-                    holding.asset.last_price_update = datetime.utcnow()
+                    holding.asset.last_price_update = datetime.now(timezone.utc)
             else:
                 holding._temp_change_percent = 0
                 holding._temp_change = 0
@@ -331,7 +311,7 @@ async def get_live_market_data(
                     holding._temp_change_percent = 0
                 if holding.asset:
                     holding.asset.current_price = data['current_price']
-                    holding.asset.last_price_update = datetime.utcnow()
+                    holding.asset.last_price_update = datetime.now(timezone.utc)
             else:
                 holding._temp_change_percent = 0
         except Exception as e:
@@ -347,7 +327,7 @@ async def get_live_market_data(
                 holding._temp_change = data.get('change', 0)
                 if holding.asset:
                     holding.asset.current_price = data['current_price']
-                    holding.asset.last_price_update = datetime.utcnow()
+                    holding.asset.last_price_update = datetime.now(timezone.utc)
             else:
                 holding._temp_change_percent = 0
                 holding._temp_change = 0
@@ -426,7 +406,7 @@ async def get_live_market_data(
             "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, exchange_rates),
             "portfolio_currency": portfolio.currency,
             "display_currency": display_currency,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         await redis_client.set(live_cache_key, early_response, ttl=60)
         return early_response
@@ -459,7 +439,7 @@ async def get_live_market_data(
         for symbol, quote in fresh_data.items():
             market_data[symbol] = quote
             cache_key = f"stock:quote:{symbol}"
-            await redis_client.set(cache_key, quote, ttl=900)  # 15 minute cache
+            await redis_client.set(cache_key, quote, ttl=60)  # Match the live refresh interval
 
     # Enrich holdings with live market data
     enriched_holdings = []
@@ -491,6 +471,11 @@ async def get_live_market_data(
             converted_current_price = convert_price(quote["current_price"], asset_currency, display_currency, exchange_rates)
             converted_change = convert_price(quote["change"], asset_currency, display_currency, exchange_rates)
 
+            holding.current_price = quote["current_price"]
+            holding.last_price_update = datetime.now(timezone.utc)
+            if holding.asset:
+                holding.asset.current_price = quote["current_price"]
+                holding.asset.last_price_update = holding.last_price_update
             holding_dict["current_price"] = converted_current_price
             holding_dict["market_value"] = converted_current_price * holding.quantity
             holding_dict["change_percent"] = quote["change_percent"]  # Percentage stays the same
@@ -528,8 +513,9 @@ async def get_live_market_data(
         "cash_balance": convert_price(portfolio.cash_balance or 0, portfolio.currency, display_currency, exchange_rates),
         "portfolio_currency": portfolio.currency,
         "display_currency": display_currency,
-        "updated_at": datetime.utcnow().isoformat()
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }
+    await db.commit()
     # Cache full response briefly so auto-refresh can pick up moving markets.
     await redis_client.set(live_cache_key, response, ttl=60)
     return response
@@ -742,7 +728,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 if data.get("type") == "ping":
                     await ws_manager.send_personal_message(
-                        {"type": "pong", "timestamp": datetime.utcnow().isoformat()},
+                        {"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()},
                         websocket
                     )
                 elif data.get("type") == "subscribe":
