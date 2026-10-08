@@ -7,11 +7,11 @@ Measured October 8, 2026. Build numbers are from Vite production output on the s
 | Initial JavaScript chunk | Before (kB / gzip kB) | After (kB / gzip kB) |
 | --- | --- | --- |
 | Entry | 43.27 / 12.30 | 43.18 / 12.42 |
-| React vendor | 340.85 / 106.59 | 139.93 / 45.20 |
-| App vendor | 35.61 / 13.94 | 93.67 / 34.05 |
-| **Total initial JS** | **419.73 / 132.83** | **276.78 / 91.67** |
+| React vendor | 340.85 / 106.59 | 140.15 / 45.24 |
+| App vendor | 35.61 / 13.94 | 93.40 / 34.01 |
+| **Total initial JS** | **419.73 / 132.83** | **276.73 / 91.67** |
 
-Initial JavaScript is 34.1% smaller uncompressed and 31.0% smaller gzip-compressed. Charts and Markdown load with the sections that require them; the new planning workspace is also separate from the entry. CSS remains approximately 66.5 kB (11.7 kB gzip). The build completes successfully; the existing Browserslist database warning remains.
+Initial JavaScript is 34.1% smaller uncompressed and 31.0% smaller gzip-compressed. Charts and Markdown load with the sections that require them; the new planning workspace is also separate from the entry. CSS remains approximately 66.7 kB (11.8 kB gzip). The build completes successfully; the existing Browserslist database warning remains. Shared CommonJS helpers stay with React to avoid a circular import through the app vendor chunk. The build also imports the generated React vendor module graph and verifies React initialization, catching runtime failures that source-level unit tests miss. The production preview was verified to render the landing page and login form without console errors.
 
 The deployed public landing page was also inspected before changes: observed TTFB 473 ms, DOMContentLoaded 1,026 ms, load 1,037 ms, with the old 106.6 kB compressed vendor chunk. These are a single remote sample and include network latency. Authenticated production performance was not measured.
 

@@ -102,6 +102,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // Keep shared CommonJS helpers with React so vendor cannot import
+            // app-vendor while app-vendor is initializing React consumers.
+            if (id.includes('commonjsHelpers')) return 'vendor';
             if (!id.includes('node_modules')) return;
             if (id.includes('@google/generative-ai')) return 'ai';
             if (id.includes('html2canvas')) return 'capture';
