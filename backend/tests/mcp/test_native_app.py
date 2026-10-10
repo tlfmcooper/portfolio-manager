@@ -33,6 +33,16 @@ def test_native_resource_and_open_tool_preserve_wire_metadata():
     assert opened["_meta"]["ui"]["resourceUri"] == content["uri"]
 
 
+def test_scenario_tool_is_read_only_and_opens_native_ui():
+    registry = get_registry()
+    tool = next(tool for tool in registry.list_tools() if tool.name == "analytics_preview_scenario")
+    wire = tool.model_dump(by_alias=True, exclude_none=True)
+    assert wire["annotations"]["readOnlyHint"] is True
+    assert wire["_meta"]["ui"]["resourceUri"] == "ui://portfolio/app"
+    with pytest.raises(MCPError):
+        asyncio.run(registry.execute_tool(tool.name, {"preset": "msr"}, SimpleNamespace(auth=MCPAuthContext())))
+
+
 @pytest.mark.parametrize("auth", [MCPAuthContext(), MCPAuthContext(is_authenticated=True, permissions={"market:read"})])
 def test_native_resource_requires_authenticated_portfolio_access(auth):
     with pytest.raises(MCPError):

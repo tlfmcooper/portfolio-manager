@@ -4,10 +4,16 @@ export function connectMcpApp(windowObject = window) {
   if (windowObject.parent === windowObject || !new URLSearchParams(windowObject.location.search).has('mcpApp')) return () => {};
   const hostOrigin = 'https://paios.alikone.dev';
   const initializeId = 'portfolio:initialize';
+  let initialized = false;
   const receive = event => {
     if (event.source !== windowObject.parent || event.origin !== hostOrigin) return;
     if (event.data?.jsonrpc === '2.0' && event.data.id === initializeId && event.data.result) {
+      initialized = true;
       windowObject.parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized' }, hostOrigin);
+    }
+    if (initialized && event.data?.jsonrpc === '2.0' && event.data.method === 'ui/notifications/tool-result') {
+      const proposal = event.data.params?.structuredContent;
+      if (proposal?.ui_type === 'allocation_scenario') windowObject.dispatchEvent(new windowObject.CustomEvent('portfolio:scenario-proposal', { detail: proposal }));
     }
   };
   windowObject.addEventListener('message', receive);

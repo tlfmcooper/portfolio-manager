@@ -8,6 +8,8 @@ from app.core.database import get_db
 from app.core.redis_client import get_redis_client
 from app.models import Portfolio, User
 from app.services.portfolio_analysis import AdvancedPortfolioAnalytics
+from app.schemas.scenario import ScenarioRequest
+from app.services.portfolio_scenarios import PortfolioScenarioService
 from app.utils.dependencies import get_current_active_user
 
 
@@ -27,13 +29,25 @@ Currency = Literal["USD", "CAD"]
 
 async def cached_analysis(portfolio_id, db, currency, kind, method, ttl, **params):
     cache = await get_redis_client()
-    key = f"portfolio:{portfolio_id}:{kind}:v2:{currency or 'default'}:{tuple(sorted(params.items()))}"
+    key = f"portfolio:{portfolio_id}:{kind}:v3:{currency or 'default'}:{tuple(sorted(params.items()))}"
 
     async def load():
         analytics = AdvancedPortfolioAnalytics(portfolio_id, db, display_currency=currency)
         return await getattr(analytics, method)(**params)
 
     return await cache.get_or_load(key, load, ttl)
+
+
+@router.post("/portfolios/{portfolio_id}/scenario")
+async def analyze_scenario(portfolio_id: int, request: ScenarioRequest, db: AsyncSession = Depends(get_db)):
+    """Preview allocations without persisting targets or changing holdings/cash."""
+    return await PortfolioScenarioService(portfolio_id, db, request.currency).analyze(
+        request.kind, preset=request.preset,
+        weights=request.weights.weights if request.weights else None,
+        scenarios=request.scenarios, time_horizon=request.time_horizon,
+        multiplier=request.multiplier, floor=request.floor,
+        cppi_time_horizon=request.cppi_time_horizon,
+    )
 
 
 @router.get("/portfolios/{portfolio_id}/metrics")

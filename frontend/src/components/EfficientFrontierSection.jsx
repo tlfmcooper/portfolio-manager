@@ -1,3 +1,4 @@
+import AnalysisCoverage from './AnalysisCoverage';
 import React from 'react'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Target, Info } from 'lucide-react'
@@ -21,6 +22,9 @@ const EfficientFrontierSection = () => {
   const efficientFrontier = data || {}
   const frontierPoints = efficientFrontier.frontier_points || []
   const specialPortfolios = efficientFrontier.special_portfolios || {}
+  const riskFreeRate = efficientFrontier.analysis_context?.risk_free_rate ?? 0.042
+  const sharpe = (value, risk) => risk > 0 ? (value - riskFreeRate) / risk : null
+  const ratioText = value => Number.isFinite(value) ? value.toFixed(3) : 'N/A'
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A'
@@ -37,7 +41,7 @@ const EfficientFrontierSection = () => {
 
   // Special portfolios data
   // Special portfolios data
-  const SPECIAL_PORTFOLIO_ORDER = ['current', 'msr', 'gmv']
+  const SPECIAL_PORTFOLIO_ORDER = ['current', 'selected', 'msr', 'gmv']
   
   const specialData = Object.entries(specialPortfolios)
     .sort(([keyA], [keyB]) => {
@@ -78,7 +82,7 @@ const EfficientFrontierSection = () => {
           <p className="text-sm">Return: {data.return.toFixed(2)}%</p>
           {data.type !== 'frontier' && (
             <p className="text-xs text-gray-300 mt-1">
-              Sharpe Ratio: {((data.return - 2) / data.risk).toFixed(3)}
+              Sharpe Ratio: {ratioText(sharpe(data.return / 100, data.risk / 100))}
             </p>
           )}
         </div>
@@ -90,6 +94,7 @@ const EfficientFrontierSection = () => {
   const getPortfolioColor = (type) => {
     switch (type) {
       case 'current': return '#EF4444'  // Red
+      case 'selected': return '#8B5CF6'
       case 'msr': return '#F59E0B'      // Orange
       case 'gmv': return '#10B981'      // Green
       default: return '#3B82F6'        // Blue
@@ -99,6 +104,7 @@ const EfficientFrontierSection = () => {
   const getPortfolioShape = (type) => {
     switch (type) {
       case 'current': return 'star'
+      case 'selected': return 'diamond'
       case 'msr': return 'triangle'
       case 'gmv': return 'square'
       default: return 'circle'
@@ -107,6 +113,7 @@ const EfficientFrontierSection = () => {
 
   return (
     <div className="space-y-8">
+      <AnalysisCoverage context={data?.analysis_context} />
       {updating && <p role="status" className="text-sm">Updating analytics…</p>}
       {error && <p role="alert" className="text-sm">{error}</p>}
       <div>
@@ -120,17 +127,16 @@ const EfficientFrontierSection = () => {
               </h4>
               <p className="text-blue-800 dark:text-blue-200">
                 The efficient frontier shows optimal risk-return combinations. Portfolios on the frontier provide 
-                maximum return for each level of risk. Your current portfolio (marked with a star) sits near the 
-                efficient frontier, indicating good optimization relative to the available investment universe.
+                maximum return for each level of risk. Actual and selected weights are shown separately so you can compare the effect of a target allocation.
               </p>
             </div>
           </div>
         </div>
 
         {/* Special Portfolios Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
           {Object.entries(specialPortfolios).map(([key, portfolio]) => {
-            const sharpeRatio = ((portfolio.return - 0.02) / portfolio.risk) || 0
+            const sharpeRatio = sharpe(portfolio.return, portfolio.risk)
             const color = getPortfolioColor(key)
             
             return (
@@ -163,7 +169,7 @@ const EfficientFrontierSection = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-gray-400">Sharpe Ratio:</span>
                     <span className="font-medium text-gray-900 dark:text-white">
-                      {sharpeRatio.toFixed(3)}
+                      {ratioText(sharpeRatio)}
                     </span>
                   </div>
                 </div>
@@ -253,32 +259,32 @@ const EfficientFrontierSection = () => {
         {/* Portfolio Analysis */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-            Portfolio Position Analysis
+            Selected Allocation Analysis
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <h4 className="font-medium text-gray-900 dark:text-white mb-3">Optimization Score</h4>
               <div className="space-y-3">
                 {(() => {
-                  const current = specialPortfolios.current
+                  const current = specialPortfolios.selected || specialPortfolios.current
                   if (!current) return <p className="text-gray-500">No current portfolio data</p>
                   
-                  const currentSharpe = (current.return - 0.02) / current.risk
-                  const msrSharpe = specialPortfolios.msr ? (specialPortfolios.msr.return - 0.02) / specialPortfolios.msr.risk : 0
-                  const efficiency = msrSharpe > 0 ? (currentSharpe / msrSharpe) * 100 : 0
+                  const currentSharpe = sharpe(current.return, current.risk)
+                  const msrSharpe = specialPortfolios.msr ? sharpe(specialPortfolios.msr.return, specialPortfolios.msr.risk) : null
+                  const efficiency = currentSharpe !== null && msrSharpe > 0 ? Math.max(0, Math.min(100, (currentSharpe / msrSharpe) * 100)) : null
                   
                   return (
                     <>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 dark:text-gray-400">Current Sharpe Ratio:</span>
+                        <span className="text-gray-600 dark:text-gray-400">Selected Sharpe Ratio:</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {currentSharpe.toFixed(3)}
+                          {ratioText(currentSharpe)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600 dark:text-gray-400">Optimal Sharpe Ratio:</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {msrSharpe.toFixed(3)}
+                          {ratioText(msrSharpe)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -287,7 +293,7 @@ const EfficientFrontierSection = () => {
                           efficiency >= 90 ? 'text-green-600' :
                           efficiency >= 75 ? 'text-yellow-600' : 'text-red-600'
                         }`}>
-                          {efficiency.toFixed(1)}%
+                          {efficiency === null ? 'N/A' : `${efficiency.toFixed(1)}%`}
                         </span>
                       </div>
                     </>
@@ -300,7 +306,7 @@ const EfficientFrontierSection = () => {
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <p>
                   • Your portfolio is positioned {(() => {
-                    const current = specialPortfolios.current
+                    const current = specialPortfolios.selected || specialPortfolios.current
                     const msr = specialPortfolios.msr
                     if (!current || !msr) return 'reasonably'
                     
@@ -309,7 +315,7 @@ const EfficientFrontierSection = () => {
                   })()} the optimal risk-return frontier
                 </p>
                 <p>
-                  • Consider rebalancing toward the Maximum Sharpe Ratio portfolio for better risk-adjusted returns
+                  • Compare your selected allocation with MSR using the same historical window
                 </p>
                 <p>
                   • The Global Minimum Volatility portfolio offers lower risk but potentially lower returns

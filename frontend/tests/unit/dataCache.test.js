@@ -7,6 +7,15 @@ const storage = () => {
 };
 
 describe('account-scoped data cache', () => {
+  it('keeps what-if chart arrays out of storage and bounds scenario variants', () => {
+    const session = storage();
+    let now = 1;
+    const cache = createDataCache(1, session, () => now++);
+    for (let i = 0; i < 65; i++) cache.setInCache(`portfolio_analysis:scenario:${i}`, { paths: [i] }, 1000);
+    expect(cache.getFromCache('portfolio_analysis:scenario:0')).toBeNull();
+    expect(cache.getFromCache('portfolio_analysis:scenario:64')).toEqual({ paths: [64] });
+    expect(createDataCache(1, session).getFromCache('portfolio_analysis:scenario:64')).toBeNull();
+  });
   it('coalesces concurrent requests, preserves falsy values, and expires entries', async () => {
     let now = 1000;
     const cache = createDataCache(1, storage(), () => now);

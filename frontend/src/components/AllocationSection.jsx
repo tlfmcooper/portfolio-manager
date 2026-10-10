@@ -1,66 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import { usePortfolioAnalysis } from '../hooks/usePortfolioAnalysis';
+import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { useAuth } from '../contexts/AuthContext';
 import { useCurrency } from '../contexts/CurrencyContext';
-import { useDataCache } from '../contexts/DataCacheContext';
 import { TrendingUp, DollarSign, Percent, PieChart as PieChartIcon } from 'lucide-react';
 import ResponsiveChartContainer from './ResponsiveChartContainer';
 
 const AllocationSection = () => {
-  const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency();
-  const { getFromCache, fetchWithCache, CACHE_TTL } = useDataCache();
-  const cached = getFromCache(`sector_allocation:${portfolioId}`, currency, { allowStale: true });
-  const [data, setData] = useState(cached);
-  const [loading, setLoading] = useState(!cached);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    const previous = getFromCache(`sector_allocation:${portfolioId}`, currency, { allowStale: true });
-    setData(previous);
-    setLoading(!previous);
-    setError(null);
-    const fetchData = async () => {
-      if (!portfolioId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log('[AllocationSection] Fetching sector allocation with currency:', currency);
-        
-        // Use cache to prevent redundant API calls
-        const response = await fetchWithCache(
-          `sector_allocation:${portfolioId}`,
-          async () => {
-            const res = await api.get(`/analysis/portfolios/${portfolioId}/sector-allocation`, {
-              params: { currency }
-            });
-            return res.data;
-          },
-          CACHE_TTL.ALLOCATION,
-          currency
-        );
-        
-        console.log('[AllocationSection] Received data:', response);
-        console.log('[AllocationSection] Currency used:', currency);
-        if (active) { setData(response); setError(null); }
-      } catch (err) {
-        // Don't show error for auth issues - interceptor handles redirect
-        if (err.response?.status === 401) {
-          return;
-        }
-        if (active) setError('Failed to load allocation data. Please refresh the page.');
-        console.error(err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    fetchData();
-    return () => { active = false; };
-  }, [api, portfolioId, currency, getFromCache, fetchWithCache, CACHE_TTL]);
+  const { data, loading, error } = usePortfolioAnalysis('sector-allocation', currency);
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">

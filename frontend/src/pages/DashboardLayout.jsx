@@ -7,6 +7,7 @@ import { Loader2, Menu, TrendingUp, Shield, PieChart, Target, BarChart3, Trendin
 import Sidebar from '../components/Sidebar';
 import CurrencySwitcher from '../components/CurrencySwitcher';
 import ThemeToggle from '../components/ThemeToggle';
+import ScenarioControls from '../components/ScenarioControls';
 import { DashboardSkeleton } from '../components/ui/Skeleton';
 
 // Lazy load tab components
@@ -223,6 +224,7 @@ const DashboardLayout = () => {
 
         <main className="flex-1 overflow-y-auto dashboard" style={{ backgroundColor: 'var(--color-background)' }}> 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" style={{ padding: 'var(--space-24) 16px' }}>
+            {!['live-market', 'update-portfolio', 'settings'].some(page => location.pathname.includes(page)) && <ScenarioControls />}
             {!location.pathname.includes('update-portfolio') && !location.pathname.includes('live-market') && !location.pathname.includes('portfolio') && !location.pathname.includes('settings') && (
               <h2 style={{ 
                 marginBottom: 'var(--space-24)', 

@@ -26,7 +26,7 @@ const TabEfficientFrontier = () => {
           color: 'var(--color-text)', 
           lineHeight: 'var(--line-height-normal)' 
         }}>
-          The efficient frontier shows optimal risk-return combinations. Portfolios on the frontier provide maximum return for each level of risk. Your current portfolio (marked in blue) sits near the efficient frontier, indicating good optimization.
+          The efficient frontier shows optimal risk-return combinations. Portfolios on the frontier provide maximum return for each level of risk. Compare actual and selected allocation markers to see how target weights change the modeled risk and return.
         </p>
       </div>
       <Suspense fallback={<LoadingSpinner />}>

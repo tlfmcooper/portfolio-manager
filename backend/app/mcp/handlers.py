@@ -778,6 +778,27 @@ async def tool_analytics_get_risk(ctx: HandlerContext, arguments: Dict[str, Any]
     )
 
 
+async def tool_analytics_preview_scenario(ctx: HandlerContext, arguments: Dict[str, Any]) -> ToolResult:
+    """Structured generative UI data for the native app; never writes portfolio state."""
+    from pydantic import ValidationError
+    from app.schemas.scenario import ScenarioRequest
+    from app.services.portfolio_scenarios import PortfolioScenarioService
+    try:
+        request = ScenarioRequest.model_validate({**arguments, "kind": "all"})
+        _, portfolio = await _get_current_portfolio(ctx)
+        payload = await PortfolioScenarioService(portfolio.id, ctx.db, request.currency).analyze(
+            "all", preset=request.preset, weights=request.weights.weights if request.weights else None,
+            scenarios=request.scenarios, time_horizon=request.time_horizon,
+            multiplier=request.multiplier, floor=request.floor, cppi_time_horizon=request.cppi_time_horizon)
+    except HTTPException as exc:
+        _normalize_http_error(exc)
+    except ValidationError as exc:
+        raise invalid_params(message="Invalid scenario: custom weights must include CASH and total 100%") from exc
+    return _tool_result("Previewed an allocation scenario. Apply its weights in the native app to update what-if charts.",
+                        data={"ui_type": "allocation_scenario", **payload},
+                        ui={"resourceUri": NATIVE_APP_URI, "type": "allocation-scenario", "data": payload})
+
+
 async def tool_analytics_get_allocation(ctx: HandlerContext, arguments: Dict[str, Any]) -> ToolResult:
     try:
         from app.api.v1.analysis import get_sector_allocation
@@ -1478,6 +1499,7 @@ async def sampling_create_message(ctx: HandlerContext, arguments: Dict[str, Any]
 
 
 TOOL_HANDLERS: Dict[str, Callable[[HandlerContext, Dict[str, Any]], Any]] = {
+    "tool_analytics_preview_scenario": tool_analytics_preview_scenario,
     "tool_portfolio_open_app": tool_portfolio_open_app,
     "tool_portfolio_get_summary": tool_portfolio_get_summary,
     "tool_portfolio_get_period_inputs": tool_portfolio_get_period_inputs,

@@ -110,9 +110,9 @@ class ExchangeRateService:
                             return float(rate)
 
             except httpx.HTTPError as e:
-                logger.warning(f"Primary API failed: {e}. Trying backup API...")
+                logger.warning("Primary exchange API failed (%s). Trying backup API...", type(e).__name__)
             except Exception as e:
-                logger.warning(f"Primary API error: {e}. Trying backup API...")
+                logger.warning("Primary exchange API error (%s). Trying backup API...", type(e).__name__)
         else:
             logger.info("No API key configured for primary API, using backup API")
 

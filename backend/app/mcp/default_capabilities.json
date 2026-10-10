@@ -677,6 +677,61 @@
       "meta": {
         "apps": {"ui": true}
       }
+    },
+    {
+      "name": "analytics_preview_scenario",
+      "description": "Preview current, maximum Sharpe ratio (MSR), or custom percentage weights across risk, allocation, efficient frontier, Monte Carlo and CPPI. Include CASH and total 100 percent in custom weights.weights. Returns an editable native MCP app card. No trades or target changes are saved.",
+      "handler": "tool_analytics_preview_scenario",
+      "requiresAuth": true,
+      "permissions": [
+        "portfolio:read"
+      ],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "current",
+              "msr",
+              "custom"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "CAD"
+            ]
+          },
+          "weights": {
+            "type": "object",
+            "properties": {
+              "weights": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              }
+            },
+            "required": [
+              "weights"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "meta": {
+        "ui": {
+          "resourceUri": "ui://portfolio/app"
+        }
+      }
     }
   ],
   "resources": [

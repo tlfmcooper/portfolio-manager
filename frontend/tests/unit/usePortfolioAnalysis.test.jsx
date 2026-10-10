@@ -3,16 +3,43 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDataCache } from '../../src/services/dataCache';
 import { usePortfolioAnalysis } from '../../src/hooks/usePortfolioAnalysis';
 
-const mocks = vi.hoisted(() => ({ api: { get: vi.fn() }, cache: null }));
+const mocks = vi.hoisted(() => ({ api: { get: vi.fn(), post: vi.fn() }, cache: null, scenario: null }));
+vi.mock('../../src/contexts/PortfolioScenarioContext', () => ({ usePortfolioScenario: () => mocks.scenario }));
 vi.mock('../../src/contexts/AuthContext', () => ({ useAuth: () => ({ api: mocks.api, portfolioId: 1 }) }));
 vi.mock('../../src/contexts/DataCacheContext', () => ({ useDataCache: () => mocks.cache }));
 beforeEach(() => {
   sessionStorage.clear();
   mocks.api.get.mockReset();
+  mocks.api.post.mockReset(); mocks.scenario = null;
   mocks.cache = { ...createDataCache(1), CACHE_TTL: { PORTFOLIO_METRICS: 120000 } };
 });
 
 describe('analytics navigation', () => {
+  it('recalculates a scenario after its portfolio valuation changes', async () => {
+    mocks.scenario = { signature: JSON.stringify({ preset: 'msr' }), valuation: 'old-price' };
+    mocks.api.post.mockResolvedValueOnce({ data: { initial_value: 1000 } });
+    const { result, rerender } = renderHook(() => usePortfolioAnalysis('monte-carlo', 'USD'));
+    await waitFor(() => expect(result.current.data?.initial_value).toBe(1000));
+    mocks.scenario = { ...mocks.scenario, valuation: 'new-price' };
+    mocks.api.post.mockResolvedValueOnce({ data: { initial_value: 2000 } });
+    rerender();
+    expect(result.current.data).toBeNull();
+    await waitFor(() => expect(result.current.data?.initial_value).toBe(2000));
+    expect(mocks.api.post).toHaveBeenCalledTimes(2);
+  });
+  it('separates custom weights from actual metrics and restores the actual cache on reset', async () => {
+    mocks.cache.setInCache('portfolio_metrics:1', { sharpe_ratio: 1 }, 120000, 'USD');
+    const { result, rerender } = renderHook(() => usePortfolioAnalysis('metrics', 'USD'));
+    mocks.scenario = { signature: JSON.stringify({ preset: 'custom', weights: { weights: { AAA: 80, CASH: 20 } } }) };
+    mocks.api.post.mockResolvedValue({ data: { sharpe_ratio: 3 } });
+    rerender();
+    expect(result.current.data).toBeNull();
+    await waitFor(() => expect(result.current.data?.sharpe_ratio).toBe(3));
+    expect(mocks.cache.getFromCache('portfolio_metrics:1', 'USD').sharpe_ratio).toBe(1);
+    mocks.scenario = null; rerender();
+    expect(result.current.data.sharpe_ratio).toBe(1);
+    expect(mocks.api.get).not.toHaveBeenCalled();
+  });
   it('renders Overview metrics in Risk without another server request', () => {
     const metrics = { sharpe_ratio: 2, value_at_risk_95: -0.03 };
     mocks.cache.setInCache('portfolio_metrics:1', metrics, 120000, 'USD');

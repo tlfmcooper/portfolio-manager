@@ -1,3 +1,6 @@
+import { usePortfolioScenario } from '../contexts/PortfolioScenarioContext';
+import { analysisKey, analysisParams } from '../utils/analysisKeys';
+import AnalysisCoverage from './AnalysisCoverage';
 import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, Info } from 'lucide-react'
@@ -11,7 +14,10 @@ const OverviewSection = () => {
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency()
   const { getFromCache, fetchWithCache, invalidateCache, CACHE_TTL } = useDataCache()
-  const cachedMetrics = getFromCache(`portfolio_metrics:${portfolioId}`, currency, { allowStale: true });
+  const scenario = usePortfolioScenario();
+  const signature = scenario?.signature || 'null';
+  const metricsKey = analysisKey(portfolioId, 'metrics', analysisParams('metrics'), signature, scenario?.valuation);
+  const cachedMetrics = getFromCache(metricsKey, currency, { allowStale: true });
   const cachedSummary = getFromCache(`portfolio_summary:${portfolioId}`, currency, { allowStale: true });
   const cachedPrevious = cachedMetrics || cachedSummary ? { ...cachedMetrics,
     ytd_return_percentage: cachedSummary?.ytd_return_percentage,
@@ -24,7 +30,7 @@ const OverviewSection = () => {
   useEffect(() => {
     let active = true;
     let failures = 0;
-    const metrics = getFromCache(`portfolio_metrics:${portfolioId}`, currency, { allowStale: true });
+    const metrics = getFromCache(metricsKey, currency, { allowStale: true });
     const summary = getFromCache(`portfolio_summary:${portfolioId}`, currency, { allowStale: true });
     const previous = metrics || summary ? { ...metrics,
       ytd_return_percentage: summary?.ytd_return_percentage,
@@ -49,16 +55,19 @@ const OverviewSection = () => {
       if (failures === 2) setLoading(false);
     };
     // A slow historical calculation must not hold back the summary, or vice versa.
-    fetchWithCache(`portfolio_metrics:${portfolioId}`, async () =>
-      (await api.get(`/analysis/portfolios/${portfolioId}/metrics`, { params: { currency } })).data,
+    fetchWithCache(metricsKey, async () =>
+      signature === 'null' ? (await api.get(`/analysis/portfolios/${portfolioId}/metrics`, { params: { currency } })).data
+        : (await api.post(`/analysis/portfolios/${portfolioId}/scenario`, { ...JSON.parse(signature), kind: 'metrics', currency }, { timeout: 60000 })).data,
       CACHE_TTL.PORTFOLIO_METRICS, currency).then(receive).catch(fail);
     fetchWithCache(`portfolio_summary:${portfolioId}`, async () =>
       (await api.get('/portfolios/summary', { params: { currency } })).data,
       CACHE_TTL.PORTFOLIO_METRICS, currency).then(summary => {
         if (!active) return;
         // The summary may have refreshed quotes after the initial fast snapshot.
-        invalidateCache([`portfolio_snapshot:${portfolioId}`]);
-        window.dispatchEvent(new CustomEvent('portfolio:pricesUpdated', { detail: { portfolioId, currency } }));
+        if (signature === 'null') {
+          invalidateCache([`portfolio_snapshot:${portfolioId}`]);
+          window.dispatchEvent(new CustomEvent('portfolio:pricesUpdated', { detail: { portfolioId, currency } }));
+        }
         receive({
           ytd_return_percentage: summary?.ytd_return_percentage,
           ytd_complete: summary?.ytd_complete,
@@ -66,7 +75,7 @@ const OverviewSection = () => {
         });
       }).catch(fail);
     return () => { active = false; };
-  }, [api, portfolioId, currency, getFromCache, fetchWithCache, invalidateCache, CACHE_TTL]);
+  }, [api, portfolioId, currency, signature, metricsKey, getFromCache, fetchWithCache, invalidateCache, CACHE_TTL]);
 
   if (loading) return <DashboardSkeleton />
   if (error && !data) return <div role="alert" className="text-red-500">{error}</div>
@@ -216,6 +225,7 @@ const OverviewSection = () => {
 
   return (
     <div className="space-y-8">
+      <AnalysisCoverage context={data?.analysis_context} />
       {pending > 0 && <p role="status" className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Loading remaining analytics…</p>}
       {error && <p role="alert" className="text-sm" style={{ color: 'var(--color-warning)' }}>{error}</p>}
       <div>

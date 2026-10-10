@@ -4,6 +4,24 @@ import { executeTool } from '../../src/tools/agentTools';
 
 
 describe('executeTool', () => {
+  it('generates structured, editable scenario cards from calculated values', async () => {
+    const scenario = { comparison: vi.fn().mockResolvedValue({
+      analysis_context: { weights: { AAA: 80, CASH: 20 } }, baseline_metrics: { sharpe_ratio: 1 },
+      analytics: { metrics: { sharpe_ratio: 2 }, 'monte-carlo': { final_mean: 1200, simulation_paths: [{ day: 0 }] } },
+    }) };
+    const result = JSON.parse(await executeTool('preview_allocation_scenario', { preset: 'custom', allocations: [
+      { ticker: 'aaa', percentage: 80 }, { ticker: 'CASH', percentage: 20 },
+    ] }, { scenario }));
+    expect(scenario.comparison).toHaveBeenCalledWith({ AAA: 80, CASH: 20 }, 'custom');
+    expect(result.ui_type).toBe('allocation_scenario');
+    expect(result.analytics.metrics.sharpe_ratio).toBe(2);
+    expect(result.analytics['monte-carlo'].simulation_paths).toBeUndefined();
+  });
+  it('resets the shared scenario through the agent', async () => {
+    const scenario = { reset: vi.fn() };
+    await executeTool('reset_analytics', {}, { scenario });
+    expect(scenario.reset).toHaveBeenCalledTimes(1);
+  });
   it('returns the portfolio summary payload with YTD fields for the chatbot', async () => {
     const api = {
       get: vi.fn().mockResolvedValue({

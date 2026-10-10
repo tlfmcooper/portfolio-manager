@@ -1,3 +1,4 @@
+import AnalysisCoverage from './AnalysisCoverage';
 import React from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react'
@@ -130,6 +131,7 @@ const MonteCarloSection = () => {
 
   return (
     <div className="space-y-8">
+      <AnalysisCoverage context={data?.analysis_context} />
       {updating && <p role="status" className="text-sm">Updating analytics…</p>}
       {error && <p role="alert" className="text-sm">{error}</p>}
       <div>

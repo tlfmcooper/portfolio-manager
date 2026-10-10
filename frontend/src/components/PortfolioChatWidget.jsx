@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Settings, RotateCcw, Bot, User, Loader2 } from 'lucide-react';
 import { useAgentContext } from '../contexts/AgentContext';
+import { usePortfolioScenario } from '../contexts/PortfolioScenarioContext';
+import ScenarioComparisonCard from './ScenarioComparisonCard';
+import { resolveAgentTools } from '../tools/agentConversation';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { tools, executeTool } from '../tools/agentTools';
@@ -8,6 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import Logo from '../assets/portfolio_pilot_logo.png';
 
 const DataCard = ({ tool, data }) => {
+  if (data.ui_type === 'allocation_scenario') return <ScenarioComparisonCard data={data} />;
   const formatValue = (key, val) => {
     if (val === null || val === undefined) return '—';
     if (typeof val === 'boolean') return val ? 'Yes' : 'No';
@@ -90,7 +94,9 @@ const PortfolioChatWidget = () => {
   const [showSettings, setShowSettings] = useState(false);
   
   const messagesEndRef = useRef(null);
-  const { isAgentActive, resetAllParams, ...agentContext } = useAgentContext();
+  const { isAgentActive: agentActive, resetAllParams, ...agentContext } = useAgentContext();
+  const scenario = usePortfolioScenario();
+  const isAgentActive = agentActive || (scenario && scenario.activeMode !== 'current');
   const { api, portfolioId } = useAuth(); // Access to backend API and portfolio ID
   const location = useLocation();
   const navigate = useNavigate();
@@ -121,8 +127,8 @@ const PortfolioChatWidget = () => {
   };
 
   const handleResetSimulation = () => {
-    resetAllParams();
-    setMessages(prev => [...prev, { role: 'assistant', content: 'Simulation mode reset. Showing real-time data.' }]);
+    if (scenario) scenario.reset(); else resetAllParams();
+    setMessages(prev => [...prev, { role: 'assistant', content: 'Analytics reset to actual portfolio weights and default simulation parameters.' }]);
   };
 
   const handleSubmit = async (e) => {
@@ -222,7 +228,7 @@ const PortfolioChatWidget = () => {
       // Lazy load Google Generative AI
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(apiKey);
-      const modelName = "gemini-3.5-flash";
+      const modelName = import.meta.env.VITE_GEMINI_MODEL || "gemini-3.8-flash";
 
       const model = genAI.getGenerativeModel({ 
         model: modelName,
@@ -254,7 +260,7 @@ const PortfolioChatWidget = () => {
           parts: [{ text: m.content }]
         }));
 
-      const chat = model.startChat({ history: history });
+      let chat = model.startChat({ history: history });
 
       const parts = [{ text: userMessage }];
       if (imagePart) parts.push(imagePart);
@@ -264,8 +270,8 @@ const PortfolioChatWidget = () => {
         result = await chat.sendMessageStream(parts);
       } catch (initialError) {
         console.warn('Initial API call failed, retrying without history:', initialError);
-        const retryChat = model.startChat({ history: [] });
-        result = await retryChat.sendMessageStream(parts);
+        chat = model.startChat({ history: [] });
+        result = await chat.sendMessageStream(parts);
       }
 
       let fullText = '';
@@ -311,23 +317,10 @@ const PortfolioChatWidget = () => {
           return newMessages;
         });
         
-        for (const call of functionCalls) {
-          const functionName = call.name;
-          const functionArgs = call.args;
-          
-          const toolResult = await executeTool(functionName, functionArgs, {
-            navigate,
-            api,
-            portfolioId,
-            ...agentContext
-          });
-
-          toolResults.push({
-            name: functionName,
-            args: functionArgs,
-            result: toolResult
-          });
-        }
+        const completed = await resolveAgentTools(chat, response, (name, args) => executeTool(name, args, {
+          scenario, navigate, api, portfolioId, ...agentContext,
+        }));
+        toolResults.push(...completed.results);
 
         // Extract structured data from tool results for card rendering
         const richData = toolResults
@@ -343,42 +336,15 @@ const PortfolioChatWidget = () => {
           })
           .filter(Boolean);
         
-        // Update to show analyzing
+        const followUpText = completed.limitReached
+          ? 'The calculated results are shown below. Please send another message to continue the analysis.'
+          : completed.response.text();
         setMessages(prev => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage.role === 'assistant') {
-            lastMessage.content = baseMessageContent + '\n\n*Analyzing results...*';
-          }
-          return newMessages;
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === 'assistant') updated[updated.length - 1] = { ...last, content: baseMessageContent + '\n\n' + followUpText };
+          return updated;
         });
-        
-        // Send tool results back to LLM for natural language response
-        const toolResultsText = toolResults.map(tr => 
-          `Tool "${tr.name}" returned:\n${tr.result}`
-        ).join('\n\n');
-        
-        // Send tool results to LLM for natural language summary
-        const followUpResult = await chat.sendMessageStream([{ 
-          text: `Here are the results from the tools I called. Please provide a clear, concise natural language response to the user's question based on this data. Format numbers nicely (e.g., $64,482.40 instead of 64482.4). Do not show raw JSON. Give a single direct answer.\n\n${toolResultsText}` 
-        }]);
-        
-        let followUpText = '';
-        
-        for await (const chunk of followUpResult.stream) {
-          const chunkText = chunk.text();
-          followUpText += chunkText;
-          
-          // Always update with the complete follow-up text
-          setMessages(prev => {
-            const newMessages = [...prev];
-            const lastMessage = newMessages[newMessages.length - 1];
-            if (lastMessage.role === 'assistant') {
-              lastMessage.content = baseMessageContent + '\n\n' + followUpText;
-            }
-            return newMessages;
-          });
-        }
 
         // Attach structured data cards to the final message
         if (richData.length > 0) {

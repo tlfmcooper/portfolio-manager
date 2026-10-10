@@ -24,6 +24,7 @@ const UpdatePortfolio = () => {
       'holdings',
       'allocation'
     ]);
+    window.dispatchEvent(new CustomEvent('portfolio:holdingsUpdated'));
     console.log('Portfolio updated successfully');
     // Could add toast notification here
   };

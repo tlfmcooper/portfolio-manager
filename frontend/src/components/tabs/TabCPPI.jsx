@@ -1,6 +1,8 @@
-import React, { Suspense, useState, useEffect } from 'react';
+import { usePortfolioAnalysis } from '../../hooks/usePortfolioAnalysis';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { useAgentContext } from '../../contexts/AgentContext';
+import React, { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 
 // Lazy load the CPPI section
 const CPPISection = React.lazy(() => import('../CPPISection'));
@@ -12,23 +14,10 @@ const LoadingSpinner = () => (
 );
 
 const TabCPPI = () => {
-  const [cppiData, setCppiData] = useState(null);
-  const { api, portfolioId } = useAuth(); // CRITICAL FIX: Get portfolioId from context
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!portfolioId) return; // Wait for portfolioId to load
-
-      try {
-        const response = await api.get(`/analysis/portfolios/${portfolioId}/cppi`); // CRITICAL FIX: Use dynamic portfolioId
-        setCppiData(response.data);
-      } catch (err) {
-        console.error('Failed to fetch CPPI data:', err);
-      }
-    };
-
-    fetchData();
-  }, [api, portfolioId]); // CRITICAL FIX: Add portfolioId to dependencies
+  const { currency: selectedCurrency } = useCurrency();
+  const { cppiParams, globalParams } = useAgentContext();
+  const currency = cppiParams.currency || globalParams.currency || selectedCurrency;
+  const { data: cppiData } = usePortfolioAnalysis('cppi', currency, cppiParams);
 
   const formatPercentage = (value) => {
     if (typeof value !== 'number') return 'N/A';

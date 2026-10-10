@@ -4,6 +4,26 @@
  */
 
 export const tools = [
+  { name: 'get_analytics_weight_context', description: 'Read the actual and draft allocation percentages, selected what-if mode, and currency before proposing custom weights. Draft weights may be invalid until they total 100%.' },
+  {
+    name: 'preview_allocation_scenario',
+    description: 'Generate an editable what-if allocation card with actual versus proposed risk metrics. MSR means maximum Sharpe ratio and preserves cash. Does not change actual holdings or saved targets. Use real returned numbers.',
+    parameters: {
+      type: 'object', properties: {
+        preset: { type: 'string', enum: ['current', 'msr', 'custom'] },
+        allocations: { type: 'array', items: { type: 'object', properties: { ticker: { type: 'string' }, percentage: { type: 'number' } }, required: ['ticker', 'percentage'] }, description: 'Custom target percentages including CASH, totaling 100. Required for custom preset.' },
+      }, required: ['preset'],
+    },
+  },
+  {
+    name: 'set_analytics_weights',
+    description: 'Switch all dashboard analytics to current, MSR, or custom weights. This is a reversible what-if mode and does not execute trades. Custom allocations include CASH and total 100%.',
+    parameters: { type: 'object', properties: {
+      preset: { type: 'string', enum: ['current', 'msr', 'custom'] },
+      allocations: { type: 'array', items: { type: 'object', properties: { ticker: { type: 'string' }, percentage: { type: 'number' } }, required: ['ticker', 'percentage'] } },
+    }, required: ['preset'] },
+  },
+  { name: 'reset_analytics', description: 'Reset allocation weights and all simulation parameter overrides to actual portfolio analytics.' },
   {
     name: "navigate_to_page",
     description: "Navigate to a specific page in the application.",
@@ -228,6 +248,29 @@ export const executeTool = async (name, args, context) => {
 
   try {
     switch (name) {
+      case 'get_analytics_weight_context':
+        if (!context.scenario?.snapshot) return 'Portfolio snapshot is still loading.';
+        return JSON.stringify({ actual_weights: context.scenario.actual, draft_weights: context.scenario.draft,
+          draft_valid: context.scenario.valid, active_mode: context.scenario.activeMode,
+          currency: context.scenario.snapshot.currency, portfolio_total_value: context.scenario.snapshot.total_value });
+      case 'preview_allocation_scenario': {
+        if (!context.scenario) throw new Error('Portfolio scenario workspace is unavailable');
+        const weights = Object.fromEntries((args.allocations || []).map(row => [row.ticker.toUpperCase(), row.percentage]));
+        const result = await context.scenario.comparison(weights, args.preset);
+        const compact = Object.fromEntries(Object.entries(result.analytics).map(([kind, values]) => [kind,
+          Object.fromEntries(Object.entries(values).filter(([, value]) => !Array.isArray(value)))]));
+        return JSON.stringify({ ui_type: 'allocation_scenario', ...result, analytics: compact });
+      }
+      case 'set_analytics_weights': {
+        if (!context.scenario) throw new Error('Portfolio scenario workspace is unavailable');
+        if (args.preset === 'current') context.scenario.resetWeights();
+        else if (args.preset === 'msr') await context.scenario.selectMSR();
+        else context.scenario.applyWeights(Object.fromEntries((args.allocations || []).map(row => [row.ticker.toUpperCase(), row.percentage])));
+        return 'Updated what-if analytics weights. Actual holdings and account balances are unchanged.';
+      }
+      case 'reset_analytics':
+        context.scenario?.reset();
+        return 'All analytics reset to actual portfolio weights and default simulation parameters.';
       case "navigate_to_page":
         navigate(`/dashboard/${args.page}`);
         return `Navigated to ${args.page} page.`;

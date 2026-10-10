@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AgentProvider } from './contexts/AgentContext';
+import { PortfolioScenarioProvider } from './contexts/PortfolioScenarioContext';
 import { DataCacheProvider } from './contexts/DataCacheContext';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
@@ -143,6 +144,7 @@ function App() {
           <CurrencyProvider>
             <DataCacheProvider>
               <AgentProvider>
+                <PortfolioScenarioProvider>
                 <OfflineIndicator />
                 <AppUpdateBanner />
                 <Toaster
@@ -176,6 +178,7 @@ function App() {
                   </Suspense>
                   <Tooltip />
                 </div>
+                </PortfolioScenarioProvider>
               </AgentProvider>
             </DataCacheProvider>
           </CurrencyProvider>

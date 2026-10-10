@@ -1,3 +1,4 @@
+import AnalysisCoverage from './AnalysisCoverage';
 import React from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import { TrendingDown, Shield, Target, Info } from 'lucide-react'
@@ -142,6 +143,7 @@ const CPPISection = () => {
 
   return (
     <div className="space-y-8">
+      <AnalysisCoverage context={data?.analysis_context} />
       {updating && <p role="status" className="text-sm">Updating analytics…</p>}
       {error && <p role="alert" className="text-sm">{error}</p>}
       <div>
