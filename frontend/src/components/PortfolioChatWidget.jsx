@@ -7,6 +7,7 @@ import { resolveAgentTools } from '../tools/agentConversation';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { tools, executeTool } from '../tools/agentTools';
+import { createChatClient, chatErrorMessage } from '../services/chatClient';
 import ReactMarkdown from 'react-markdown';
 import Logo from '../assets/portfolio_pilot_logo.png';
 
@@ -90,16 +91,54 @@ const PortfolioChatWidget = () => {
   });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
+  const [apiKey, setApiKey] = useState('');
+  const [keyConfigured, setKeyConfigured] = useState(false);
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyError, setKeyError] = useState('');
+  const accountController = useRef(null);
+  const chatController = useRef(null);
+  const previousUserId = useRef(undefined);
   const [showSettings, setShowSettings] = useState(false);
   
   const messagesEndRef = useRef(null);
   const { isAgentActive: agentActive, resetAllParams, ...agentContext } = useAgentContext();
   const scenario = usePortfolioScenario();
   const isAgentActive = agentActive || (scenario && scenario.activeMode !== 'current');
-  const { api, portfolioId } = useAuth(); // Access to backend API and portfolio ID
+  const { api, portfolioId, user } = useAuth(); // Access to backend API and portfolio ID
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    accountController.current = controller;
+    // Legacy credentials are discarded; users save them under their own account.
+    localStorage.removeItem('gemini_api_key');
+    setApiKey('');
+    setKeyConfigured(false);
+    setKeyError('');
+    setKeyBusy(false);
+    setIsLoading(false);
+    setInput('');
+    setShowSettings(false);
+    if (previousUserId.current !== undefined && previousUserId.current !== user?.id) {
+      setMessages([{ role: 'assistant', content: 'Hello! I am your Portfolio Pilot. How can I help you manage your investments today?' }]);
+    }
+    previousUserId.current = user?.id;
+    if (user?.id) {
+      setKeyBusy(true);
+      api.get('/chat/api-key', { signal: controller.signal }).then(({ data }) => {
+        if (!controller.signal.aborted) setKeyConfigured(data.configured);
+      }).catch(error => {
+        if (!controller.signal.aborted) setKeyError(chatErrorMessage(error));
+      }).finally(() => {
+        if (!controller.signal.aborted) setKeyBusy(false);
+      });
+    }
+    return () => {
+      controller.abort();
+      chatController.current?.abort();
+    };
+  }, [api, user?.id]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -120,10 +159,39 @@ const PortfolioChatWidget = () => {
     }
   }, [messages]);
 
-  const handleSaveApiKey = (key) => {
-    localStorage.setItem('gemini_api_key', key);
-    setApiKey(key);
-    setShowSettings(false);
+  const handleSaveApiKey = async (key) => {
+    const signal = accountController.current?.signal;
+    if (!user?.id || keyBusy || !key.trim()) return;
+    setKeyBusy(true);
+    setKeyError('');
+    try {
+      await api.put('/chat/api-key', { api_key: key.trim() }, { signal });
+      if (signal?.aborted) return;
+      setApiKey('');
+      setKeyConfigured(true);
+      setShowSettings(false);
+    } catch {
+      if (!signal?.aborted) setKeyError('The key could not be saved. Please try again.');
+    } finally {
+      if (!signal?.aborted) setKeyBusy(false);
+    }
+  };
+
+  const handleDeleteApiKey = async () => {
+    const signal = accountController.current?.signal;
+    setKeyBusy(true);
+    setKeyError('');
+    chatController.current?.abort();
+    try {
+      await api.delete('/chat/api-key', { signal });
+      if (signal?.aborted) return;
+      setApiKey('');
+      setKeyConfigured(false);
+    } catch {
+      if (!signal?.aborted) setKeyError('The key could not be removed. Please try again.');
+    } finally {
+      if (!signal?.aborted) setKeyBusy(false);
+    }
   };
 
   const handleResetSimulation = () => {
@@ -133,14 +201,16 @@ const PortfolioChatWidget = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || keyBusy || !user?.id) return;
 
-    if (!apiKey) {
+    if (!keyConfigured) {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Please set your Gemini API Key in settings to continue.' }]);
       setShowSettings(true);
       return;
     }
 
+    const controller = new AbortController();
+    chatController.current = controller;
     const userMessage = input;
     setInput(''); // Clear input immediately
     // Optimistically add user message
@@ -225,15 +295,10 @@ const PortfolioChatWidget = () => {
         - Be concise and direct in your responses.
       `;
 
-      // Lazy load Google Generative AI
-      const { GoogleGenerativeAI } = await import('@google/generative-ai');
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const modelName = import.meta.env.VITE_GEMINI_MODEL || "gemini-3.8-flash";
-
-      const model = genAI.getGenerativeModel({ 
-        model: modelName,
+      const model = createChatClient(api, {
         systemInstruction: systemPrompt,
-        tools: [{ functionDeclarations: tools }]
+        tools: [{ functionDeclarations: tools }],
+        signal: controller.signal,
       });
 
       // Build history excluding the initial assistant greeting (index 0)
@@ -265,14 +330,7 @@ const PortfolioChatWidget = () => {
       const parts = [{ text: userMessage }];
       if (imagePart) parts.push(imagePart);
 
-      let result;
-      try {
-        result = await chat.sendMessageStream(parts);
-      } catch (initialError) {
-        console.warn('Initial API call failed, retrying without history:', initialError);
-        chat = model.startChat({ history: [] });
-        result = await chat.sendMessageStream(parts);
-      }
+      const result = await chat.sendMessageStream(parts);
 
       let fullText = '';
       let isFirstChunk = true;
@@ -317,9 +375,11 @@ const PortfolioChatWidget = () => {
           return newMessages;
         });
         
-        const completed = await resolveAgentTools(chat, response, (name, args) => executeTool(name, args, {
-          scenario, navigate, api, portfolioId, ...agentContext,
-        }));
+        const completed = await resolveAgentTools(chat, response, (name, args) => {
+          controller.signal.throwIfAborted();
+          return executeTool(name, args, { scenario, navigate, api, portfolioId, ...agentContext });
+        });
+        controller.signal.throwIfAborted();
         toolResults.push(...completed.results);
 
         // Extract structured data from tool results for card rendering
@@ -360,7 +420,8 @@ const PortfolioChatWidget = () => {
       }
 
     } catch (error) {
-      console.error('Gemini Error:', error);
+      if (controller.signal.aborted) return;
+      if (error.response?.status === 409) { setKeyConfigured(false); setShowSettings(true); }
       setMessages(prev => {
         // If we have a partial message, append error. If not, add new error message.
         const newMessages = [...prev];
@@ -368,12 +429,12 @@ const PortfolioChatWidget = () => {
         if (lastMessage.role === 'assistant' && !lastMessage.content.startsWith('Error')) {
            // If the last message was the streaming one, maybe just leave it and add error?
            // Or replace it? Let's add a new error message to be safe.
-           return [...prev, { role: 'assistant', content: `I encountered an error. (Error: ${error.message})` }];
+           return [...prev, { role: 'assistant', content: `I encountered an error. (Error: ${chatErrorMessage(error)})` }];
         }
-        return [...prev, { role: 'assistant', content: `Error: ${error.message}` }];
+        return [...prev, { role: 'assistant', content: `Error: ${chatErrorMessage(error)}` }];
       });
     } finally {
-      setIsLoading(false);
+      if (chatController.current === controller) setIsLoading(false);
     }
   };
 
@@ -387,6 +448,7 @@ const PortfolioChatWidget = () => {
   if (!isOpen) {
     return (
       <button
+        aria-label="Portfolio Pilot"
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 h-14 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center gap-3 transition-all duration-200 hover:scale-105 z-50"
       >
@@ -418,13 +480,15 @@ const PortfolioChatWidget = () => {
               <RotateCcw className="h-4 w-4" />
             </button>
           <button 
+            aria-label="Chat settings"
             onClick={() => setShowSettings(!showSettings)}
             className="p-1.5 hover:bg-indigo-500 rounded-lg transition-colors"
           >
             <Settings className="h-4 w-4" />
           </button>
           <button 
-            onClick={() => setIsOpen(false)}
+            aria-label="Close chat"
+            onClick={() => { chatController.current?.abort(); setIsOpen(false); }}
             className="p-1.5 hover:bg-indigo-500 rounded-lg transition-colors"
           >
             <X className="h-4 w-4" />
@@ -435,22 +499,29 @@ const PortfolioChatWidget = () => {
       {/* Settings Panel */}
       {showSettings && (
         <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label htmlFor="chat-api-key" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Gemini API Key
           </label>
           <input
+            id="chat-api-key"
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Enter your API key"
+            placeholder={keyConfigured ? "Enter a replacement API key" : "Enter your API key"}
+            autoComplete="off"
+            disabled={keyBusy || !user?.id}
             className="w-full p-2 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white mb-2 text-sm"
           />
+          <p className="text-xs text-gray-500 mb-2">{keyConfigured ? 'Key saved securely to your account.' : 'Save your key to your account to enable chat.'}</p>
+          {keyError && <p role="alert" className="text-xs text-red-500 mb-2">{keyError}</p>}
           <button
+            disabled={keyBusy || !user?.id || !apiKey.trim()}
             onClick={() => handleSaveApiKey(apiKey)}
             className="w-full py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700"
           >
-            Save Key
+            {keyBusy ? 'Please wait...' : 'Save Key'}
           </button>
+          {keyConfigured && <button onClick={handleDeleteApiKey} disabled={keyBusy} className="w-full mt-2 py-2 text-red-600 text-sm">Remove Key</button>}
         </div>
       )}
 
@@ -506,7 +577,7 @@ const PortfolioChatWidget = () => {
           />
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || keyBusy || !user?.id || !input.trim()}
             className="p-2 mb-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="h-5 w-5" />

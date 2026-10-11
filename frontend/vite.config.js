@@ -106,7 +106,6 @@ export default defineConfig(({ mode }) => {
             // app-vendor while app-vendor is initializing React consumers.
             if (id.includes('commonjsHelpers')) return 'vendor';
             if (!id.includes('node_modules')) return;
-            if (id.includes('@google/generative-ai')) return 'ai';
             if (id.includes('html2canvas')) return 'capture';
             if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'vendor';
             if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-vendor/')) return 'charts';

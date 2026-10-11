@@ -370,3 +370,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Built with ❤️ using React, FastAPI, and modern financial analytics**
 
 For support and questions, please check the API documentation at http://localhost:8000/docs or review the troubleshooting section above.
+
+### Encrypted chatbot API keys
+
+Chatbot Gemini keys are encrypted in persistent Redis and used only by the backend.
+See [chat secret configuration and deployment](docs/chat-secrets.md) before enabling chat.

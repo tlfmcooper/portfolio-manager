@@ -157,6 +157,9 @@ class Settings:
     FINNHUB_API_KEY: str = ""
     EXCHANGE_RATES_API_KEY: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
+    CHAT_SECRETS_REDIS_URL: str = ""
+    CHAT_SECRET_ENCRYPTION_KEY: str = ""
+    CHAT_GEMINI_MODEL: str = "gemini-3.8-flash"
     WS_HEARTBEAT_INTERVAL: int = 30
     STOCK_DATA_CACHE_TTL: int = 3600
     ADMIN_UPLOAD_TOKEN: str = ""
@@ -198,6 +201,9 @@ class Settings:
         self.FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", self.FINNHUB_API_KEY)
         self.EXCHANGE_RATES_API_KEY = os.getenv("EXCHANGE_RATES_API_KEY", self.EXCHANGE_RATES_API_KEY)
         self.REDIS_URL = os.getenv("REDIS_URL", self.REDIS_URL)
+        self.CHAT_SECRETS_REDIS_URL = os.getenv("CHAT_SECRETS_REDIS_URL") or self.REDIS_URL
+        self.CHAT_SECRET_ENCRYPTION_KEY = os.getenv("CHAT_SECRET_ENCRYPTION_KEY", "")
+        self.CHAT_GEMINI_MODEL = os.getenv("CHAT_GEMINI_MODEL", self.CHAT_GEMINI_MODEL)
         self.WS_HEARTBEAT_INTERVAL = _parse_int(os.getenv("WS_HEARTBEAT_INTERVAL"), self.WS_HEARTBEAT_INTERVAL)
         self.STOCK_DATA_CACHE_TTL = _parse_int(os.getenv("STOCK_DATA_CACHE_TTL"), self.STOCK_DATA_CACHE_TTL)
         self.ADMIN_UPLOAD_TOKEN = os.getenv("ADMIN_UPLOAD_TOKEN", self.ADMIN_UPLOAD_TOKEN)

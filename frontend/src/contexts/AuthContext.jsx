@@ -75,6 +75,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    // Release rejected streaming response bodies before refreshing/retrying auth.
+    if (originalRequest?.responseType === 'stream' && error.response?.data?.cancel) {
+      await error.response.data.cancel().catch(() => {});
+    }
 
     // If error is 401 and we haven't already tried to refresh
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {

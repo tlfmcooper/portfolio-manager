@@ -19,6 +19,20 @@ services:
     networks:
       - portfolio-network
 
+  chat-secrets:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - chat_secrets_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - portfolio-network
+
   backend:
     build:
       context: ./backend
@@ -29,6 +43,7 @@ services:
     environment:
       - PYTHONPATH=/app
       - ENVIRONMENT=production
+      - CHAT_SECRETS_REDIS_URL=redis://chat-secrets:6379/0
       - DATABASE_URL=postgresql+asyncpg://portfolio_user:portfolio_local_dev@db:5432/portfolio_db
     env_file:
       - ./backend/.env
@@ -36,6 +51,8 @@ services:
       - ./backend:/app
     depends_on:
       db:
+        condition: service_healthy
+      chat-secrets:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -72,6 +89,8 @@ networks:
     driver: bridge
 
 volumes:
+  chat_secrets_data:
+    driver: local
   pg_data:
     driver: local
   backend_data:
