@@ -7,7 +7,7 @@ import { connectMcpApp } from './mcp-app'
 
 connectMcpApp()
 
-if (import.meta.env.PROD) {
+if (import.meta.env.PROD && !(window.parent !== window && new URLSearchParams(window.location.search).get('mcpApp') === '1')) {
   // Register service worker for PWA functionality in production only.
   const updateSW = registerSW({
     onNeedRefresh() {

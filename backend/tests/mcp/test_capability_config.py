@@ -65,7 +65,7 @@ def test_example_yaml_exists() -> None:
 def test_native_app_is_an_authenticated_html_resource() -> None:
     payload = json.loads(DEFAULT_CONFIG.read_text(encoding="utf-8"))
     tool = next(item for item in payload["tools"] if item["name"] == "portfolio_open_app")
-    resource = next(item for item in payload["resources"] if item["uri"] == "ui://portfolio/app")
+    resource = next(item for item in payload["resources"] if item["uri"] == "ui://portfolio/app/v2")
     assert tool["meta"]["ui"]["resourceUri"] == resource["uri"]
     assert tool["annotations"]["readOnlyHint"] is True
     assert resource["mimeType"] == "text/html;profile=mcp-app"

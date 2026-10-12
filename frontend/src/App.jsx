@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CurrencyProvider } from './contexts/CurrencyContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -25,6 +25,9 @@ const Settings = lazy(() => import('./pages/Settings'));
 const UpdatePortfolio = lazy(() => import('./pages/UpdatePortfolio'));
 const LiveMarket = lazy(() => import('./pages/LiveMarket'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+
+// Keep the embedded entry point (and its frame policy) stable during navigation.
+const Router = window.parent !== window && new URLSearchParams(window.location.search).get('mcpApp') === '1' ? HashRouter : BrowserRouter;
 
 const AppUpdateBanner = () => {
   const [updateHandler, setUpdateHandler] = useState(null);
