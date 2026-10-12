@@ -103,7 +103,8 @@ class CapabilityRegistry:
                 handler = RESOURCE_HANDLERS.get(resource.handler)
                 if not handler:
                     raise method_not_found(message=f"Resource handler {resource.handler} is not registered")
-                return await handler(context, {})
+                arguments = {"uri": uri} if resource.handler == "resource_portfolio_native_app" else {}
+                return await handler(context, arguments)
 
             if resource.uriTemplate:
                 match = _template_to_regex(resource.uriTemplate).match(uri)

@@ -68,7 +68,7 @@ export default defineConfig(({ mode }) => {
             },
           ],
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api/],
+          navigateFallbackDenylist: [/^\/api/, /[?&]mcpApp=1(?:&|$)/],
         },
         devOptions: {
           enabled: false,

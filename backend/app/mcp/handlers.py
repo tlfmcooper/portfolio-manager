@@ -8,8 +8,10 @@ import io
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable, Dict, Iterable
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
+from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.errors import invalid_params, not_found, unauthorized, upstream_error
@@ -30,33 +32,73 @@ class HandlerContext:
 
 
 NATIVE_APP_URI = "ui://portfolio/app"
-NATIVE_APP_URL = "https://portfolio.alikone.dev/dashboard?mcpApp=1"
-NATIVE_APP_META = {
-    "ui": {
-        "domain": "https://portfolio.alikone.dev",
-        "nativeAppUrl": NATIVE_APP_URL,
-        "csp": {"frameDomains": ["https://portfolio.alikone.dev"], "resourceDomains": ["https://portfolio.alikone.dev"]},
-    }
-}
+NATIVE_APP_VIEW_URI = "ui://portfolio/app/v2"
+NATIVE_APP_URL = "https://portfolio.alikone.dev/api/mcp-app?mcpApp=1"
+_JSON_DATA = TypeAdapter(Any)
 
 
 async def tool_portfolio_open_app(ctx: HandlerContext, arguments: Dict[str, Any]) -> ToolResult:
-    return ToolResult(content=[TextContent(text="Open the native Portfolio app.").model_dump()], _meta={"ui": {"resourceUri": NATIVE_APP_URI}})
+    return ToolResult(content=[TextContent(text="Open the native Portfolio app.").model_dump()], _meta={"ui": {"resourceUri": NATIVE_APP_VIEW_URI}})
 
 
 async def resource_portfolio_native_app(ctx: HandlerContext, arguments: Dict[str, Any]) -> ResourceReadResult:
+    return native_app_resource(resource_uri=arguments.get("uri", NATIVE_APP_URI))
+
+
+def native_app_resource(entrypoint: str = NATIVE_APP_URL, *, resource_uri: str = NATIVE_APP_URI) -> ResourceReadResult:
+    """Build the same native app resource for production or a trusted HTTPS preview."""
+    parsed = urlsplit(entrypoint)
+    if resource_uri not in {NATIVE_APP_URI, NATIVE_APP_VIEW_URI}:
+        raise ValueError("Unknown native app resource URI")
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment or parsed.path != "/api/mcp-app" or parsed.query != "mcpApp=1":
+        raise ValueError("Native app entrypoint must be a credential-free HTTPS MCP app URL")
+    native_origin = f"https://{parsed.netloc}"
     # The native origin owns sign-in, assets, routing, and all app interactions.
-    # Hosts supporting nativeAppUrl load this same resource directly on that origin.
-    html = f'<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0"><iframe title="Portfolio" src="{NATIVE_APP_URL}" style="width:100%;height:100vh;border:0"></iframe></body></html>'
-    return ResourceReadResult(contents=[ResourceContent(uri=NATIVE_APP_URI, mimeType="text/html;profile=mcp-app", text=html, _meta=NATIVE_APP_META)])
+    # nativeAppUrl is used by PAIOS's native frame. Standard MCP Apps hosts use
+    # this resource on their own sandbox origin. Relay the protocol across the
+    # additional frame instead of leaving the native app talking to a dead end.
+    # ui.domain is intentionally omitted: it is a host-specific sandbox domain,
+    # not the URL of the native website.
+    html = f'''<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">
+<iframe id="portfolio" title="Portfolio" style="width:100%;height:100vh;border:0"></iframe>
+<script>
+const frame = document.getElementById('portfolio');
+const nativeOrigin = {json.dumps(native_origin)};
+const pending = [];
+let connected = false;
+let initializeId;
+window.addEventListener('message', event => {{
+  const message = event.data;
+  if (!message || message.jsonrpc !== '2.0') return;
+  if (event.source === frame.contentWindow && event.origin === nativeOrigin) {{
+    if (message.method === 'ui/initialize') {{ connected = false; initializeId = message.id; }}
+    window.parent.postMessage(message, '*');
+    if (message.method === 'ui/notifications/initialized') {{
+      connected = true;
+      while (pending.length) frame.contentWindow.postMessage(pending.shift(), nativeOrigin);
+    }}
+  }} else if (event.source === window.parent) {{
+    if (connected || (initializeId != null && message.id === initializeId)) frame.contentWindow.postMessage(message, nativeOrigin);
+    else pending.push(message);
+  }}
+}});
+frame.src = {json.dumps(entrypoint)};
+</script></body></html>'''
+    meta = {"ui": {"nativeAppUrl": entrypoint, "csp": {"frameDomains": [native_origin], "resourceDomains": [native_origin]}}}
+    return ResourceReadResult(contents=[ResourceContent(uri=resource_uri, mimeType="text/html;profile=mcp-app", text=html, _meta=meta)])
 
 
 def _tool_result(text: str, data: Any = None, ui: Dict[str, Any] | None = None) -> ToolResult:
     meta = {}
     if ui:
-        meta = {"ui": ui}
+        # All UI-enabled tools open the actual registered native app. Legacy
+        # per-chart/form URIs were never readable MCP resources.
+        meta = {"ui": {**ui, "resourceUri": NATIVE_APP_VIEW_URI}}
+    content = [TextContent(text=text).model_dump()]
+    if data is not None:
+        content.append(TextContent(text=_JSON_DATA.dump_json(data).decode()).model_dump())
     return ToolResult(
-        content=[TextContent(text=text).model_dump()],
+        content=content,
         structuredContent=data,
         _meta=meta,
     )

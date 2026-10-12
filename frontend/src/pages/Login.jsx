@@ -5,6 +5,7 @@ import { Mail, Lock, AlertCircle } from 'lucide-react';
 import PortfolioService from '../services/portfolioService';
 import axios from 'axios';
 import Logo from '../components/LandingPage/Logo';
+import { getMcpRequestedRoute } from '../mcp-app';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -52,7 +53,7 @@ const Login = () => {
 
     // Redirect immediately based on onboarding status
     if (result.isOnboarded) {
-      navigate('/dashboard');
+      navigate(getMcpRequestedRoute() || '/dashboard');
     } else {
       navigate('/onboarding');
     }
