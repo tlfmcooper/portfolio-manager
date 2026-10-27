@@ -106,6 +106,8 @@ const OverviewSection = () => {
       case 'ytd_return_percentage':
       case 'portfolio_return_annualized':
       case 'sharpe_ratio':
+      case 'sortino_ratio':
+      case 'calmar_ratio':
         return value > 0 ? 'positive' : 'negative'
       case 'max_drawdown':
         return value > -0.15 ? 'positive' : value > -0.25 ? 'warning' : 'negative'
@@ -134,6 +136,10 @@ const OverviewSection = () => {
         return value < 0.15 ? 'Low Risk' : value < 0.25 ? 'Moderate Risk' : 'High Risk'
       case 'sharpe_ratio':
         return value > 1.5 ? 'Excellent Risk-Adj Return' : value > 1.0 ? 'Good Risk-Adj Return' : 'Poor Risk-Adj Return'
+      case 'sortino_ratio':
+        return value > 2 ? 'Strong Downside-Adj Return' : value > 1 ? 'Good Downside-Adj Return' : 'Poor Downside-Adj Return'
+      case 'calmar_ratio':
+        return value > 2 ? 'Strong Return / Drawdown' : value > 1 ? 'Good Return / Drawdown' : 'Low Return / Drawdown'
       case 'max_drawdown':
         return value > -0.10 ? 'Well Controlled' : value > -0.20 ? 'Acceptable' : 'High Drawdown'
       default:
@@ -150,7 +156,7 @@ const OverviewSection = () => {
         return `Year-to-date return measures portfolio performance since the start of the current year, adjusted for this year's cash flows. A return of ${value.toFixed(2)}% is considered ${value >= 15 ? 'excellent' : value >= 8 ? 'strong' : value >= 5 ? 'moderate' : 'modest'} performance.`
 
       case 'portfolio_return_annualized':
-        return `The annualized return represents the geometric average amount of money earned by the portfolio each year. A return of ${(value * 100).toFixed(2)}% is considered ${value >= 0.15 ? 'excellent' : value >= 0.10 ? 'strong' : value >= 0.05 ? 'moderate' : 'modest'} performance, especially when risk-adjusted.`
+        return `Geometric return for today's modeled allocation over the common historical period, scaled to a year using 252 trading observations. This is not the account's realized annual or YTD return. Calmar divides this return by maximum drawdown; Sharpe and Sortino compare modeled returns with the risk-free rate.`
       
       case 'portfolio_volatility_annualized':
         return `Annual volatility measures the portfolio's price fluctuations. ${(value * 100).toFixed(2)}% volatility is ${value <= 0.10 ? 'low' : value <= 0.20 ? 'moderate' : 'high'} and ${value <= 0.20 ? 'appropriate' : 'elevated'} for a diversified portfolio seeking growth.`
@@ -183,6 +189,12 @@ const OverviewSection = () => {
       value: performanceMetrics.ytd_return_percentage,
       formatter: formatPercentagePoints,
       tooltip: performanceMetrics.ytd_message,
+    },
+    {
+      key: 'portfolio_return_annualized',
+      label: 'Modeled Annualized Return',
+      value: performanceMetrics.portfolio_return_annualized,
+      formatter: formatPercentage,
     },
     {
       key: 'portfolio_volatility_annualized',
@@ -226,6 +238,10 @@ const OverviewSection = () => {
   return (
     <div className="space-y-8">
       <AnalysisCoverage context={data?.analysis_context} />
+      <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        YTD return is calculated separately from account holdings and cash flows. The modeled annualized return and risk ratios use the common historical period shown above and today's allocation.
+        {typeof data?.analysis_context?.risk_free_rate === 'number' && ` Sharpe and Sortino use a ${(data.analysis_context.risk_free_rate * 100).toFixed(2)}% annual risk-free rate.`}
+      </p>
       {pending > 0 && <p role="status" className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Loading remaining analytics…</p>}
       {error && <p role="alert" className="text-sm" style={{ color: 'var(--color-warning)' }}>{error}</p>}
       <div>

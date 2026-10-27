@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 from typing import Dict
-from portfolio_manager.analytics import annualize_rets, annualize_vol, sharpe_ratio, drawdown, semideviation, var_historic, cvar_historic
+from portfolio_manager.analytics import annualize_rets, annualize_vol, sharpe_ratio, semideviation, var_historic, cvar_historic
 
 
 class AdvancedPortfolioAnalytics:
@@ -54,16 +54,17 @@ class AdvancedPortfolioAnalytics:
 
             # Sortino ratio
             daily_rf = (1 + self.risk_free_rate) ** (1 / 252) - 1
-            downside_returns = portfolio_returns[portfolio_returns < daily_rf]
-            if len(downside_returns) > 0:
-                downside_std = float(downside_returns.std() * np.sqrt(252))
-                sortino = (annual_return - self.risk_free_rate) / downside_std if downside_std > 0 else np.inf
-            else:
-                sortino = np.inf if annual_return > self.risk_free_rate else 0.0
+            # Target semideviation includes zero shortfalls on days above target.
+            # Standard deviation of losing days incorrectly treats equal losses as no risk.
+            shortfalls = (portfolio_returns - daily_rf).clip(upper=0)
+            downside_std = float(np.sqrt((shortfalls ** 2).mean() * 252))
+            sortino = (annual_return - self.risk_free_rate) / downside_std if downside_std > 0 else np.inf
 
             # Max drawdown + Calmar
-            dd_df = drawdown(portfolio_returns)
-            max_dd_val = float(dd_df["Drawdown"].min())
+            wealth = (1 + portfolio_returns).cumprod()
+            # Starting capital is a peak even if the first observed return is negative.
+            peaks = wealth.cummax().clip(lower=1.0)
+            max_dd_val = float((wealth / peaks - 1).min())
             calmar = annual_return / abs(max_dd_val) if abs(max_dd_val) > 1e-9 else np.inf
 
             # Risk metrics

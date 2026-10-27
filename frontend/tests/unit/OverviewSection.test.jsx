@@ -38,7 +38,7 @@ describe('OverviewSection', () => {
     mocks.cache.invalidateCache.mockClear();
   });
 
-  it('shows YTD return instead of annual return on the first metric card', async () => {
+  it('distinguishes account YTD from the modeled return underlying risk ratios', async () => {
     mocks.apiGet.mockImplementation((url) => {
       if (url.includes('/analysis/portfolios/1/metrics')) {
         return Promise.resolve({
@@ -68,6 +68,11 @@ describe('OverviewSection', () => {
     expect(await screen.findByText('YTD Return')).toBeInTheDocument();
     expect(screen.getByText('+12.34%')).toBeInTheDocument();
     expect(screen.queryByText('Annual Return')).not.toBeInTheDocument();
+    expect(screen.getByText('Modeled Annualized Return')).toBeInTheDocument();
+    expect(screen.getByText('+85.69%')).toBeInTheDocument();
+    expect(screen.getByText(/YTD return is calculated separately/)).toBeInTheDocument();
+    expect(screen.getByText('Strong Downside-Adj Return')).toBeInTheDocument();
+    expect(screen.getByText('Strong Return / Drawdown')).toBeInTheDocument();
   });
 
   it('shows N/A when portfolio YTD is unavailable', async () => {
@@ -97,7 +102,7 @@ describe('OverviewSection', () => {
     render(<OverviewSection />);
 
     expect(await screen.findByText('YTD Return')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('N/A')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText('N/A').length).toBeGreaterThan(0));
   });
   it('renders a summary while historical analytics are still pending', async () => {
     mocks.apiGet.mockImplementation(url => url.includes('/metrics')
