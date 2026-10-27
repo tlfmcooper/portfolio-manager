@@ -55,6 +55,16 @@ async def get_portfolio_metrics(portfolio_id: int, currency: Currency | None = N
     return await cached_analysis(portfolio_id, db, currency, "metrics", "calculate_portfolio_metrics", 300)
 
 
+@router.get("/portfolios/{portfolio_id}/account-performance")
+async def get_account_performance(portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db)):
+    from datetime import date
+    from app.services.account_performance import calculate_account_performance
+    cache = await get_redis_client()
+    return await cache.get_or_load(
+        f"portfolio:{portfolio_id}:account-ytd:v1:{currency or 'default'}:{date.today()}",
+        lambda: calculate_account_performance(portfolio_id, db, currency), 120)
+
+
 @router.get("/portfolios/{portfolio_id}/sector-allocation")
 async def get_sector_allocation(portfolio_id: int, currency: Currency | None = None, db: AsyncSession = Depends(get_db)):
     return await cached_analysis(portfolio_id, db, currency, "sector-allocation", "sector_analysis", 600, display_currency=currency)

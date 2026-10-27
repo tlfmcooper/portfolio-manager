@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useAuth } from '../contexts/AuthContext'
 import { useCurrency } from '../contexts/CurrencyContext'
 import { useDataCache } from '../contexts/DataCacheContext'
+import AnalysisCoverage from './AnalysisCoverage'
 
 const PerformanceView = () => {
   const [data, setData] = useState(null)
@@ -18,12 +19,12 @@ const PerformanceView = () => {
       if (!portfolioId) return; // Wait for portfolioId to load
 
       try {
-        const response = await fetchWithCache(`portfolio_metrics:${portfolioId}`, async () =>
-          (await api.get(`/analysis/portfolios/${portfolioId}/metrics`, { params: { currency } })).data,
+        const response = await fetchWithCache(`account_ytd:v1:${portfolioId}:${new Date().getFullYear()}`, async () =>
+          (await api.get(`/analysis/portfolios/${portfolioId}/account-performance`, { params: { currency }, timeout: 60000 })).data,
           CACHE_TTL.PORTFOLIO_METRICS, currency);
         setData(response)
       } catch (err) {
-        setError('Failed to fetch performance data')
+        setError(err.response?.data?.detail || 'Failed to fetch account performance data')
         console.error(err)
       } finally {
         setLoading(false)
@@ -61,6 +62,7 @@ const PerformanceView = () => {
 
   return (
     <div className="space-y-6">
+      <AnalysisCoverage context={data.analysis_context} />
       {/* Performance Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {/* Sharpe Ratio */}

@@ -13,15 +13,13 @@ import { DashboardSkeleton } from './ui/Skeleton'
 const OverviewSection = () => {
   const { api, portfolioId } = useAuth() // CRITICAL FIX: Get portfolioId from context
   const { currency } = useCurrency()
-  const { getFromCache, fetchWithCache, invalidateCache, CACHE_TTL } = useDataCache()
+  const { getFromCache, fetchWithCache, CACHE_TTL } = useDataCache()
   const scenario = usePortfolioScenario();
   const signature = scenario?.signature || 'null';
-  const metricsKey = analysisKey(portfolioId, 'metrics', analysisParams('metrics'), signature, scenario?.valuation);
-  const cachedMetrics = getFromCache(metricsKey, currency, { allowStale: true });
-  const cachedSummary = getFromCache(`portfolio_summary:${portfolioId}`, currency, { allowStale: true });
-  const cachedPrevious = cachedMetrics || cachedSummary ? { ...cachedMetrics,
-    ytd_return_percentage: cachedSummary?.ytd_return_percentage,
-    ytd_complete: cachedSummary?.ytd_complete, ytd_message: cachedSummary?.ytd_message } : null;
+  const accountView = signature === 'null';
+  const metricsKey = accountView ? `account_ytd:v1:${portfolioId}:${new Date().getFullYear()}`
+    : analysisKey(portfolioId, 'metrics', analysisParams('metrics'), signature, scenario?.valuation);
+  const cachedPrevious = getFromCache(metricsKey, currency, { allowStale: true });
   const [data, setData] = useState(cachedPrevious)
   const [loading, setLoading] = useState(!cachedPrevious)
   const [error, setError] = useState(null)
@@ -29,53 +27,26 @@ const OverviewSection = () => {
 
   useEffect(() => {
     let active = true;
-    let failures = 0;
-    const metrics = getFromCache(metricsKey, currency, { allowStale: true });
-    const summary = getFromCache(`portfolio_summary:${portfolioId}`, currency, { allowStale: true });
-    const previous = metrics || summary ? { ...metrics,
-      ytd_return_percentage: summary?.ytd_return_percentage,
-      ytd_complete: summary?.ytd_complete, ytd_message: summary?.ytd_message } : null;
+    const previous = getFromCache(metricsKey, currency, { allowStale: true });
     setData(previous);
     setError(null);
-    setPending(portfolioId ? 2 : 0);
+    setPending(portfolioId ? 1 : 0);
     setLoading(Boolean(portfolioId) && !previous);
     if (!portfolioId) return undefined;
-
-    const receive = result => {
-      if (!active) return;
-      setData(previous => ({ ...previous, ...result }));
-      setPending(value => Math.max(0, value - 1));
-      setLoading(false);
-    };
-    const fail = err => {
-      if (!active || err.response?.status === 401) return;
-      failures++;
-      setPending(value => Math.max(0, value - 1));
-      setError('Some analytics could not be loaded. Retry when the connection is restored.');
-      if (failures === 2) setLoading(false);
-    };
-    // A slow historical calculation must not hold back the summary, or vice versa.
-    fetchWithCache(metricsKey, async () =>
-      signature === 'null' ? (await api.get(`/analysis/portfolios/${portfolioId}/metrics`, { params: { currency } })).data
-        : (await api.post(`/analysis/portfolios/${portfolioId}/scenario`, { ...JSON.parse(signature), kind: 'metrics', currency }, { timeout: 60000 })).data,
-      CACHE_TTL.PORTFOLIO_METRICS, currency).then(receive).catch(fail);
-    fetchWithCache(`portfolio_summary:${portfolioId}`, async () =>
-      (await api.get('/portfolios/summary', { params: { currency } })).data,
-      CACHE_TTL.PORTFOLIO_METRICS, currency).then(summary => {
+    fetchWithCache(metricsKey, async () => accountView
+      ? (await api.get(`/analysis/portfolios/${portfolioId}/account-performance`, { params: { currency }, timeout: 60000 })).data
+      : (await api.post(`/analysis/portfolios/${portfolioId}/scenario`, { ...JSON.parse(signature), kind: 'metrics', currency }, { timeout: 60000 })).data,
+      CACHE_TTL.PORTFOLIO_METRICS, currency).then(result => {
         if (!active) return;
-        // The summary may have refreshed quotes after the initial fast snapshot.
-        if (signature === 'null') {
-          invalidateCache([`portfolio_snapshot:${portfolioId}`]);
-          window.dispatchEvent(new CustomEvent('portfolio:pricesUpdated', { detail: { portfolioId, currency } }));
-        }
-        receive({
-          ytd_return_percentage: summary?.ytd_return_percentage,
-          ytd_complete: summary?.ytd_complete,
-          ytd_message: summary?.ytd_message,
-        });
-      }).catch(fail);
+        setData(result); setPending(0); setLoading(false);
+      }).catch(err => {
+        if (!active || err.response?.status === 401) return;
+        // Do not substitute allocation-model ratios when account history is incomplete.
+        setData(null); setPending(0); setLoading(false);
+        setError(err.response?.data?.detail || 'Account performance could not be loaded. Please retry.');
+      });
     return () => { active = false; };
-  }, [api, portfolioId, currency, signature, metricsKey, getFromCache, fetchWithCache, invalidateCache, CACHE_TTL]);
+  }, [api, portfolioId, currency, signature, accountView, metricsKey, getFromCache, fetchWithCache, CACHE_TTL]);
 
   if (loading) return <DashboardSkeleton />
   if (error && !data) return <div role="alert" className="text-red-500">{error}</div>
@@ -153,9 +124,10 @@ const OverviewSection = () => {
     
     switch (key) {
       case 'ytd_return_percentage':
-        return `Year-to-date return measures portfolio performance since the start of the current year, adjusted for this year's cash flows. A return of ${value.toFixed(2)}% is considered ${value >= 15 ? 'excellent' : value >= 8 ? 'strong' : value >= 5 ? 'moderate' : 'modest'} performance.`
+        return `Year-to-date time-weighted account return, with external cash flows removed using an end-of-day convention. A return of ${value.toFixed(2)}% is considered ${value >= 15 ? 'excellent' : value >= 8 ? 'strong' : value >= 5 ? 'moderate' : 'modest'} performance.`
 
       case 'portfolio_return_annualized':
+        if (accountView) return 'Geometric annualized account return, calculated from the same cash-flow-adjusted daily returns as YTD performance. Annualization is not a forecast.';
         return `Geometric return for today's modeled allocation over the common historical period, scaled to a year using 252 trading observations. This is not the account's realized annual or YTD return. Calmar divides this return by maximum drawdown; Sharpe and Sortino compare modeled returns with the risk-free rate.`
       
       case 'portfolio_volatility_annualized':
@@ -192,7 +164,7 @@ const OverviewSection = () => {
     },
     {
       key: 'portfolio_return_annualized',
-      label: 'Modeled Annualized Return',
+      label: accountView ? 'Account Annualized Return' : 'Modeled Annualized Return',
       value: performanceMetrics.portfolio_return_annualized,
       formatter: formatPercentage,
     },
@@ -226,7 +198,7 @@ const OverviewSection = () => {
       value: performanceMetrics.calmar_ratio,
       formatter: formatRatio,
     }
-  ]
+  ].filter(metric => accountView || metric.key !== 'ytd_return_percentage')
 
   // Prepare chart data for individual performance
   const chartData = Object.entries(individualPerformance).map(([symbol, perf]) => ({
@@ -239,7 +211,9 @@ const OverviewSection = () => {
     <div className="space-y-8">
       <AnalysisCoverage context={data?.analysis_context} />
       <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-        YTD return is calculated separately from account holdings and cash flows. The modeled annualized return and risk ratios use the common historical period shown above and today's allocation.
+        {accountView
+          ? 'YTD return and all risk metrics use the same account history, including recorded trades, deposits and withdrawals. Values end at the last completed market session.'
+          : "Allocation scenario: returns and risk ratios model today's selected weights over the historical period shown above."}
         {typeof data?.analysis_context?.risk_free_rate === 'number' && ` Sharpe and Sortino use a ${(data.analysis_context.risk_free_rate * 100).toFixed(2)}% annual risk-free rate.`}
       </p>
       {pending > 0 && <p role="status" className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Loading remaining analytics…</p>}
