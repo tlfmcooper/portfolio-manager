@@ -24,6 +24,7 @@ const OverviewSection = () => {
   const [loading, setLoading] = useState(!cachedPrevious)
   const [error, setError] = useState(null)
   const [pending, setPending] = useState(0)
+  const [retryRevision, setRetryRevision] = useState(0)
 
   useEffect(() => {
     let active = true;
@@ -46,10 +47,13 @@ const OverviewSection = () => {
         setError(err.response?.data?.detail || 'Account performance could not be loaded. Please retry.');
       });
     return () => { active = false; };
-  }, [api, portfolioId, currency, signature, accountView, metricsKey, getFromCache, fetchWithCache, CACHE_TTL]);
+  }, [api, portfolioId, currency, signature, accountView, metricsKey, getFromCache, fetchWithCache, CACHE_TTL, retryRevision]);
 
   if (loading) return <DashboardSkeleton />
-  if (error && !data) return <div role="alert" className="text-red-500">{error}</div>
+  if (error && !data) return <div role="alert" className="space-y-3">
+    <p className="text-red-500">{error}</p>
+    <button type="button" className="btn btn-primary" onClick={() => setRetryRevision(value => value + 1)}>Retry account performance</button>
+  </div>
   if (!data) return null
 
   const performanceMetrics = data || {}

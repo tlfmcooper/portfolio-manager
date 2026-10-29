@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import OverviewSection from '../../src/components/OverviewSection';
 
@@ -57,6 +57,16 @@ describe('OverviewSection', () => {
     expect(screen.getByText('+37.44%')).toBeInTheDocument();
     expect(screen.getByText('1.461')).toBeInTheDocument();
     expect(screen.queryByText('-0.084')).not.toBeInTheDocument();
+  });
+
+  it('recovers from a temporary history failure when Retry is clicked', async () => {
+    mocks.apiGet.mockRejectedValueOnce({ response: { status: 422, data: { detail: 'Missing history for MU' } } })
+      .mockResolvedValueOnce({ data: account });
+    render(<OverviewSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry account performance' }));
+    expect(await screen.findByText('+37.44%')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mocks.apiGet).toHaveBeenCalledTimes(2);
   });
 
   it('keeps allocation scenarios separate from account YTD', async () => {

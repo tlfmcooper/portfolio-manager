@@ -28,6 +28,18 @@ async def account_history(ticker, kind, today):
     if kind == 'mutual_fund' or ticker.upper().endswith('.CF'):
         return {**await historical_prices(ticker, kind), 'splits': []}
     cache = await get_redis_client()
+    key = f'market:account-closes:v1:{ticker}:{kind}:{today}'
+
+    def usable(payload):
+        try:
+            return bool(payload) and not payload.get('error') and not price_series(payload['points']).empty
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    # Older releases cached an empty provider response for the success TTL.
+    cached = await cache.get(key)
+    if cached is not None and not usable(cached):
+        await cache.delete(key)
 
     async def load():
         import yfinance as yf
@@ -36,14 +48,23 @@ async def account_history(ticker, kind, today):
             symbol = symbol.upper() + '-USD'
         def fetch():
             frame = yf.Ticker(symbol).history(start=date(today.year - 1, 12, 20),
-                end=today + timedelta(days=1), auto_adjust=False, actions=True)
-            return {'points': [(str(day.date()), float(value)) for day, value in frame['Close'].items()],
+                end=today + timedelta(days=1), auto_adjust=False, actions=True, timeout=10)
+            # Yahoo sometimes returns an empty frame instead of raising on an outage.
+            prices = price_series([(str(day.date()), value) for day, value in frame['Close'].items()])
+            return {'points': [(str(day.date()), float(value)) for day, value in prices.items()],
                 'splits': [(str(day.date()), float(value)) for day, value in frame.get('Stock Splits', pd.Series(dtype=float)).items() if value > 0]}
-        try:
-            return await asyncio.to_thread(fetch)
-        except Exception:
-            return {'points': [], 'splits': []}
-    return await cache.get_or_load(f'market:account-closes:v1:{ticker}:{kind}:{today}', load, 900)
+        for attempt in range(2):
+            try:
+                payload = await asyncio.to_thread(fetch)
+                if usable(payload):
+                    return payload
+            except Exception:
+                pass
+            if attempt == 0:
+                await asyncio.sleep(0.25)
+        # RedisClient deliberately does not cache results marked as errors.
+        return {'points': [], 'splits': [], 'error': 'Historical price provider temporarily unavailable'}
+    return await cache.get_or_load(key, load, 900)
 
 
 def normalized_trades(events, histories):

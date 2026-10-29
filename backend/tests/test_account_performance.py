@@ -110,3 +110,71 @@ async def test_account_valuation_uses_quoted_close_instead_of_dividend_adjusted_
     assert calls[0]['auto_adjust'] is False
     assert result['points'][0][1] == 100
     assert result['splits'] == [('2026-01-02', 2)]
+
+
+@pytest.mark.asyncio
+async def test_empty_download_is_retried_before_caching(monkeypatch):
+    import yfinance as yf
+    from app.services.account_performance import account_history
+    from app.core.redis_client import RedisClient
+    from app.services import account_performance
+    cache = RedisClient()
+    async def get_cache(): return cache
+    monkeypatch.setattr(account_performance, 'get_redis_client', get_cache)
+    calls = []
+    class Ticker:
+        def history(self, **params):
+            calls.append(1)
+            if len(calls) == 1:
+                return pd.DataFrame()
+            return pd.DataFrame({'Close': [100, 101]}, index=pd.to_datetime(['2025-12-31', '2026-01-02']))
+    monkeypatch.setattr(yf, 'Ticker', lambda symbol: Ticker())
+    result = await account_history('MU', 'stock', date(2026, 1, 6))
+    assert len(result['points']) == 2
+    assert len(calls) == 2
+    cached = await account_history('MU', 'stock', date(2026, 1, 6))
+    assert [tuple(point) for point in cached['points']] == result['points']
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_persistent_failure_is_not_cached_and_next_request_can_recover(monkeypatch):
+    import yfinance as yf
+    from app.core.redis_client import RedisClient
+    from app.services import account_performance
+    cache = RedisClient()
+    async def get_cache(): return cache
+    monkeypatch.setattr(account_performance, 'get_redis_client', get_cache)
+    failed = [True]
+    class Ticker:
+        def history(self, **params):
+            if failed[0]:
+                raise TimeoutError('upstream temporarily unavailable')
+            return pd.DataFrame({'Close': [100, 101]}, index=pd.to_datetime(['2025-12-31', '2026-01-02']))
+    monkeypatch.setattr(yf, 'Ticker', lambda symbol: Ticker())
+    key = 'market:account-closes:v1:MU:stock:2026-01-06'
+    result = await account_performance.account_history('MU', 'stock', date(2026, 1, 6))
+    assert result['points'] == []
+    assert await cache.get(key) is None
+    failed[0] = False
+    result = await account_performance.account_history('MU', 'stock', date(2026, 1, 6))
+    assert len(result['points']) == 2
+
+
+@pytest.mark.asyncio
+async def test_previously_cached_empty_or_invalid_history_is_evicted(monkeypatch):
+    import yfinance as yf
+    from app.core.redis_client import RedisClient
+    from app.services import account_performance
+    cache = RedisClient()
+    async def get_cache(): return cache
+    monkeypatch.setattr(account_performance, 'get_redis_client', get_cache)
+    class Ticker:
+        def history(self, **params):
+            return pd.DataFrame({'Close': [100, 101]}, index=pd.to_datetime(['2025-12-31', '2026-01-02']))
+    monkeypatch.setattr(yf, 'Ticker', lambda symbol: Ticker())
+    key = 'market:account-closes:v1:MU:stock:2026-01-06'
+    for points in [[], [('2025-12-31', float('nan'))], [('2025-12-31', 0)]]:
+        await cache.set(key, {'points': points, 'splits': []}, ttl=900)
+        result = await account_performance.account_history('MU', 'stock', date(2026, 1, 6))
+        assert len(result['points']) == 2
